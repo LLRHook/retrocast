@@ -13,6 +13,9 @@ struct Message: Codable, Identifiable, Hashable, Sendable {
     let authorDisplayName: String?
     let authorAvatarHash: String?
 
+    // Attachments
+    let attachments: [Attachment]?
+
     enum CodingKeys: String, CodingKey {
         case id
         case channelID = "channel_id"
@@ -23,6 +26,7 @@ struct Message: Codable, Identifiable, Hashable, Sendable {
         case authorUsername = "author_username"
         case authorDisplayName = "author_display_name"
         case authorAvatarHash = "author_avatar_hash"
+        case attachments
     }
 
     /// Display name: prefer display_name, fall back to username.

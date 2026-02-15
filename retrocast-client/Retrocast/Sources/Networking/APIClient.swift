@@ -71,6 +71,52 @@ final class APIClient {
         return data
     }
 
+    /// Upload a file as multipart form data and decode the response.
+    func uploadFile(channelID: Snowflake, data fileData: Data, filename: String, contentType: String) async throws -> Attachment {
+        guard let baseURL else { throw APIError.invalidURL }
+
+        let url = baseURL.appendingPathComponent("/api/v1/channels/\(channelID)/attachments")
+        let boundary = "Boundary-\(UUID().uuidString)"
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        if let token = tokenManager.accessToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        var body = Data()
+        body.append("--\(boundary)\r\n")
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n")
+        body.append("Content-Type: \(contentType)\r\n\r\n")
+        body.append(fileData)
+        body.append("\r\n--\(boundary)--\r\n")
+        request.httpBody = body
+
+        let (responseData, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.noData
+        }
+
+        if httpResponse.statusCode >= 400 {
+            if let errorResponse = try? decoder.decode(APIErrorResponse.self, from: responseData) {
+                throw APIError.serverError(
+                    code: errorResponse.error.code,
+                    message: errorResponse.error.message,
+                    status: httpResponse.statusCode
+                )
+            }
+            throw APIError.serverError(code: "UNKNOWN", message: "Upload failed", status: httpResponse.statusCode)
+        }
+
+        do {
+            return try decoder.decode(Attachment.self, from: responseData)
+        } catch {
+            throw APIError.decodingError(error)
+        }
+    }
+
     // MARK: - Health check
 
     func checkHealth() async -> Bool {
@@ -202,4 +248,12 @@ extension ISO8601DateFormatter {
         f.formatOptions = [.withInternetDateTime]
         return f
     }()
+}
+
+extension Data {
+    mutating func append(_ string: String) {
+        if let data = string.data(using: .utf8) {
+            append(data)
+        }
+    }
 }

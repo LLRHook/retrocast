@@ -8,6 +8,7 @@ struct MainView: View {
     @State private var serverListVM: ServerListViewModel?
     @State private var channelListVM: ChannelListViewModel?
     @State private var chatVM: ChatViewModel?
+    @State private var showMemberList = false
 
     var body: some View {
         NavigationSplitView {
@@ -21,7 +22,23 @@ struct MainView: View {
             }
         } detail: {
             if appState.selectedChannelID != nil {
-                ChatAreaView(viewModel: chatVM)
+                HStack(spacing: 0) {
+                    ChatAreaView(viewModel: chatVM)
+                        .frame(maxWidth: .infinity)
+                    if showMemberList {
+                        MemberListView()
+                    }
+                }
+                .toolbar {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            withAnimation { showMemberList.toggle() }
+                        } label: {
+                            Image(systemName: "person.2")
+                                .foregroundStyle(showMemberList ? .retroText : .retroMuted)
+                        }
+                    }
+                }
             } else {
                 emptyChannelState
             }

@@ -25,7 +25,9 @@
 		4990FBCC8211267F2DFF8E65 /* PresenceDot.swift in Sources */ = {isa = PBXBuildFile; fileRef = C49F1B585072675943B927F0 /* PresenceDot.swift */; };
 		50175E1BE5845916E8567970 /* MemberListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFBC94DC40295447F8F883C8 /* MemberListViewModel.swift */; };
 		55B0E78016375C96B809EE7E /* MessageInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA766B6416BDB09F254EB29E /* MessageInput.swift */; };
+		6CFFC574D33909E78E2866D6 /* Attachment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5003779038C4CC3528C731F8 /* Attachment.swift */; };
 		6D241E5AFDDE030A464F6AEE /* ChannelListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D42F7703C06AD96F44C34B37 /* ChannelListViewModel.swift */; };
+		715D8E89EBE4FA8270B884E7 /* RoleEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 125A0C2BC0B4B426C558C6BA /* RoleEditorView.swift */; };
 		745111555B342F6B0C562943 /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C5DB846FACF0F8A6D1F3D31 /* AuthViewModel.swift */; };
 		748D07D28341B04C6BE2B7C9 /* Member.swift in Sources */ = {isa = PBXBuildFile; fileRef = 897255E33E0F9C4CB4E775F1 /* Member.swift */; };
 		76D042880793B065DB5103C2 /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC60D404828547D16F4ACA5B /* KeychainHelper.swift */; };
@@ -74,6 +76,7 @@
 		06A6097ADA01BB7B4E99ED76 /* Role.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Role.swift; sourceTree = "<group>"; };
 		0B0FEC735A820BAD111C9B62 /* APIError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIError.swift; sourceTree = "<group>"; };
 		0CCFB8EB4E4C442EF2FA2D7F /* LoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadingView.swift; sourceTree = "<group>"; };
+		125A0C2BC0B4B426C558C6BA /* RoleEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoleEditorView.swift; sourceTree = "<group>"; };
 		13AF9719D6E2AB483B8E0BD3 /* ChannelSidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelSidebarView.swift; sourceTree = "<group>"; };
 		18C5226B79497ED5AFCE1B2C /* AppSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsView.swift; sourceTree = "<group>"; };
 		1BBA68633E1B90FB59129CDB /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
@@ -86,6 +89,7 @@
 		473C39CD6B28926419D21D0F /* ServerAddressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerAddressView.swift; sourceTree = "<group>"; };
 		4B28E7597567EBA142B94F20 /* GatewayClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayClient.swift; sourceTree = "<group>"; };
 		4C139876E109B9B3B5F2E413 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		5003779038C4CC3528C731F8 /* Attachment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Attachment.swift; sourceTree = "<group>"; };
 		5699080FB4A28C118304844D /* MarkdownParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownParser.swift; sourceTree = "<group>"; };
 		6C4ED36112A22BCF644D5F08 /* ReconnectionStrategy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReconnectionStrategy.swift; sourceTree = "<group>"; };
 		6DE73B037470E38CA40B54E4 /* Invite.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Invite.swift; sourceTree = "<group>"; };
@@ -272,6 +276,7 @@
 		BB117C38431CECA7CB08BC7E /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				5003779038C4CC3528C731F8 /* Attachment.swift */,
 				91DFDD16736BBEBF2810AEDD /* Channel.swift */,
 				FDC86DFFE59E90928D0148F4 /* Guild.swift */,
 				6DE73B037470E38CA40B54E4 /* Invite.swift */,
@@ -302,6 +307,7 @@
 				CEFAE96C832B727FCC5E014A /* GuildSettingsView.swift */,
 				ECA668D87A09270D6535ACA7 /* InviteSheet.swift */,
 				CB2775675BD56069925BEF96 /* JoinGuildSheet.swift */,
+				125A0C2BC0B4B426C558C6BA /* RoleEditorView.swift */,
 			);
 			path = Guild;
 			sourceTree = "<group>";
@@ -388,6 +394,7 @@
 				7C70C5FC7744A2C67939DDA6 /* APIError.swift in Sources */,
 				C725CE1DFE4ADF33DC380F5E /* AppSettingsView.swift in Sources */,
 				E0EF95F895AB1621974D55B9 /* AppState.swift in Sources */,
+				6CFFC574D33909E78E2866D6 /* Attachment.swift in Sources */,
 				745111555B342F6B0C562943 /* AuthViewModel.swift in Sources */,
 				8614F8902DAA91B5C0DE40AC /* AvatarView.swift in Sources */,
 				11060DDF90E87FE682847EB5 /* Channel.swift in Sources */,
@@ -431,6 +438,7 @@
 				26EF163A68BD33988168D52D /* RegisterView.swift in Sources */,
 				7C025C51BF8C55FC254E08FF /* RetrocastApp.swift in Sources */,
 				92BA4E16672A34756DC27BC4 /* Role.swift in Sources */,
+				715D8E89EBE4FA8270B884E7 /* RoleEditorView.swift in Sources */,
 				81A7BDE730F543F2ED8235AE /* RoleTag.swift in Sources */,
 				8F1DE285BAF37A09957C925E /* ServerAddressView.swift in Sources */,
 				DB7A429198D3D79B71B0AA03 /* ServerListView.swift in Sources */,

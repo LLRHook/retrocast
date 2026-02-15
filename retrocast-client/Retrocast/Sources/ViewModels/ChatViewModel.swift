@@ -6,6 +6,7 @@ final class ChatViewModel {
     var isLoading = false
     var isSending = false
     var isLoadingMore = false
+    var isUploading = false
     var errorMessage: String?
 
     private let api: APIClient
@@ -73,6 +74,30 @@ final class ChatViewModel {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
         isSending = false
+    }
+
+    // MARK: - Upload attachment
+
+    func uploadAttachment(channelID: Snowflake, data: Data, filename: String, contentType: String) async {
+        guard !isUploading else { return }
+        isUploading = true
+        errorMessage = nil
+
+        do {
+            let attachment = try await api.uploadFile(
+                channelID: channelID,
+                data: data,
+                filename: filename,
+                contentType: contentType
+            )
+            // Send a message with the attachment URL so it appears in chat
+            let _: Message = try await api.request(
+                .sendMessage(channelID: channelID, content: attachment.url)
+            )
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+        isUploading = false
     }
 
     // MARK: - Edit / Delete
