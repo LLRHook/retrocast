@@ -3,41 +3,46 @@ services:
     build: .
     ports:
       - "8080:8080"
+    env_file: .env
     environment:
-      - DATABASE_URL=postgres://retrocast:password@db:5432/retrocast?sslmode=disable
+      - DATABASE_URL=postgres://retrocast:${POSTGRES_PASSWORD}@db:5432/retrocast?sslmode=disable
       - REDIS_URL=redis://redis:6379
-      - JWT_SECRET=change-this-to-a-random-string
       - MINIO_ENDPOINT=minio:9000
-      - MINIO_ACCESS_KEY=retrocast
-      - MINIO_SECRET_KEY=changeme
       - LIVEKIT_URL=ws://livekit:7880
-      - LIVEKIT_API_KEY=devkey
-      - LIVEKIT_API_SECRET=devsecret
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
 
   db:
     image: postgres:17
     volumes:
       - pgdata:/var/lib/postgresql/data
+    env_file: .env
     environment:
       - POSTGRES_DB=retrocast
       - POSTGRES_USER=retrocast
-      - POSTGRES_PASSWORD=password
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U retrocast"]
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
     command: redis-server --appendonly yes
     volumes:
       - redis-data:/data
+    restart: unless-stopped
 
   minio:
     image: minio/minio:latest
@@ -47,9 +52,10 @@ services:
       - "9001:9001"
     volumes:
       - minio-data:/data
+    env_file: .env
     environment:
       - MINIO_ROOT_USER=retrocast
-      - MINIO_ROOT_PASSWORD=changeme
+    restart: unless-stopped
 
   livekit:
     image: livekit/livekit-server:latest
@@ -57,8 +63,10 @@ services:
       - "7880:7880"
       - "7881:7881"
       - "50000-50100:50000-50100/udp"
+    env_file: .env
     environment:
-      - LIVEKIT_KEYS=devkey:devsecret
+      - LIVEKIT_KEYS=${LIVEKIT_API_KEY}:${LIVEKIT_API_SECRET}
+    restart: unless-stopped
 
   caddy:
     image: caddy:2-alpine
@@ -70,6 +78,7 @@ services:
       - caddy_data:/data
     depends_on:
       - api
+    restart: unless-stopped
 
 volumes:
   pgdata:

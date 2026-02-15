@@ -7,6 +7,7 @@ struct UserSettingsView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var viewModel: SettingsViewModel?
+    @State private var showAppSettings = false
 
     var body: some View {
         NavigationStack {
@@ -54,6 +55,12 @@ struct UserSettingsView: View {
                 }
 
                 Section {
+                    Button("App Settings") {
+                        showAppSettings = true
+                    }
+                }
+
+                Section {
                     Button("Log Out", role: .destructive) {
                         Task {
                             await viewModel?.logout()
@@ -69,6 +76,9 @@ struct UserSettingsView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }
                 }
+            }
+            .sheet(isPresented: $showAppSettings) {
+                AppSettingsView()
             }
         }
         .task {

@@ -15,6 +15,19 @@ struct MessageListView: View {
                             .padding()
                     }
 
+                    // Pagination sentinel — triggers loading older messages
+                    if let channelID = appState.selectedChannelID {
+                        Color.clear
+                            .frame(height: 1)
+                            .onAppear {
+                                guard !viewModel.isLoadingMore,
+                                      appState.hasMoreMessages[channelID] ?? true else { return }
+                                Task {
+                                    await viewModel.loadMoreMessages(channelID: channelID)
+                                }
+                            }
+                    }
+
                     // Messages (reversed — newest at bottom)
                     let messages = appState.selectedChannelMessages.reversed()
                     ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
@@ -32,7 +45,28 @@ struct MessageListView: View {
                         MessageRow(
                             message: message,
                             isGrouped: isGrouped,
-                            currentUserID: appState.currentUser?.id
+                            currentUserID: appState.currentUser?.id,
+                            onEdit: { newContent in
+                                if let channelID = appState.selectedChannelID {
+                                    Task {
+                                        await viewModel.editMessage(
+                                            channelID: channelID,
+                                            messageID: message.id,
+                                            newContent: newContent
+                                        )
+                                    }
+                                }
+                            },
+                            onDelete: {
+                                if let channelID = appState.selectedChannelID {
+                                    Task {
+                                        await viewModel.deleteMessage(
+                                            channelID: channelID,
+                                            messageID: message.id
+                                        )
+                                    }
+                                }
+                            }
                         )
                         .id(message.id)
                     }

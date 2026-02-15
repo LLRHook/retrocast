@@ -3,7 +3,7 @@ package gateway
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -105,7 +105,7 @@ func (m *Manager) clearPresenceWithGrace(userID int64) {
 	defer cancel()
 
 	if err := m.redis.SetPresence(ctx, userID, "offline"); err != nil {
-		log.Printf("gateway: failed to clear presence for user %d: %v", userID, err)
+		slog.Error("failed to clear presence", "userID", userID, "error", err)
 	}
 
 	m.broadcastPresence(userID, "offline")
@@ -217,14 +217,14 @@ func (m *Manager) sendToGuildInternal(guildID int64, event Event) {
 func (m *Manager) handleIdentify(c *Connection, data json.RawMessage) {
 	var identify IdentifyData
 	if err := json.Unmarshal(data, &identify); err != nil {
-		log.Printf("gateway: invalid identify data: %v", err)
+		slog.Error("invalid identify data", "error", err)
 		c.Close()
 		return
 	}
 
 	claims, err := m.tokens.ValidateAccessToken(identify.Token)
 	if err != nil {
-		log.Printf("gateway: invalid token in identify: %v", err)
+		slog.Warn("invalid token in identify", "error", err)
 		c.Close()
 		return
 	}
@@ -238,7 +238,7 @@ func (m *Manager) handleIdentify(c *Connection, data json.RawMessage) {
 
 	guilds, err := m.guilds.GetByUserID(ctx, c.UserID)
 	if err != nil {
-		log.Printf("gateway: failed to get guilds for user %d: %v", c.UserID, err)
+		slog.Error("failed to get guilds for user", "userID", c.UserID, "error", err)
 		c.Close()
 		return
 	}
@@ -253,7 +253,7 @@ func (m *Manager) handleIdentify(c *Connection, data json.RawMessage) {
 
 	// Set presence to online.
 	if err := m.redis.SetPresence(ctx, c.UserID, "online"); err != nil {
-		log.Printf("gateway: failed to set presence for user %d: %v", c.UserID, err)
+		slog.Error("failed to set presence", "userID", c.UserID, "error", err)
 	}
 
 	// Send READY.
@@ -271,7 +271,7 @@ func (m *Manager) handleIdentify(c *Connection, data json.RawMessage) {
 func (m *Manager) handleResume(c *Connection, data json.RawMessage) {
 	var resume ResumeData
 	if err := json.Unmarshal(data, &resume); err != nil {
-		log.Printf("gateway: invalid resume data: %v", err)
+		slog.Error("invalid resume data", "error", err)
 		c.SendPayload(GatewayPayload{Op: OpReconnect})
 		c.Close()
 		return
@@ -279,7 +279,7 @@ func (m *Manager) handleResume(c *Connection, data json.RawMessage) {
 
 	claims, err := m.tokens.ValidateAccessToken(resume.Token)
 	if err != nil {
-		log.Printf("gateway: invalid token in resume: %v", err)
+		slog.Warn("invalid token in resume", "error", err)
 		c.Close()
 		return
 	}
@@ -293,7 +293,7 @@ func (m *Manager) handleResume(c *Connection, data json.RawMessage) {
 
 	guilds, err := m.guilds.GetByUserID(ctx, c.UserID)
 	if err != nil {
-		log.Printf("gateway: failed to get guilds on resume for user %d: %v", c.UserID, err)
+		slog.Error("failed to get guilds on resume", "userID", c.UserID, "error", err)
 		c.SendPayload(GatewayPayload{Op: OpReconnect})
 		c.Close()
 		return
@@ -340,7 +340,7 @@ func (m *Manager) handlePresenceUpdate(c *Connection, data json.RawMessage) {
 		redisStatus = "offline"
 	}
 	if err := m.redis.SetPresence(ctx, c.UserID, redisStatus); err != nil {
-		log.Printf("gateway: failed to update presence for user %d: %v", c.UserID, err)
+		slog.Error("failed to update presence", "userID", c.UserID, "error", err)
 		return
 	}
 

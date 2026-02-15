@@ -1,7 +1,7 @@
 package gateway
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/gorilla/websocket"
@@ -20,7 +20,7 @@ var upgrader = websocket.Upgrader{
 func (m *Manager) HandleWebSocket(c echo.Context) error {
 	ws, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
 	if err != nil {
-		log.Printf("gateway: upgrade error: %v", err)
+		slog.Error("websocket upgrade error", "error", err)
 		return nil
 	}
 
