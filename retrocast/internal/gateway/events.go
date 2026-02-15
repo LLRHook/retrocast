@@ -36,6 +36,8 @@ const (
 	EventTypingStart        = "TYPING_START"
 	EventPresenceUpdate     = "PRESENCE_UPDATE"
 	EventVoiceStateUpdate   = "VOICE_STATE_UPDATE"
+	EventGuildBanAdd        = "GUILD_BAN_ADD"
+	EventGuildBanRemove     = "GUILD_BAN_REMOVE"
 )
 
 // GatewayPayload is the envelope for all gateway messages.

@@ -435,3 +435,91 @@ func (m *mockChannelOverrideRepo) Delete(ctx context.Context, channelID, roleID 
 	}
 	return nil
 }
+
+// mockBanRepo implements database.BanRepository.
+type mockBanRepo struct {
+	CreateFn         func(ctx context.Context, ban *models.Ban) error
+	GetByGuildAndUserFn func(ctx context.Context, guildID, userID int64) (*models.Ban, error)
+	GetByGuildIDFn   func(ctx context.Context, guildID int64) ([]models.Ban, error)
+	DeleteFn         func(ctx context.Context, guildID, userID int64) error
+}
+
+func (m *mockBanRepo) Create(ctx context.Context, ban *models.Ban) error {
+	if m.CreateFn != nil {
+		return m.CreateFn(ctx, ban)
+	}
+	return nil
+}
+
+func (m *mockBanRepo) GetByGuildAndUser(ctx context.Context, guildID, userID int64) (*models.Ban, error) {
+	if m.GetByGuildAndUserFn != nil {
+		return m.GetByGuildAndUserFn(ctx, guildID, userID)
+	}
+	return nil, nil
+}
+
+func (m *mockBanRepo) GetByGuildID(ctx context.Context, guildID int64) ([]models.Ban, error) {
+	if m.GetByGuildIDFn != nil {
+		return m.GetByGuildIDFn(ctx, guildID)
+	}
+	return nil, nil
+}
+
+func (m *mockBanRepo) Delete(ctx context.Context, guildID, userID int64) error {
+	if m.DeleteFn != nil {
+		return m.DeleteFn(ctx, guildID, userID)
+	}
+	return nil
+}
+
+// mockDMChannelRepo implements database.DMChannelRepository.
+type mockDMChannelRepo struct {
+	CreateFn        func(ctx context.Context, dm *models.DMChannel) error
+	GetByIDFn       func(ctx context.Context, id int64) (*models.DMChannel, error)
+	GetByUserIDFn   func(ctx context.Context, userID int64) ([]models.DMChannel, error)
+	GetOrCreateDMFn func(ctx context.Context, user1ID, user2ID, newID int64) (*models.DMChannel, error)
+	AddRecipientFn  func(ctx context.Context, channelID, userID int64) error
+	IsRecipientFn   func(ctx context.Context, channelID, userID int64) (bool, error)
+}
+
+func (m *mockDMChannelRepo) Create(ctx context.Context, dm *models.DMChannel) error {
+	if m.CreateFn != nil {
+		return m.CreateFn(ctx, dm)
+	}
+	return nil
+}
+
+func (m *mockDMChannelRepo) GetByID(ctx context.Context, id int64) (*models.DMChannel, error) {
+	if m.GetByIDFn != nil {
+		return m.GetByIDFn(ctx, id)
+	}
+	return nil, nil
+}
+
+func (m *mockDMChannelRepo) GetByUserID(ctx context.Context, userID int64) ([]models.DMChannel, error) {
+	if m.GetByUserIDFn != nil {
+		return m.GetByUserIDFn(ctx, userID)
+	}
+	return nil, nil
+}
+
+func (m *mockDMChannelRepo) GetOrCreateDM(ctx context.Context, user1ID, user2ID, newID int64) (*models.DMChannel, error) {
+	if m.GetOrCreateDMFn != nil {
+		return m.GetOrCreateDMFn(ctx, user1ID, user2ID, newID)
+	}
+	return nil, nil
+}
+
+func (m *mockDMChannelRepo) AddRecipient(ctx context.Context, channelID, userID int64) error {
+	if m.AddRecipientFn != nil {
+		return m.AddRecipientFn(ctx, channelID, userID)
+	}
+	return nil
+}
+
+func (m *mockDMChannelRepo) IsRecipient(ctx context.Context, channelID, userID int64) (bool, error) {
+	if m.IsRecipientFn != nil {
+		return m.IsRecipientFn(ctx, channelID, userID)
+	}
+	return false, nil
+}
