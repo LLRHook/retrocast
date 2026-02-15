@@ -14,6 +14,7 @@
 		11060DDF90E87FE682847EB5 /* Channel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91DFDD16736BBEBF2810AEDD /* Channel.swift */; };
 		26EF163A68BD33988168D52D /* RegisterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8237FDD24D3C38A181902C2D /* RegisterView.swift */; };
 		2B180171DBADDA65DFEB4E47 /* MessageListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87360C79B7F3B6F9A209B3C7 /* MessageListView.swift */; };
+		312E9E1AA9821D0CCDEE4D31 /* DMListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A29812152A12899FCC7A919 /* DMListViewModel.swift */; };
 		36031E1B1BADB9F03188B47D /* InviteViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A772C0830E7886968300FACC /* InviteViewModel.swift */; };
 		36B73B03B7352F8879064A14 /* LoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CCFB8EB4E4C442EF2FA2D7F /* LoadingView.swift */; };
 		378D5C9FEEEB6107FA7F2BCE /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE5271A87C29EDF521F803C3 /* ContentView.swift */; };
@@ -35,6 +36,7 @@
 		7C025C51BF8C55FC254E08FF /* RetrocastApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9DD6561596481C539733686 /* RetrocastApp.swift */; };
 		7C70C5FC7744A2C67939DDA6 /* APIError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B0FEC735A820BAD111C9B62 /* APIError.swift */; };
 		81A7BDE730F543F2ED8235AE /* RoleTag.swift in Sources */ = {isa = PBXBuildFile; fileRef = B333436DBE042F36945DC441 /* RoleTag.swift */; };
+		833F53E66C4224C686D46D98 /* CreateChannelSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 679BFF89C2E71BE01F1AA8EB /* CreateChannelSheet.swift */; };
 		852B78C9E66D21F689A0B910 /* MemberRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = F69BECE8256C67A65B7CAAF2 /* MemberRow.swift */; };
 		8614F8902DAA91B5C0DE40AC /* AvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBD58564E016B0C9875E7C3D /* AvatarView.swift */; };
 		8F1DE285BAF37A09957C925E /* ServerAddressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 473C39CD6B28926419D21D0F /* ServerAddressView.swift */; };
@@ -49,6 +51,7 @@
 		B993CD9EC11A726BF91FA65D /* Endpoints.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F952DEFC5C9619B330515FE /* Endpoints.swift */; };
 		BA89FD78F0308FCB62957ABD /* TokenManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E94DE292C0F232B4416D7E0 /* TokenManager.swift */; };
 		BB5BC4F819368A1DA9289508 /* DateFormatters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78D21A0674ADA53C23CF7BFE /* DateFormatters.swift */; };
+		C029627202AA021D7D7CCBFD /* DMChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 250ADB58D255A19EB18A4E11 /* DMChannel.swift */; };
 		C6E80C5B3185354AE1692047 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BBA68633E1B90FB59129CDB /* LoginView.swift */; };
 		C725CE1DFE4ADF33DC380F5E /* AppSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18C5226B79497ED5AFCE1B2C /* AppSettingsView.swift */; };
 		C7745008949130FFFC49EC23 /* GatewayEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 049F7E490014B85D68B46A7B /* GatewayEvent.swift */; };
@@ -61,6 +64,7 @@
 		E8A6A0285E46C335B1640A5D /* ServerListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6B8D364175F5E8B8875740F /* ServerListViewModel.swift */; };
 		E99465B9FC7F9B2BBAD16DBF /* UserProfilePopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E2C170C38A9DE24133DAE44 /* UserProfilePopover.swift */; };
 		EC9E025DC17571EB080FB70E /* MessageRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD0F08198FBA2A06D871818B /* MessageRow.swift */; };
+		EF53DA0188B8452BBFF95B3B /* DMListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0443A9553BB15CCB536BAE36 /* DMListView.swift */; };
 		EFEF9E28BCC2E8CD79CFD1F7 /* Colors.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10395B4D9B8F616FA5B3625 /* Colors.swift */; };
 		F0826BC1263BB779467F640F /* GuildIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4515AE24B991706C265B7D7 /* GuildIcon.swift */; };
 		F6E2CECC1474BD8FD09B09FD /* PresenceState.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC1436B40A42B73F6FF2A95C /* PresenceState.swift */; };
@@ -70,6 +74,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		0443A9553BB15CCB536BAE36 /* DMListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DMListView.swift; sourceTree = "<group>"; };
 		049F7E490014B85D68B46A7B /* GatewayEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayEvent.swift; sourceTree = "<group>"; };
 		04C044ECF926804C2F3B102F /* User.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = User.swift; sourceTree = "<group>"; };
 		05A05FB5C2D5032D4E704FCD /* SettingsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewModel.swift; sourceTree = "<group>"; };
@@ -81,8 +86,10 @@
 		18C5226B79497ED5AFCE1B2C /* AppSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsView.swift; sourceTree = "<group>"; };
 		1BBA68633E1B90FB59129CDB /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		1E2C170C38A9DE24133DAE44 /* UserProfilePopover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfilePopover.swift; sourceTree = "<group>"; };
+		250ADB58D255A19EB18A4E11 /* DMChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DMChannel.swift; sourceTree = "<group>"; };
 		26B774625EE9E78BE006B690 /* CreateGuildSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateGuildSheet.swift; sourceTree = "<group>"; };
 		28F2F44244DEE92AF0FFE4A8 /* TypingIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypingIndicator.swift; sourceTree = "<group>"; };
+		2A29812152A12899FCC7A919 /* DMListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DMListViewModel.swift; sourceTree = "<group>"; };
 		2B10719F8EBE137C91CBF744 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		3006CF97954CB7CBBB69A632 /* Snowflake.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Snowflake.swift; sourceTree = "<group>"; };
 		3FB33C333A74EE8DAAC87872 /* Retrocast.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Retrocast.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -91,6 +98,7 @@
 		4C139876E109B9B3B5F2E413 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		5003779038C4CC3528C731F8 /* Attachment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Attachment.swift; sourceTree = "<group>"; };
 		5699080FB4A28C118304844D /* MarkdownParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownParser.swift; sourceTree = "<group>"; };
+		679BFF89C2E71BE01F1AA8EB /* CreateChannelSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateChannelSheet.swift; sourceTree = "<group>"; };
 		6C4ED36112A22BCF644D5F08 /* ReconnectionStrategy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReconnectionStrategy.swift; sourceTree = "<group>"; };
 		6DE73B037470E38CA40B54E4 /* Invite.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Invite.swift; sourceTree = "<group>"; };
 		78D21A0674ADA53C23CF7BFE /* DateFormatters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateFormatters.swift; sourceTree = "<group>"; };
@@ -181,6 +189,7 @@
 				9C5DB846FACF0F8A6D1F3D31 /* AuthViewModel.swift */,
 				D42F7703C06AD96F44C34B37 /* ChannelListViewModel.swift */,
 				EE3A1DEA94F5849927B8E1D6 /* ChatViewModel.swift */,
+				2A29812152A12899FCC7A919 /* DMListViewModel.swift */,
 				A772C0830E7886968300FACC /* InviteViewModel.swift */,
 				AFBC94DC40295447F8F883C8 /* MemberListViewModel.swift */,
 				E6B8D364175F5E8B8875740F /* ServerListViewModel.swift */,
@@ -194,6 +203,7 @@
 			children = (
 				13AF9719D6E2AB483B8E0BD3 /* ChannelSidebarView.swift */,
 				CC868A95EAAB39E3E3CF7C63 /* ChatAreaView.swift */,
+				0443A9553BB15CCB536BAE36 /* DMListView.swift */,
 				CFD52683B34DFAE006EE84F9 /* MainView.swift */,
 				F9BABD67B01A2D2209DF5B2B /* ServerListView.swift */,
 			);
@@ -278,6 +288,7 @@
 			children = (
 				5003779038C4CC3528C731F8 /* Attachment.swift */,
 				91DFDD16736BBEBF2810AEDD /* Channel.swift */,
+				250ADB58D255A19EB18A4E11 /* DMChannel.swift */,
 				FDC86DFFE59E90928D0148F4 /* Guild.swift */,
 				6DE73B037470E38CA40B54E4 /* Invite.swift */,
 				897255E33E0F9C4CB4E775F1 /* Member.swift */,
@@ -303,6 +314,7 @@
 		C6BE71CD974095367CF68513 /* Guild */ = {
 			isa = PBXGroup;
 			children = (
+				679BFF89C2E71BE01F1AA8EB /* CreateChannelSheet.swift */,
 				26B774625EE9E78BE006B690 /* CreateGuildSheet.swift */,
 				CEFAE96C832B727FCC5E014A /* GuildSettingsView.swift */,
 				ECA668D87A09270D6535ACA7 /* InviteSheet.swift */,
@@ -404,7 +416,11 @@
 				E090FA3DDDF1056A17F921FF /* ChatViewModel.swift in Sources */,
 				EFEF9E28BCC2E8CD79CFD1F7 /* Colors.swift in Sources */,
 				378D5C9FEEEB6107FA7F2BCE /* ContentView.swift in Sources */,
+				833F53E66C4224C686D46D98 /* CreateChannelSheet.swift in Sources */,
 				0AAE0D148980F0DBDC194237 /* CreateGuildSheet.swift in Sources */,
+				C029627202AA021D7D7CCBFD /* DMChannel.swift in Sources */,
+				EF53DA0188B8452BBFF95B3B /* DMListView.swift in Sources */,
+				312E9E1AA9821D0CCDEE4D31 /* DMListViewModel.swift in Sources */,
 				BB5BC4F819368A1DA9289508 /* DateFormatters.swift in Sources */,
 				426D4F9777F256653C907404 /* DateSeparator.swift in Sources */,
 				B993CD9EC11A726BF91FA65D /* Endpoints.swift in Sources */,

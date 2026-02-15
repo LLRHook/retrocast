@@ -26,7 +26,12 @@ struct InviteSheet: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 8))
 
                             Button {
+                                #if os(iOS)
                                 UIPasteboard.general.string = code
+                                #else
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(code, forType: .string)
+                                #endif
                             } label: {
                                 Image(systemName: "doc.on.doc")
                                     .font(.title3)

@@ -76,23 +76,31 @@ func (c *Client) DeleteRefreshToken(ctx context.Context, token string) error {
 	return c.rdb.Del(ctx, refreshTokenPrefix+token).Err()
 }
 
-// rateLimitScript atomically increments a counter and sets its TTL on first use.
+// rateLimitScript atomically increments a counter, sets its TTL on first use,
+// and returns {count, pttl_ms} for rate limit headers.
 var rateLimitScript = goredis.NewScript(`
 local count = redis.call("INCR", KEYS[1])
 if count == 1 then
     redis.call("PEXPIRE", KEYS[1], ARGV[1])
 end
-return count
+local ttl = redis.call("PTTL", KEYS[1])
+return {count, ttl}
 `)
 
-// CheckRateLimit returns true if the request is allowed, false if rate limited.
-// Uses an atomic INCR + PEXPIRE Lua script for a fixed-window counter.
-func (c *Client) CheckRateLimit(ctx context.Context, key string, limit int, window time.Duration) (bool, error) {
-	count, err := rateLimitScript.Run(ctx, c.rdb, []string{key}, window.Milliseconds()).Int64()
+// CheckRateLimit returns whether the request is allowed, the current count,
+// and the remaining TTL in milliseconds for the rate limit window.
+func (c *Client) CheckRateLimit(ctx context.Context, key string, limit int, window time.Duration) (allowed bool, count int64, ttlMs int64, err error) {
+	result, err := rateLimitScript.Run(ctx, c.rdb, []string{key}, window.Milliseconds()).Result()
 	if err != nil {
-		return false, fmt.Errorf("checking rate limit: %w", err)
+		return false, 0, 0, fmt.Errorf("checking rate limit: %w", err)
 	}
-	return count <= int64(limit), nil
+	vals, ok := result.([]interface{})
+	if !ok || len(vals) < 2 {
+		return false, 0, 0, fmt.Errorf("unexpected rate limit result")
+	}
+	count, _ = vals[0].(int64)
+	ttlMs, _ = vals[1].(int64)
+	return count <= int64(limit), count, ttlMs, nil
 }
 
 // SetPresence sets a user's presence status with a TTL.

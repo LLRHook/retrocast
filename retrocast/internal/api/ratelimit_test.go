@@ -35,6 +35,17 @@ func TestRateLimit_Allowed(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
 	}
+
+	// Verify rate limit headers are present.
+	if got := rec.Header().Get("X-RateLimit-Limit"); got != "5" {
+		t.Errorf("expected X-RateLimit-Limit=5, got %q", got)
+	}
+	if got := rec.Header().Get("X-RateLimit-Remaining"); got != "4" {
+		t.Errorf("expected X-RateLimit-Remaining=4, got %q", got)
+	}
+	if got := rec.Header().Get("X-RateLimit-Reset"); got == "" {
+		t.Error("expected X-RateLimit-Reset header to be set")
+	}
 }
 
 func TestRateLimit_Exceeded(t *testing.T) {
@@ -71,6 +82,17 @@ func TestRateLimit_Exceeded(t *testing.T) {
 	}
 	if errResp.Error.Code != "RATE_LIMITED" {
 		t.Errorf("expected error code 'RATE_LIMITED', got %q", errResp.Error.Code)
+	}
+
+	// Verify rate limit headers on 429 response.
+	if got := rec.Header().Get("X-RateLimit-Limit"); got != "2" {
+		t.Errorf("expected X-RateLimit-Limit=2, got %q", got)
+	}
+	if got := rec.Header().Get("X-RateLimit-Remaining"); got != "0" {
+		t.Errorf("expected X-RateLimit-Remaining=0, got %q", got)
+	}
+	if got := rec.Header().Get("Retry-After"); got == "" {
+		t.Error("expected Retry-After header on 429 response")
 	}
 }
 

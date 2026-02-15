@@ -47,7 +47,7 @@ struct MessageRow: View {
 
                 // Message content
                 if !message.content.isEmpty {
-                    Text(message.content)
+                    Text(MarkdownParser.parse(message.content))
                         .font(.body)
                         .foregroundStyle(.retroText)
                         .textSelection(.enabled)
@@ -112,7 +112,12 @@ struct MessageRow: View {
                     }
                 }
                 Button("Copy Text") {
+                    #if os(iOS)
                     UIPasteboard.general.string = message.content
+                    #else
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(message.content, forType: .string)
+                    #endif
                 }
             }
         }

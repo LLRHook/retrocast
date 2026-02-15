@@ -238,6 +238,20 @@ extension Endpoint {
     }
 }
 
+// MARK: - DMs
+
+extension Endpoint {
+    static func createDM(recipientID: Snowflake) -> Endpoint {
+        struct Body: Encodable, Sendable { let recipient_id: String }
+        return Endpoint(method: .POST, path: "/api/v1/users/@me/channels",
+                        body: Body(recipient_id: recipientID.description))
+    }
+
+    static func listDMs() -> Endpoint {
+        Endpoint(method: .GET, path: "/api/v1/users/@me/channels")
+    }
+}
+
 // MARK: - Typing
 
 extension Endpoint {

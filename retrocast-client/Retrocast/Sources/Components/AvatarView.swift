@@ -4,11 +4,24 @@ struct AvatarView: View {
     let name: String
     let avatarHash: String?
     var size: CGFloat = 32
+    var avatarURL: String?
 
     var body: some View {
-        if let hash = avatarHash, !hash.isEmpty {
-            // TODO: Load avatar image from server
-            initialsView
+        if let urlStr = avatarURL, let url = URL(string: urlStr) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: size, height: size)
+                        .clipShape(Circle())
+                case .failure:
+                    initialsView
+                default:
+                    initialsView
+                }
+            }
         } else {
             initialsView
         }

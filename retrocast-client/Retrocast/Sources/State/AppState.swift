@@ -13,6 +13,11 @@ final class AppState {
     var members: [Snowflake: [Member]] = [:]          // guildID -> members
     var roles: [Snowflake: [Role]] = [:]              // guildID -> sorted roles
 
+    // MARK: - DM data
+
+    var dms: [DMChannel] = []
+    var showDMList = false                             // true when DM list is active instead of guild channels
+
     // MARK: - Presence & typing
 
     var presence: [Snowflake: String] = [:]           // userID -> status ("online", "idle", "dnd", "offline")
@@ -49,11 +54,27 @@ final class AppState {
         guilds.values.sorted { $0.id < $1.id }
     }
 
+    var selectedDM: DMChannel? {
+        guard showDMList, let channelID = selectedChannelID else { return nil }
+        return dms.first { $0.id == channelID }
+    }
+
     // MARK: - Mutations
 
     func selectGuild(_ id: Snowflake?) {
+        showDMList = false
         selectedGuildID = id
         selectedChannelID = nil
+    }
+
+    func selectDMList() {
+        showDMList = true
+        selectedGuildID = nil
+        selectedChannelID = nil
+    }
+
+    func selectDMChannel(_ id: Snowflake) {
+        selectedChannelID = id
     }
 
     func selectChannel(_ id: Snowflake?) {
@@ -113,6 +134,8 @@ final class AppState {
         channels = [:]
         members = [:]
         roles = [:]
+        dms = []
+        showDMList = false
         presence = [:]
         typingUsers = [:]
         selectedGuildID = nil

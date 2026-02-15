@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ChannelSidebarView: View {
-    let viewModel: ChannelListViewModel?
+    @Bindable var viewModel: ChannelListViewModel
     @Environment(AppState.self) private var appState
 
     var body: some View {
@@ -14,14 +14,29 @@ struct ChannelSidebarView: View {
             // Channel list
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
-                    if let guildID = appState.selectedGuildID, let vm = viewModel {
-                        let groups = vm.groupedChannels(for: guildID)
+                    if let guildID = appState.selectedGuildID {
+                        let groups = viewModel.groupedChannels(for: guildID)
                         ForEach(Array(groups.enumerated()), id: \.offset) { _, group in
                             if let category = group.category {
                                 categoryHeader(category)
                             }
                             ForEach(group.channels) { channel in
                                 channelRow(channel)
+                                    .contextMenu {
+                                        Button {
+                                            viewModel.editChannelName = channel.name
+                                            viewModel.editingChannel = channel
+                                        } label: {
+                                            Label("Rename", systemImage: "pencil")
+                                        }
+                                        Button(role: .destructive) {
+                                            Task {
+                                                await viewModel.deleteChannel(channel)
+                                            }
+                                        } label: {
+                                            Label("Delete", systemImage: "trash")
+                                        }
+                                    }
                             }
                         }
                     }
@@ -33,8 +48,33 @@ struct ChannelSidebarView: View {
         .background(Color.retroSidebar)
         .task(id: appState.selectedGuildID) {
             if let guildID = appState.selectedGuildID {
-                await viewModel?.loadChannels(guildID: guildID)
+                await viewModel.loadChannels(guildID: guildID)
             }
+        }
+        .sheet(isPresented: $viewModel.showCreateChannel) {
+            if let guildID = appState.selectedGuildID {
+                let categories = (appState.channels[guildID] ?? []).filter { $0.type == .category }
+                CreateChannelSheet(viewModel: viewModel, guildID: guildID, categories: categories)
+            }
+        }
+        .alert("Rename Channel", isPresented: Binding(
+            get: { viewModel.editingChannel != nil },
+            set: { if !$0 { viewModel.editingChannel = nil } }
+        )) {
+            TextField("Channel name", text: $viewModel.editChannelName)
+            Button("Cancel", role: .cancel) {
+                viewModel.editingChannel = nil
+                viewModel.editChannelName = ""
+            }
+            Button("Save") {
+                if let channel = viewModel.editingChannel {
+                    Task {
+                        await viewModel.renameChannel(channel, newName: viewModel.editChannelName)
+                    }
+                }
+            }
+        } message: {
+            Text("Enter a new name for this channel.")
         }
     }
 
@@ -45,6 +85,14 @@ struct ChannelSidebarView: View {
                 .foregroundStyle(.retroText)
                 .lineLimit(1)
             Spacer()
+            Button {
+                viewModel.showCreateChannel = true
+            } label: {
+                Image(systemName: "plus")
+                    .font(.subheadline)
+                    .foregroundStyle(.retroMuted)
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -66,6 +114,21 @@ struct ChannelSidebarView: View {
         .padding(.top, 16)
         .padding(.bottom, 4)
         .padding(.leading, 4)
+        .contextMenu {
+            Button {
+                viewModel.editChannelName = channel.name
+                viewModel.editingChannel = channel
+            } label: {
+                Label("Rename", systemImage: "pencil")
+            }
+            Button(role: .destructive) {
+                Task {
+                    await viewModel.deleteChannel(channel)
+                }
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
     }
 
     private func channelRow(_ channel: Channel) -> some View {

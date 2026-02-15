@@ -34,22 +34,30 @@ struct ChatAreaView: View {
 
     private var channelHeader: some View {
         HStack(spacing: 8) {
-            Image(systemName: "number")
-                .foregroundStyle(.retroMuted)
-            if let channelID = appState.selectedChannelID,
-               let guildID = appState.selectedGuildID,
-               let channel = appState.channels[guildID]?.first(where: { $0.id == channelID }) {
-                Text(channel.name)
+            if let dm = appState.selectedDM {
+                Image(systemName: "at")
+                    .foregroundStyle(.retroMuted)
+                Text(dm.displayName)
                     .font(.headline)
                     .foregroundStyle(.retroText)
+            } else {
+                Image(systemName: "number")
+                    .foregroundStyle(.retroMuted)
+                if let channelID = appState.selectedChannelID,
+                   let guildID = appState.selectedGuildID,
+                   let channel = appState.channels[guildID]?.first(where: { $0.id == channelID }) {
+                    Text(channel.name)
+                        .font(.headline)
+                        .foregroundStyle(.retroText)
 
-                if let topic = channel.topic, !topic.isEmpty {
-                    Divider()
-                        .frame(height: 20)
-                    Text(topic)
-                        .font(.subheadline)
-                        .foregroundStyle(.retroMuted)
-                        .lineLimit(1)
+                    if let topic = channel.topic, !topic.isEmpty {
+                        Divider()
+                            .frame(height: 20)
+                        Text(topic)
+                            .font(.subheadline)
+                            .foregroundStyle(.retroMuted)
+                            .lineLimit(1)
+                    }
                 }
             }
             Spacer()

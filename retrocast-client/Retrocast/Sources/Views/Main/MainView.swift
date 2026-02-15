@@ -8,6 +8,7 @@ struct MainView: View {
     @State private var serverListVM: ServerListViewModel?
     @State private var channelListVM: ChannelListViewModel?
     @State private var chatVM: ChatViewModel?
+    @State private var dmListVM: DMListViewModel?
     @State private var showMemberList = false
 
     var body: some View {
@@ -15,7 +16,9 @@ struct MainView: View {
             ServerListView(viewModel: serverListVM)
                 .navigationSplitViewColumnWidth(min: 72, ideal: 72, max: 72)
         } content: {
-            if appState.selectedGuildID != nil {
+            if appState.showDMList {
+                DMListView(viewModel: dmListVM)
+            } else if appState.selectedGuildID != nil, let channelListVM {
                 ChannelSidebarView(viewModel: channelListVM)
             } else {
                 emptyGuildState
@@ -25,17 +28,19 @@ struct MainView: View {
                 HStack(spacing: 0) {
                     ChatAreaView(viewModel: chatVM)
                         .frame(maxWidth: .infinity)
-                    if showMemberList {
+                    if showMemberList && !appState.showDMList {
                         MemberListView()
                     }
                 }
                 .toolbar {
-                    ToolbarItem(placement: .primaryAction) {
-                        Button {
-                            withAnimation { showMemberList.toggle() }
-                        } label: {
-                            Image(systemName: "person.2")
-                                .foregroundStyle(showMemberList ? .retroText : .retroMuted)
+                    if !appState.showDMList {
+                        ToolbarItem(placement: .primaryAction) {
+                            Button {
+                                withAnimation { showMemberList.toggle() }
+                            } label: {
+                                Image(systemName: "person.2")
+                                    .foregroundStyle(showMemberList ? .retroText : .retroMuted)
+                            }
                         }
                     }
                 }
@@ -48,9 +53,11 @@ struct MainView: View {
             let slVM = ServerListViewModel(api: api, appState: appState)
             let clVM = ChannelListViewModel(api: api, appState: appState)
             let cVM = ChatViewModel(api: api, appState: appState)
+            let dlVM = DMListViewModel(api: api, appState: appState)
             serverListVM = slVM
             channelListVM = clVM
             chatVM = cVM
+            dmListVM = dlVM
 
             setupGatewayEventHandler()
             await slVM.loadGuilds()
