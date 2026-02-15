@@ -10,6 +10,7 @@ import (
 
 	"github.com/victorivanov/retrocast/internal/gateway"
 	"github.com/victorivanov/retrocast/internal/models"
+	"github.com/victorivanov/retrocast/internal/service"
 )
 
 func newBanHandler(
@@ -19,7 +20,9 @@ func newBanHandler(
 	bans *mockBanRepo,
 	gw *mockGateway,
 ) *BanHandler {
-	return NewBanHandler(guilds, members, roles, bans, gw)
+	perms := service.NewPermissionChecker(guilds, members, roles, &mockChannelOverrideRepo{})
+	svc := service.NewBanService(guilds, members, roles, bans, gw, perms)
+	return NewBanHandler(svc)
 }
 
 func TestBanMember(t *testing.T) {

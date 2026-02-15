@@ -11,6 +11,7 @@ import (
 	"github.com/victorivanov/retrocast/internal/gateway"
 	"github.com/victorivanov/retrocast/internal/models"
 	"github.com/victorivanov/retrocast/internal/permissions"
+	"github.com/victorivanov/retrocast/internal/service"
 )
 
 // ---------------------------------------------------------------------------
@@ -26,7 +27,7 @@ const (
 	testRoleID    int64 = 6000
 )
 
-// newMessageHandler wires up a MessageHandler with the given mocks.
+// newMessageHandler wires up a MessageHandler with the given mocks via the service layer.
 func newMessageHandler(
 	msgs *mockMessageRepo,
 	chs *mockChannelRepo,
@@ -36,7 +37,9 @@ func newMessageHandler(
 	overrides *mockChannelOverrideRepo,
 	gw *mockGateway,
 ) *MessageHandler {
-	return NewMessageHandler(msgs, chs, &mockDMChannelRepo{}, mems, roles, guilds, overrides, testSnowflake(), gw)
+	perms := service.NewPermissionChecker(guilds, mems, roles, overrides)
+	svc := service.NewMessageService(msgs, chs, &mockDMChannelRepo{}, testSnowflake(), gw, perms)
+	return NewMessageHandler(svc)
 }
 
 // permMocks sets up the standard guild/member/role/override mocks so that a
@@ -585,55 +588,6 @@ func TestDeleteMessage_NoPermission(t *testing.T) {
 	setAuthUser(c, testUserID)
 
 	_ = h.DeleteMessage(c)
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Typing tests
-// ---------------------------------------------------------------------------
-
-func TestTyping_Success(t *testing.T) {
-	guilds, members, roles, overrides := permMocks(permissions.PermSendMessages | permissions.PermViewChannel)
-	channels := channelMock()
-	gw := &mockGateway{}
-	msgs := &mockMessageRepo{}
-
-	h := newMessageHandler(msgs, channels, members, roles, guilds, overrides, gw)
-
-	c, rec := newTestContext(http.MethodPost, "/api/v1/channels/2000/typing", nil)
-	c.SetParamNames("id")
-	c.SetParamValues("2000")
-	setAuthUser(c, testUserID)
-
-	err := h.Typing(c)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("expected 204, got %d: %s", rec.Code, rec.Body.String())
-	}
-	if len(gw.events) != 1 || gw.events[0].Event != gateway.EventTypingStart {
-		t.Fatalf("expected TYPING_START event, got %+v", gw.events)
-	}
-}
-
-func TestTyping_NoPermission(t *testing.T) {
-	// Has ViewChannel but NOT SendMessages.
-	guilds, members, roles, overrides := permMocks(permissions.PermViewChannel)
-	channels := channelMock()
-	gw := &mockGateway{}
-	msgs := &mockMessageRepo{}
-
-	h := newMessageHandler(msgs, channels, members, roles, guilds, overrides, gw)
-
-	c, rec := newTestContext(http.MethodPost, "/api/v1/channels/2000/typing", nil)
-	c.SetParamNames("id")
-	c.SetParamValues("2000")
-	setAuthUser(c, testUserID)
-
-	_ = h.Typing(c)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
 	}

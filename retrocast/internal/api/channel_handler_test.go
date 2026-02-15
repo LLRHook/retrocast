@@ -7,28 +7,44 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/labstack/echo/v4"
 	"github.com/victorivanov/retrocast/internal/models"
+	"github.com/victorivanov/retrocast/internal/permissions"
+	"github.com/victorivanov/retrocast/internal/service"
 )
 
-// allowAll is a guildPerm func that always permits.
-func allowAll(_ echo.Context, _, _, _ int64) error {
-	return nil
-}
-
-// denyAll is a guildPerm func that always denies with 403.
-func denyAll(c echo.Context, _, _, _ int64) error {
-	return errorJSON(c, http.StatusForbidden, "MISSING_PERMISSIONS", "denied")
-}
-
+// newTestChannelHandler creates a ChannelHandler backed by the given mock repos.
+// When ownerID > 0, the guild mock returns that owner to allow permission checks.
 func newTestChannelHandler(
 	channels *mockChannelRepo,
 	members *mockMemberRepo,
-	guildPerm func(echo.Context, int64, int64, int64) error,
+	guilds *mockGuildRepo,
+	roles *mockRoleRepo,
+	overrides *mockChannelOverrideRepo,
 ) *ChannelHandler {
 	gw := &mockGateway{}
 	sf := testSnowflake()
-	return NewChannelHandler(channels, &mockGuildRepo{}, members, &mockRoleRepo{}, sf, guildPerm, gw)
+	perms := service.NewPermissionChecker(guilds, members, roles, overrides)
+	svc := service.NewChannelService(channels, members, sf, gw, perms)
+	return NewChannelHandler(svc)
+}
+
+// allowAllChannelHandler builds a handler where the caller is always the guild owner.
+func allowAllChannelHandler(channels *mockChannelRepo, members *mockMemberRepo) *ChannelHandler {
+	guilds := &mockGuildRepo{
+		GetByIDFn: func(_ context.Context, id int64) (*models.Guild, error) {
+			// Caller 1000 is always the owner.
+			return &models.Guild{ID: id, OwnerID: 1000}, nil
+		},
+	}
+	roles := &mockRoleRepo{
+		GetByMemberFn: func(_ context.Context, _, _ int64) ([]models.Role, error) {
+			return []models.Role{{Permissions: int64(permissions.PermAdministrator)}}, nil
+		},
+		GetByGuildIDFn: func(_ context.Context, _ int64) ([]models.Role, error) {
+			return []models.Role{{ID: 1, IsDefault: true, Permissions: int64(permissions.PermAdministrator)}}, nil
+		},
+	}
+	return newTestChannelHandler(channels, members, guilds, roles, &mockChannelOverrideRepo{})
 }
 
 func TestCreateChannel_Success(t *testing.T) {
@@ -38,7 +54,7 @@ func TestCreateChannel_Success(t *testing.T) {
 		},
 	}
 
-	h := newTestChannelHandler(channels, &mockMemberRepo{}, allowAll)
+	h := allowAllChannelHandler(channels, &mockMemberRepo{})
 
 	body := strings.NewReader(`{"name":"new-channel","type":0}`)
 	c, rec := newTestContext(http.MethodPost, "/api/v1/guilds/500/channels", body)
@@ -69,7 +85,26 @@ func TestCreateChannel_Success(t *testing.T) {
 }
 
 func TestCreateChannel_NoPermission(t *testing.T) {
-	h := newTestChannelHandler(&mockChannelRepo{}, &mockMemberRepo{}, denyAll)
+	guilds := &mockGuildRepo{
+		GetByIDFn: func(_ context.Context, id int64) (*models.Guild, error) {
+			return &models.Guild{ID: id, OwnerID: 9999}, nil // caller 1000 is NOT owner
+		},
+	}
+	members := &mockMemberRepo{
+		GetByGuildAndUserFn: func(_ context.Context, gID, uID int64) (*models.Member, error) {
+			return &models.Member{GuildID: gID, UserID: uID}, nil
+		},
+	}
+	roles := &mockRoleRepo{
+		GetByMemberFn: func(_ context.Context, _, _ int64) ([]models.Role, error) {
+			return []models.Role{{Permissions: 0}}, nil // no permissions
+		},
+		GetByGuildIDFn: func(_ context.Context, _ int64) ([]models.Role, error) {
+			return []models.Role{{ID: 1, IsDefault: true, Permissions: 0}}, nil
+		},
+	}
+
+	h := newTestChannelHandler(&mockChannelRepo{}, members, guilds, roles, &mockChannelOverrideRepo{})
 
 	body := strings.NewReader(`{"name":"new-channel","type":0}`)
 	c, rec := newTestContext(http.MethodPost, "/api/v1/guilds/500/channels", body)
@@ -110,7 +145,7 @@ func TestListChannels_AsMember(t *testing.T) {
 		},
 	}
 
-	h := newTestChannelHandler(channels, members, allowAll)
+	h := allowAllChannelHandler(channels, members)
 
 	c, rec := newTestContext(http.MethodGet, "/api/v1/guilds/500/channels", nil)
 	c.SetParamNames("id")
@@ -158,7 +193,7 @@ func TestGetChannel_AsMember(t *testing.T) {
 		},
 	}
 
-	h := newTestChannelHandler(channels, members, allowAll)
+	h := allowAllChannelHandler(channels, members)
 
 	c, rec := newTestContext(http.MethodGet, "/api/v1/channels/100", nil)
 	c.SetParamNames("id")
@@ -197,7 +232,7 @@ func TestUpdateChannel_WithPermission(t *testing.T) {
 		},
 	}
 
-	h := newTestChannelHandler(channels, &mockMemberRepo{}, allowAll)
+	h := allowAllChannelHandler(channels, &mockMemberRepo{})
 
 	body := strings.NewReader(`{"name":"new-name"}`)
 	c, rec := newTestContext(http.MethodPatch, "/api/v1/channels/100", body)
@@ -242,7 +277,7 @@ func TestDeleteChannel_WithPermission(t *testing.T) {
 		},
 	}
 
-	h := newTestChannelHandler(channels, &mockMemberRepo{}, allowAll)
+	h := allowAllChannelHandler(channels, &mockMemberRepo{})
 
 	c, rec := newTestContext(http.MethodDelete, "/api/v1/channels/100", nil)
 	c.SetParamNames("id")

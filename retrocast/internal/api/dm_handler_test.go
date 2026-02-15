@@ -11,6 +11,7 @@ import (
 
 	"github.com/victorivanov/retrocast/internal/gateway"
 	"github.com/victorivanov/retrocast/internal/models"
+	"github.com/victorivanov/retrocast/internal/service"
 )
 
 // ---------------------------------------------------------------------------
@@ -22,9 +23,10 @@ const (
 	testDMChannelID int64 = 7000
 )
 
-// newDMHandler wires up a DMHandler with the given mocks and test defaults.
+// newDMHandler wires up a DMHandler with the given mocks via the service layer.
 func newDMHandler(dms *mockDMChannelRepo, users *mockUserRepo, gw *mockGateway) *DMHandler {
-	return NewDMHandler(dms, users, testSnowflake(), gw)
+	svc := service.NewDMService(dms, users, testSnowflake(), gw)
+	return NewDMHandler(svc)
 }
 
 // recipientUser returns a test recipient user.

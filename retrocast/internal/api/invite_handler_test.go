@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/victorivanov/retrocast/internal/models"
+	"github.com/victorivanov/retrocast/internal/service"
 )
 
 func newInviteHandler(
@@ -19,7 +20,9 @@ func newInviteHandler(
 	bans *mockBanRepo,
 	gw *mockGateway,
 ) *InviteHandler {
-	return NewInviteHandler(invites, guilds, members, roles, bans, gw)
+	perms := service.NewPermissionChecker(guilds, members, roles, &mockChannelOverrideRepo{})
+	svc := service.NewInviteService(invites, guilds, members, bans, gw, perms)
+	return NewInviteHandler(svc)
 }
 
 func TestCreateInvite_Success(t *testing.T) {
@@ -111,7 +114,7 @@ func TestGetInvite_Public(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var resp inviteInfoResponse
+	var resp service.InviteInfo
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("failed to unmarshal: %v", err)
 	}

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/victorivanov/retrocast/internal/models"
+	"github.com/victorivanov/retrocast/internal/service"
 )
 
 func TestGetMe(t *testing.T) {
@@ -20,7 +21,8 @@ func TestGetMe(t *testing.T) {
 			return nil, nil
 		},
 	}
-	h := NewUserHandler(users)
+	svc := service.NewUserService(users)
+	h := NewUserHandler(svc)
 
 	c, rec := newTestContext(http.MethodGet, "/api/v1/users/@me", nil)
 	setAuthUser(c, 1)
@@ -49,7 +51,8 @@ func TestGetMe(t *testing.T) {
 
 func TestGetMe_NotFound(t *testing.T) {
 	users := &mockUserRepo{} // GetByIDFn returns nil, nil by default
-	h := NewUserHandler(users)
+	svc := service.NewUserService(users)
+	h := NewUserHandler(svc)
 
 	c, rec := newTestContext(http.MethodGet, "/api/v1/users/@me", nil)
 	setAuthUser(c, 999)
@@ -77,7 +80,8 @@ func TestGetMe_InternalError(t *testing.T) {
 			return nil, fmt.Errorf("db connection lost")
 		},
 	}
-	h := NewUserHandler(users)
+	svc := service.NewUserService(users)
+	h := NewUserHandler(svc)
 
 	c, rec := newTestContext(http.MethodGet, "/api/v1/users/@me", nil)
 	setAuthUser(c, 1)
@@ -108,7 +112,8 @@ func TestUpdateMe(t *testing.T) {
 			return nil
 		},
 	}
-	h := NewUserHandler(users)
+	svc := service.NewUserService(users)
+	h := NewUserHandler(svc)
 
 	body := strings.NewReader(`{"display_name":"New Name"}`)
 	c, rec := newTestContext(http.MethodPatch, "/api/v1/users/@me", body)
@@ -153,7 +158,8 @@ func TestUpdateMe_AvatarHash(t *testing.T) {
 			return nil
 		},
 	}
-	h := NewUserHandler(users)
+	svc := service.NewUserService(users)
+	h := NewUserHandler(svc)
 
 	body := strings.NewReader(`{"avatar":"abc123"}`)
 	c, rec := newTestContext(http.MethodPatch, "/api/v1/users/@me", body)
@@ -180,7 +186,8 @@ func TestUpdateMe_EmptyBody(t *testing.T) {
 			return nil, nil
 		},
 	}
-	h := NewUserHandler(users)
+	svc := service.NewUserService(users)
+	h := NewUserHandler(svc)
 
 	// Empty JSON object: no fields to update, but bind succeeds. Update is still called.
 	body := strings.NewReader(`{}`)
@@ -205,7 +212,8 @@ func TestUpdateMe_DisplayNameTooLong(t *testing.T) {
 			return nil, nil
 		},
 	}
-	h := NewUserHandler(users)
+	svc := service.NewUserService(users)
+	h := NewUserHandler(svc)
 
 	longName := strings.Repeat("a", 33)
 	body := strings.NewReader(fmt.Sprintf(`{"display_name":"%s"}`, longName))
@@ -238,7 +246,8 @@ func TestUpdateMe_DisplayNameEmpty(t *testing.T) {
 			return nil, nil
 		},
 	}
-	h := NewUserHandler(users)
+	svc := service.NewUserService(users)
+	h := NewUserHandler(svc)
 
 	body := strings.NewReader(`{"display_name":""}`)
 	c, rec := newTestContext(http.MethodPatch, "/api/v1/users/@me", body)

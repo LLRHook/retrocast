@@ -16,6 +16,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/victorivanov/retrocast/internal/models"
 	"github.com/victorivanov/retrocast/internal/permissions"
+	"github.com/victorivanov/retrocast/internal/service"
 )
 
 // ---------------------------------------------------------------------------
@@ -93,7 +94,9 @@ func newUploadHandler(
 	overrides *mockChannelOverrideRepo,
 	store *mockStorage,
 ) *UploadHandler {
-	return NewUploadHandler(att, chs, mems, roles, guilds, overrides, testSnowflake(), store)
+	perms := service.NewPermissionChecker(guilds, mems, roles, overrides)
+	svc := service.NewUploadService(att, chs, testSnowflake(), store, perms)
+	return NewUploadHandler(svc)
 }
 
 func newMultipartContext(t *testing.T, filename, contentType string, fileContent []byte) (echo.Context, *httptest.ResponseRecorder) {

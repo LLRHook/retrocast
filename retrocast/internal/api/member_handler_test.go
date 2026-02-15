@@ -8,21 +8,34 @@ import (
 	"testing"
 	"time"
 
-	"github.com/labstack/echo/v4"
 	"github.com/victorivanov/retrocast/internal/models"
+	"github.com/victorivanov/retrocast/internal/permissions"
+	"github.com/victorivanov/retrocast/internal/service"
 )
-
-// noopGuildPerm is a guildPerm callback that always allows.
-func noopGuildPerm(_ echo.Context, _, _, _ int64) error { return nil }
 
 func newMemberHandler(
 	members *mockMemberRepo,
 	guilds *mockGuildRepo,
 	roles *mockRoleRepo,
-	guildPerm func(echo.Context, int64, int64, int64) error,
 	gw *mockGateway,
 ) *MemberHandler {
-	return NewMemberHandler(members, guilds, roles, guildPerm, gw)
+	perms := service.NewPermissionChecker(guilds, members, roles, &mockChannelOverrideRepo{})
+	svc := service.NewMemberService(members, guilds, roles, gw, perms)
+	return NewMemberHandler(svc)
+}
+
+// newMemberHandlerOwner creates a member handler where caller 100 is the guild owner.
+func newMemberHandlerOwner(
+	members *mockMemberRepo,
+	roles *mockRoleRepo,
+	gw *mockGateway,
+) *MemberHandler {
+	guilds := &mockGuildRepo{
+		GetByIDFn: func(ctx context.Context, id int64) (*models.Guild, error) {
+			return &models.Guild{ID: id, OwnerID: 100}, nil
+		},
+	}
+	return newMemberHandler(members, guilds, roles, gw)
 }
 
 func TestListMembers_AsMember(t *testing.T) {
@@ -39,7 +52,7 @@ func TestListMembers_AsMember(t *testing.T) {
 			}, nil
 		},
 	}
-	h := newMemberHandler(members, &mockGuildRepo{}, &mockRoleRepo{}, noopGuildPerm, gw)
+	h := newMemberHandlerOwner(members, &mockRoleRepo{}, gw)
 
 	c, rec := newTestContext(http.MethodGet, "/api/v1/guilds/1/members", nil)
 	c.SetParamNames("id")
@@ -74,7 +87,7 @@ func TestListMembers_NotMember(t *testing.T) {
 			return nil, nil // not a member
 		},
 	}
-	h := newMemberHandler(members, &mockGuildRepo{}, &mockRoleRepo{}, noopGuildPerm, gw)
+	h := newMemberHandlerOwner(members, &mockRoleRepo{}, gw)
 
 	c, rec := newTestContext(http.MethodGet, "/api/v1/guilds/1/members", nil)
 	c.SetParamNames("id")
@@ -98,7 +111,7 @@ func TestGetMember_Success(t *testing.T) {
 			return &models.Member{GuildID: guildID, UserID: userID, JoinedAt: now}, nil
 		},
 	}
-	h := newMemberHandler(members, &mockGuildRepo{}, &mockRoleRepo{}, noopGuildPerm, gw)
+	h := newMemberHandlerOwner(members, &mockRoleRepo{}, gw)
 
 	c, rec := newTestContext(http.MethodGet, "/api/v1/guilds/1/members/200", nil)
 	c.SetParamNames("id", "user_id")
@@ -127,7 +140,7 @@ func TestUpdateSelf_Nickname(t *testing.T) {
 			return nil
 		},
 	}
-	h := newMemberHandler(members, &mockGuildRepo{}, &mockRoleRepo{}, noopGuildPerm, gw)
+	h := newMemberHandlerOwner(members, &mockRoleRepo{}, gw)
 
 	body := `{"nickname":"CoolNick"}`
 	c, rec := newTestContext(http.MethodPatch, "/api/v1/guilds/1/members/@me", strings.NewReader(body))
@@ -172,13 +185,13 @@ func TestUpdateMember_Nickname(t *testing.T) {
 			return nil
 		},
 	}
-	h := newMemberHandler(members, &mockGuildRepo{}, &mockRoleRepo{}, noopGuildPerm, gw)
+	h := newMemberHandlerOwner(members, &mockRoleRepo{}, gw)
 
 	body := `{"nickname":"NewNick"}`
 	c, rec := newTestContext(http.MethodPatch, "/api/v1/guilds/1/members/200", strings.NewReader(body))
 	c.SetParamNames("id", "user_id")
 	c.SetParamValues("1", "200")
-	setAuthUser(c, 100) // caller
+	setAuthUser(c, 100) // caller (owner)
 
 	err := h.UpdateMember(c)
 	if err != nil {
@@ -217,7 +230,7 @@ func TestUpdateMember_Roles(t *testing.T) {
 			}, nil
 		},
 	}
-	h := newMemberHandler(members, &mockGuildRepo{}, roles, noopGuildPerm, gw)
+	h := newMemberHandlerOwner(members, roles, gw)
 
 	body := `{"roles":[10,20]}`
 	c, rec := newTestContext(http.MethodPatch, "/api/v1/guilds/1/members/200", strings.NewReader(body))
@@ -255,7 +268,7 @@ func TestKickMember_Success(t *testing.T) {
 			return nil
 		},
 	}
-	h := newMemberHandler(members, guilds, &mockRoleRepo{}, noopGuildPerm, gw)
+	h := newMemberHandler(members, guilds, &mockRoleRepo{}, gw)
 
 	c, rec := newTestContext(http.MethodDelete, "/api/v1/guilds/1/members/200", nil)
 	c.SetParamNames("id", "user_id")
@@ -281,7 +294,20 @@ func TestKickMember_Owner(t *testing.T) {
 			return &models.Guild{ID: 1, OwnerID: 200}, nil // target 200 is the owner
 		},
 	}
-	h := newMemberHandler(&mockMemberRepo{}, guilds, &mockRoleRepo{}, noopGuildPerm, gw)
+	members := &mockMemberRepo{
+		GetByGuildAndUserFn: func(ctx context.Context, guildID, userID int64) (*models.Member, error) {
+			return &models.Member{GuildID: guildID, UserID: userID, JoinedAt: time.Now()}, nil
+		},
+	}
+	roles := &mockRoleRepo{
+		GetByMemberFn: func(ctx context.Context, guildID, userID int64) ([]models.Role, error) {
+			return []models.Role{{ID: 10, Position: 5, Permissions: int64(permissions.PermKickMembers)}}, nil
+		},
+		GetByGuildIDFn: func(ctx context.Context, guildID int64) ([]models.Role, error) {
+			return []models.Role{{ID: 1, IsDefault: true, Permissions: 0}}, nil
+		},
+	}
+	h := newMemberHandler(members, guilds, roles, gw)
 
 	c, rec := newTestContext(http.MethodDelete, "/api/v1/guilds/1/members/200", nil)
 	c.SetParamNames("id", "user_id")
@@ -313,10 +339,11 @@ func TestKickMember_NoPermission(t *testing.T) {
 		GetByMemberFn: func(ctx context.Context, guildID, userID int64) ([]models.Role, error) {
 			return []models.Role{{Permissions: 0}}, nil // no permissions
 		},
+		GetByGuildIDFn: func(ctx context.Context, guildID int64) ([]models.Role, error) {
+			return []models.Role{{ID: 1, IsDefault: true, Permissions: 0}}, nil
+		},
 	}
-	// Build a real GuildHandler to get the real requirePermission function.
-	gh := NewGuildHandler(guilds, &mockChannelRepo{}, members, roles, testSnowflake(), gw)
-	h := newMemberHandler(members, guilds, roles, gh.RequirePermission(), gw)
+	h := newMemberHandler(members, guilds, roles, gw)
 
 	c, rec := newTestContext(http.MethodDelete, "/api/v1/guilds/1/members/200", nil)
 	c.SetParamNames("id", "user_id")
@@ -350,7 +377,7 @@ func TestLeaveGuild_Success(t *testing.T) {
 			return nil
 		},
 	}
-	h := newMemberHandler(members, guilds, &mockRoleRepo{}, noopGuildPerm, gw)
+	h := newMemberHandler(members, guilds, &mockRoleRepo{}, gw)
 
 	c, rec := newTestContext(http.MethodDelete, "/api/v1/guilds/1/members/@me", nil)
 	c.SetParamNames("id")
@@ -376,7 +403,7 @@ func TestLeaveGuild_AsOwner(t *testing.T) {
 			return &models.Guild{ID: 1, OwnerID: 100}, nil // caller IS the owner
 		},
 	}
-	h := newMemberHandler(&mockMemberRepo{}, guilds, &mockRoleRepo{}, noopGuildPerm, gw)
+	h := newMemberHandler(&mockMemberRepo{}, guilds, &mockRoleRepo{}, gw)
 
 	c, rec := newTestContext(http.MethodDelete, "/api/v1/guilds/1/members/@me", nil)
 	c.SetParamNames("id")

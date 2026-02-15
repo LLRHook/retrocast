@@ -11,6 +11,7 @@ import (
 	"github.com/victorivanov/retrocast/internal/auth"
 	"github.com/victorivanov/retrocast/internal/models"
 	redisclient "github.com/victorivanov/retrocast/internal/redis"
+	"github.com/victorivanov/retrocast/internal/service"
 )
 
 func newTestRedis(t *testing.T) *redisclient.Client {
@@ -29,7 +30,8 @@ func newTestAuthHandler(t *testing.T, users *mockUserRepo) *AuthHandler {
 	rdb := newTestRedis(t)
 	tokens := auth.NewTokenService("test-secret")
 	sf := testSnowflake()
-	return NewAuthHandler(users, tokens, rdb, sf)
+	svc := service.NewAuthService(users, tokens, rdb, sf)
+	return NewAuthHandler(svc)
 }
 
 func TestRegister_Success(t *testing.T) {
@@ -57,8 +59,13 @@ func TestRegister_Success(t *testing.T) {
 	if resp.RefreshToken == "" {
 		t.Error("expected non-empty refresh_token")
 	}
-	if resp.User.Username != "testuser" {
-		t.Errorf("expected username 'testuser', got %q", resp.User.Username)
+	// User is interface{} now; check via map assertion.
+	userMap, ok := resp.User.(map[string]interface{})
+	if !ok {
+		t.Fatal("expected user to be a map")
+	}
+	if userMap["username"] != "testuser" {
+		t.Errorf("expected username 'testuser', got %v", userMap["username"])
 	}
 }
 
@@ -171,8 +178,12 @@ func TestLogin_Success(t *testing.T) {
 	if resp.AccessToken == "" {
 		t.Error("expected non-empty access_token")
 	}
-	if resp.User.Username != "testuser" {
-		t.Errorf("expected username 'testuser', got %q", resp.User.Username)
+	userMap, ok := resp.User.(map[string]interface{})
+	if !ok {
+		t.Fatal("expected user to be a map")
+	}
+	if userMap["username"] != "testuser" {
+		t.Errorf("expected username 'testuser', got %v", userMap["username"])
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/victorivanov/retrocast/internal/models"
+	"github.com/victorivanov/retrocast/internal/service"
 )
 
 func newRoleHandler(
@@ -18,7 +19,9 @@ func newRoleHandler(
 	overrides *mockChannelOverrideRepo,
 	gw *mockGateway,
 ) *RoleHandler {
-	return NewRoleHandler(guilds, roles, members, channels, overrides, testSnowflake(), gw)
+	perms := service.NewPermissionChecker(guilds, members, roles, overrides)
+	svc := service.NewRoleService(guilds, roles, members, channels, overrides, testSnowflake(), gw, perms)
+	return NewRoleHandler(svc)
 }
 
 func TestCreateRole_Success(t *testing.T) {

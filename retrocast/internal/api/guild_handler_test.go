@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/victorivanov/retrocast/internal/models"
+	"github.com/victorivanov/retrocast/internal/service"
 )
 
 func newTestGuildHandler(
@@ -20,7 +21,9 @@ func newTestGuildHandler(
 ) *GuildHandler {
 	gw := &mockGateway{}
 	sf := testSnowflake()
-	return NewGuildHandler(guilds, channels, members, roles, sf, gw)
+	perms := service.NewPermissionChecker(guilds, members, roles, &mockChannelOverrideRepo{})
+	svc := service.NewGuildService(guilds, channels, members, roles, sf, gw, perms)
+	return NewGuildHandler(svc)
 }
 
 func TestCreateGuild_Success(t *testing.T) {
