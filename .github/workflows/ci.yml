@@ -36,6 +36,11 @@ jobs:
         with:
           version: v2.9
           working-directory: retrocast
+      - name: Run migrations
+        working-directory: retrocast
+        env:
+          DATABASE_URL: postgres://retrocast:password@localhost:5432/retrocast?sslmode=disable
+        run: go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest -path=migrations -database "$DATABASE_URL" up
       - name: Run tests
         working-directory: retrocast
         env:
