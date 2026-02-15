@@ -19,10 +19,18 @@ import (
 // Set via -ldflags at build time.
 var version = "dev"
 
+// Exit codes.
+const (
+	exitOK             = 0 // Success
+	exitError          = 1 // General error
+	exitMissingConfig  = 2 // Required environment variable not set
+	exitConnectFailure = 3 // Cannot connect to database or server
+)
+
 func main() {
 	if len(os.Args) < 2 {
 		printUsage()
-		os.Exit(1)
+		os.Exit(exitError)
 	}
 
 	switch os.Args[1] {
@@ -66,7 +74,7 @@ func main() {
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n\n", os.Args[1])
 		printUsage()
-		os.Exit(1)
+		os.Exit(exitError)
 	}
 }
 
@@ -80,6 +88,12 @@ func printUsage() {
 	fmt.Println("  version  Print version info")
 	fmt.Println()
 	fmt.Println("Run 'retrocast-cli <command> --help' for details on a command.")
+	fmt.Println()
+	fmt.Println("Exit codes:")
+	fmt.Println("  0  Success")
+	fmt.Println("  1  General error")
+	fmt.Println("  2  Missing required configuration")
+	fmt.Println("  3  Connection failure (database or server)")
 }
 
 func hasFlag(flag string, args []string) bool {
@@ -95,7 +109,7 @@ func requireEnv(key string) string {
 	v := os.Getenv(key)
 	if v == "" {
 		fmt.Fprintf(os.Stderr, "error: %s environment variable is required\n", key)
-		os.Exit(1)
+		os.Exit(exitMissingConfig)
 	}
 	return v
 }
@@ -116,14 +130,14 @@ func runMigrate() int {
 	m, err := migrate.New("file://migrations", dbURL)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: migration init failed: %v\n", err)
-		return 1
+		return exitConnectFailure
 	}
 	defer m.Close()
 
 	fmt.Println("running migrations...")
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		fmt.Fprintf(os.Stderr, "error: migration failed: %v\n", err)
-		return 1
+		return exitError
 	}
 
 	v, dirty, _ := m.Version()
@@ -132,7 +146,7 @@ func runMigrate() int {
 	} else {
 		fmt.Printf("migrations applied (version: %d, dirty: %v)\n", v, dirty)
 	}
-	return 0
+	return exitOK
 }
 
 // --- seed ---
@@ -145,19 +159,19 @@ func runSeed() int {
 	pool, err := pgxpool.New(ctx, dbURL)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: database connection failed: %v\n", err)
-		return 1
+		return exitConnectFailure
 	}
 	defer pool.Close()
 
 	if err := pool.Ping(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "error: database ping failed: %v\n", err)
-		return 1
+		return exitConnectFailure
 	}
 
 	sf, err := snowflake.NewGenerator(0, 0)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: snowflake init failed: %v\n", err)
-		return 1
+		return exitError
 	}
 
 	// Hash passwords for demo users.
@@ -165,12 +179,12 @@ func runSeed() int {
 	aliceHash, err := auth.HashPassword("password123")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: hashing password: %v\n", err)
-		return 1
+		return exitError
 	}
 	bobHash, err := auth.HashPassword("password456")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: hashing password: %v\n", err)
-		return 1
+		return exitError
 	}
 
 	// Generate IDs.
@@ -189,7 +203,7 @@ func runSeed() int {
 	tx, err := pool.Begin(ctx)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: starting transaction: %v\n", err)
-		return 1
+		return exitError
 	}
 	defer tx.Rollback(ctx)
 
@@ -203,7 +217,7 @@ func runSeed() int {
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: creating users: %v\n", err)
-		return 1
+		return exitError
 	}
 
 	// Guild.
@@ -215,7 +229,7 @@ func runSeed() int {
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: creating guild: %v\n", err)
-		return 1
+		return exitError
 	}
 
 	// Channels.
@@ -228,7 +242,7 @@ func runSeed() int {
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: creating channels: %v\n", err)
-		return 1
+		return exitError
 	}
 
 	// Default @everyone role.
@@ -240,7 +254,7 @@ func runSeed() int {
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: creating role: %v\n", err)
-		return 1
+		return exitError
 	}
 
 	// Members.
@@ -253,7 +267,7 @@ func runSeed() int {
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: creating members: %v\n", err)
-		return 1
+		return exitError
 	}
 
 	// Member roles.
@@ -265,7 +279,7 @@ func runSeed() int {
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: creating member roles: %v\n", err)
-		return 1
+		return exitError
 	}
 
 	// Messages.
@@ -279,12 +293,12 @@ func runSeed() int {
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: creating messages: %v\n", err)
-		return 1
+		return exitError
 	}
 
 	if err := tx.Commit(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "error: committing transaction: %v\n", err)
-		return 1
+		return exitError
 	}
 
 	fmt.Println()
@@ -293,7 +307,7 @@ func runSeed() int {
 	fmt.Printf("  guild:    Demo Server (owner: alice)\n")
 	fmt.Printf("  channels: #general, #random\n")
 	fmt.Printf("  messages: 3 messages in #general and #random\n")
-	return 0
+	return exitOK
 }
 
 // --- health ---
@@ -308,7 +322,7 @@ func runHealth() int {
 	resp, err := client.Get(url)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		return 1
+		return exitConnectFailure
 	}
 	defer resp.Body.Close()
 
@@ -323,5 +337,5 @@ func runHealth() int {
 		return 0
 	}
 	fmt.Fprintln(os.Stderr, "server returned non-200 status")
-	return 1
+	return exitError
 }
