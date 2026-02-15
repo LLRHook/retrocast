@@ -7,10 +7,34 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo-contrib/echoprometheus"
 	"github.com/labstack/echo/v4"
+	"github.com/victorivanov/retrocast/docs"
 	"github.com/victorivanov/retrocast/internal/auth"
 	"github.com/victorivanov/retrocast/internal/gateway"
 	"github.com/victorivanov/retrocast/internal/redis"
 )
+
+const swaggerUIHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Retrocast API</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+  <style>html{box-sizing:border-box;overflow-y:scroll}*,*::before,*::after{box-sizing:inherit}body{margin:0;background:#fafafa}</style>
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script>
+    SwaggerUIBundle({
+      url: "/docs/openapi.yaml",
+      dom_id: "#swagger-ui",
+      deepLinking: true,
+      presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
+      layout: "BaseLayout",
+    });
+  </script>
+</body>
+</html>`
 
 // Dependencies holds all handler instances and middleware for route wiring.
 type Dependencies struct {
@@ -58,6 +82,14 @@ func SetupRouter(e *echo.Echo, deps *Dependencies) {
 	// Prometheus metrics
 	e.Use(echoprometheus.NewMiddleware("retrocast"))
 	e.GET("/metrics", echoprometheus.NewHandler())
+
+	// Swagger UI — serves the embedded OpenAPI spec
+	e.GET("/docs", func(c echo.Context) error {
+		return c.HTML(http.StatusOK, swaggerUIHTML)
+	})
+	e.GET("/docs/openapi.yaml", func(c echo.Context) error {
+		return c.Blob(http.StatusOK, "application/yaml", docs.OpenAPISpec)
+	})
 
 	// WebSocket gateway
 	e.GET("/gateway", deps.Gateway.HandleWebSocket)
