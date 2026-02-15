@@ -13,7 +13,8 @@ type Message struct {
 
 type MessageWithAuthor struct {
 	Message
-	AuthorUsername    string  `json:"author_username"`
-	AuthorDisplayName string  `json:"author_display_name"`
-	AuthorAvatarHash  *string `json:"author_avatar_hash,omitempty"`
+	AuthorUsername    string       `json:"author_username"`
+	AuthorDisplayName string       `json:"author_display_name"`
+	AuthorAvatarHash  *string      `json:"author_avatar_hash,omitempty"`
+	Attachments       []Attachment `json:"attachments"`
 }
