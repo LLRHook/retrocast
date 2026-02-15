@@ -7,6 +7,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/victorivanov/retrocast/internal/auth"
 	"github.com/victorivanov/retrocast/internal/database"
+	"github.com/victorivanov/retrocast/internal/gateway"
 	"github.com/victorivanov/retrocast/internal/models"
 )
 
@@ -16,6 +17,7 @@ type MemberHandler struct {
 	guilds    database.GuildRepository
 	roles     database.RoleRepository
 	guildPerm func(ctx echo.Context, guildID, userID, perm int64) error
+	gateway   gateway.Dispatcher
 }
 
 // NewMemberHandler creates a MemberHandler.
@@ -24,12 +26,14 @@ func NewMemberHandler(
 	guilds database.GuildRepository,
 	roles database.RoleRepository,
 	guildPerm func(ctx echo.Context, guildID, userID, perm int64) error,
+	gw gateway.Dispatcher,
 ) *MemberHandler {
 	return &MemberHandler{
 		members:   members,
 		guilds:    guilds,
 		roles:     roles,
 		guildPerm: guildPerm,
+		gateway:   gw,
 	}
 }
 

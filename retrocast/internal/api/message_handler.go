@@ -21,8 +21,9 @@ type MessageHandler struct {
 	members   database.MemberRepository
 	roles     database.RoleRepository
 	guilds    database.GuildRepository
+	overrides database.ChannelOverrideRepository
 	snowflake *snowflake.Generator
-	gateway   *gateway.Manager
+	gateway   gateway.Dispatcher
 }
 
 // NewMessageHandler creates a MessageHandler.
@@ -32,8 +33,9 @@ func NewMessageHandler(
 	members database.MemberRepository,
 	roles database.RoleRepository,
 	guilds database.GuildRepository,
+	overrides database.ChannelOverrideRepository,
 	sf *snowflake.Generator,
-	gw *gateway.Manager,
+	gw gateway.Dispatcher,
 ) *MessageHandler {
 	return &MessageHandler{
 		messages:  messages,
@@ -41,6 +43,7 @@ func NewMessageHandler(
 		members:   members,
 		roles:     roles,
 		guilds:    guilds,
+		overrides: overrides,
 		snowflake: sf,
 		gateway:   gw,
 	}

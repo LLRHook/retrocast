@@ -7,6 +7,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/victorivanov/retrocast/internal/auth"
 	"github.com/victorivanov/retrocast/internal/database"
+	"github.com/victorivanov/retrocast/internal/gateway"
 	"github.com/victorivanov/retrocast/internal/models"
 	"github.com/victorivanov/retrocast/internal/snowflake"
 )
@@ -19,6 +20,7 @@ type RoleHandler struct {
 	channels  database.ChannelRepository
 	overrides database.ChannelOverrideRepository
 	snowflake *snowflake.Generator
+	gateway   gateway.Dispatcher
 }
 
 // NewRoleHandler creates a RoleHandler.
@@ -29,6 +31,7 @@ func NewRoleHandler(
 	channels database.ChannelRepository,
 	overrides database.ChannelOverrideRepository,
 	sf *snowflake.Generator,
+	gw gateway.Dispatcher,
 ) *RoleHandler {
 	return &RoleHandler{
 		guilds:    guilds,
@@ -37,6 +40,7 @@ func NewRoleHandler(
 		channels:  channels,
 		overrides: overrides,
 		snowflake: sf,
+		gateway:   gw,
 	}
 }
 

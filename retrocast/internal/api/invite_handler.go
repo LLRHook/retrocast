@@ -21,7 +21,7 @@ type InviteHandler struct {
 	guilds  database.GuildRepository
 	members database.MemberRepository
 	roles   database.RoleRepository
-	gateway *gateway.Manager
+	gateway gateway.Dispatcher
 }
 
 // NewInviteHandler creates an InviteHandler.
@@ -30,7 +30,7 @@ func NewInviteHandler(
 	guilds database.GuildRepository,
 	members database.MemberRepository,
 	roles database.RoleRepository,
-	gw *gateway.Manager,
+	gw gateway.Dispatcher,
 ) *InviteHandler {
 	return &InviteHandler{
 		invites: invites,

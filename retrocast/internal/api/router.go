@@ -79,6 +79,7 @@ func SetupRouter(e *echo.Echo, deps *Dependencies) {
 	// Members
 	protected.GET("/guilds/:id/members", deps.Members.ListMembers)
 	protected.GET("/guilds/:id/members/:user_id", deps.Members.GetMember)
+	protected.PATCH("/guilds/:id/members/:user_id", deps.Members.UpdateMember)
 	protected.PATCH("/guilds/:id/members/@me", deps.Members.UpdateSelf)
 	protected.DELETE("/guilds/:id/members/:user_id", deps.Members.KickMember)
 	protected.DELETE("/guilds/:id/members/@me", deps.Members.LeaveGuild)
