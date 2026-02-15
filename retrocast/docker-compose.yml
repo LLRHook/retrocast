@@ -1,0 +1,62 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_URL=postgres://retrocast:password@db:5432/retrocast?sslmode=disable
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=change-this-to-a-random-string
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=retrocast
+      - MINIO_SECRET_KEY=changeme
+      - LIVEKIT_URL=ws://livekit:7880
+      - LIVEKIT_API_KEY=devkey
+      - LIVEKIT_API_SECRET=devsecret
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  db:
+    image: postgres:17
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=retrocast
+      - POSTGRES_USER=retrocast
+      - POSTGRES_PASSWORD=password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U retrocast"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    environment:
+      - MINIO_ROOT_USER=retrocast
+      - MINIO_ROOT_PASSWORD=changeme
+
+  livekit:
+    image: livekit/livekit-server:latest
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "50000-50100:50000-50100/udp"
+    environment:
+      - LIVEKIT_KEYS=devkey:devsecret
+
+volumes:
+  pgdata:
+  minio-data:
