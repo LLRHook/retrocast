@@ -4,6 +4,9 @@ struct ServerListView: View {
     let viewModel: ServerListViewModel?
     @Environment(AppState.self) private var appState
 
+    @State private var showSettings = false
+    @State private var guildForSettings: Guild? = nil
+
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 8) {
@@ -28,6 +31,24 @@ struct ServerListView: View {
                             .foregroundStyle(.retroGreen)
                     }
                 }
+
+                Divider()
+                    .frame(width: 32)
+                    .padding(.vertical, 4)
+
+                // Settings button
+                Button {
+                    showSettings = true
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(Color.retroSidebar)
+                            .frame(width: 48, height: 48)
+                        Image(systemName: "gearshape.fill")
+                            .font(.title2)
+                            .foregroundStyle(.retroMuted)
+                    }
+                }
             }
             .padding(.vertical, 12)
         }
@@ -49,6 +70,12 @@ struct ServerListView: View {
                 JoinGuildSheet(viewModel: vm)
             }
         }
+        .sheet(isPresented: $showSettings) {
+            UserSettingsView()
+        }
+        .sheet(item: $guildForSettings) { guild in
+            GuildSettingsView(guild: guild)
+        }
     }
 
     private func guildButton(_ guild: Guild) -> some View {
@@ -69,5 +96,12 @@ struct ServerListView: View {
             }
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button {
+                guildForSettings = guild
+            } label: {
+                Label("Server Settings", systemImage: "gearshape")
+            }
+        }
     }
 }

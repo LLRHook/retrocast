@@ -10,6 +10,8 @@ struct GuildSettingsView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var showInvites = false
+    @State private var editingRole: Role?
+    @State private var showCreateRole = false
 
     var body: some View {
         NavigationStack {
@@ -27,14 +29,29 @@ struct GuildSettingsView: View {
                 Section("Roles") {
                     if let roles = appState.roles[guild.id] {
                         ForEach(roles) { role in
-                            HStack {
-                                RoleTag(name: role.name, color: role.color)
-                                Spacer()
-                                Text("Position \(role.position)")
-                                    .font(.caption)
-                                    .foregroundStyle(.retroMuted)
+                            Button {
+                                editingRole = role
+                            } label: {
+                                HStack {
+                                    RoleTag(name: role.name, color: role.color)
+                                    Spacer()
+                                    Text("Position \(role.position)")
+                                        .font(.caption)
+                                        .foregroundStyle(.retroMuted)
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundStyle(.retroMuted)
+                                }
+                                .contentShape(Rectangle())
                             }
+                            .buttonStyle(.plain)
                         }
+                    }
+
+                    Button {
+                        showCreateRole = true
+                    } label: {
+                        Label("Create Role", systemImage: "plus.circle")
                     }
                 }
 
@@ -77,6 +94,12 @@ struct GuildSettingsView: View {
         }
         .sheet(isPresented: $showInvites) {
             InviteSheet(guildID: guild.id)
+        }
+        .sheet(isPresented: $showCreateRole) {
+            RoleEditorView(guildID: guild.id, role: nil)
+        }
+        .sheet(item: $editingRole) { role in
+            RoleEditorView(guildID: guild.id, role: role)
         }
     }
 

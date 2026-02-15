@@ -193,10 +193,10 @@ extension Endpoint {
                         body: Body(name: name, permissions: permissions, color: color))
     }
 
-    static func updateRole(guildID: Snowflake, roleID: Snowflake, name: String? = nil, permissions: Int64? = nil) -> Endpoint {
-        struct Body: Encodable, Sendable { let name: String?; let permissions: Int64? }
+    static func updateRole(guildID: Snowflake, roleID: Snowflake, name: String? = nil, color: Int? = nil, permissions: Int64? = nil) -> Endpoint {
+        struct Body: Encodable, Sendable { let name: String?; let color: Int?; let permissions: Int64? }
         return Endpoint(method: .PATCH, path: "/api/v1/guilds/\(guildID)/roles/\(roleID)",
-                        body: Body(name: name, permissions: permissions))
+                        body: Body(name: name, color: color, permissions: permissions))
     }
 
     static func deleteRole(guildID: Snowflake, roleID: Snowflake) -> Endpoint {
