@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -53,8 +54,20 @@ func TestRejectTamperedToken(t *testing.T) {
 		t.Fatalf("GenerateAccessToken() error: %v", err)
 	}
 
-	// Tamper with the token by flipping a character in the signature
-	tampered := token[:len(token)-1] + "X"
+	// Tamper with a character in the middle of the signature to avoid
+	// base64 padding-bit ambiguity at the last position. For HMAC-SHA256
+	// (32 bytes), the last base64url char has 2 padding bits that Go's
+	// decoder ignores, so changing only those bits won't alter the
+	// decoded signature (~6% of runs).
+	sigStart := strings.LastIndex(token, ".") + 1
+	mid := sigStart + (len(token)-sigStart)/2
+	b := token[mid]
+	if b == 'A' {
+		b = 'B'
+	} else {
+		b = 'A'
+	}
+	tampered := token[:mid] + string(b) + token[mid+1:]
 
 	_, err = ts.ValidateAccessToken(tampered)
 	if err == nil {
