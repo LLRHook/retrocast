@@ -1,0 +1,72 @@
+package database
+
+import (
+	"context"
+
+	"github.com/victorivanov/retrocast/internal/models"
+)
+
+type UserRepository interface {
+	Create(ctx context.Context, user *models.User) error
+	GetByID(ctx context.Context, id int64) (*models.User, error)
+	GetByUsername(ctx context.Context, username string) (*models.User, error)
+	Update(ctx context.Context, user *models.User) error
+	Delete(ctx context.Context, id int64) error
+}
+
+type GuildRepository interface {
+	Create(ctx context.Context, guild *models.Guild) error
+	GetByID(ctx context.Context, id int64) (*models.Guild, error)
+	Update(ctx context.Context, guild *models.Guild) error
+	Delete(ctx context.Context, id int64) error
+	GetByUserID(ctx context.Context, userID int64) ([]models.Guild, error)
+}
+
+type ChannelRepository interface {
+	Create(ctx context.Context, channel *models.Channel) error
+	GetByID(ctx context.Context, id int64) (*models.Channel, error)
+	GetByGuildID(ctx context.Context, guildID int64) ([]models.Channel, error)
+	Update(ctx context.Context, channel *models.Channel) error
+	Delete(ctx context.Context, id int64) error
+}
+
+type RoleRepository interface {
+	Create(ctx context.Context, role *models.Role) error
+	GetByID(ctx context.Context, id int64) (*models.Role, error)
+	GetByGuildID(ctx context.Context, guildID int64) ([]models.Role, error)
+	Update(ctx context.Context, role *models.Role) error
+	Delete(ctx context.Context, id int64) error
+	GetByMember(ctx context.Context, guildID, userID int64) ([]models.Role, error)
+}
+
+type MemberRepository interface {
+	Create(ctx context.Context, member *models.Member) error
+	GetByGuildAndUser(ctx context.Context, guildID, userID int64) (*models.Member, error)
+	GetByGuildID(ctx context.Context, guildID int64, limit, offset int) ([]models.Member, error)
+	Update(ctx context.Context, member *models.Member) error
+	Delete(ctx context.Context, guildID, userID int64) error
+	AddRole(ctx context.Context, guildID, userID, roleID int64) error
+	RemoveRole(ctx context.Context, guildID, userID, roleID int64) error
+}
+
+type MessageRepository interface {
+	Create(ctx context.Context, msg *models.Message) error
+	GetByID(ctx context.Context, id int64) (*models.MessageWithAuthor, error)
+	GetByChannelID(ctx context.Context, channelID int64, before *int64, limit int) ([]models.MessageWithAuthor, error)
+	Update(ctx context.Context, msg *models.Message) error
+	Delete(ctx context.Context, id int64) error
+}
+
+type InviteRepository interface {
+	Create(ctx context.Context, invite *models.Invite) error
+	GetByCode(ctx context.Context, code string) (*models.Invite, error)
+	GetByGuildID(ctx context.Context, guildID int64) ([]models.Invite, error)
+	IncrementUses(ctx context.Context, code string) error
+	Delete(ctx context.Context, code string) error
+}
+
+type ChannelOverrideRepository interface {
+	Set(ctx context.Context, override *models.ChannelOverride) error
+	GetByChannel(ctx context.Context, channelID int64) ([]models.ChannelOverride, error)
+	Delete(ctx context.Context, channelID, roleID int64) error
+}
