@@ -71,7 +71,7 @@ func (h *MessageHandler) SendMessage(c echo.Context) error {
 		return Error(c, http.StatusNotFound, "NOT_FOUND", "channel not found")
 	}
 
-	if err := h.requirePermission(c, channel.GuildID, userID, permissions.PermSendMessages); err != nil {
+	if err := h.requirePermission(c, channel.GuildID, channelID, userID, permissions.PermSendMessages); err != nil {
 		return err
 	}
 
@@ -124,7 +124,7 @@ func (h *MessageHandler) GetMessages(c echo.Context) error {
 		return Error(c, http.StatusNotFound, "NOT_FOUND", "channel not found")
 	}
 
-	if err := h.requirePermission(c, channel.GuildID, userID, permissions.PermReadMessageHistory); err != nil {
+	if err := h.requirePermission(c, channel.GuildID, channelID, userID, permissions.PermReadMessageHistory); err != nil {
 		return err
 	}
 
@@ -180,7 +180,7 @@ func (h *MessageHandler) GetMessage(c echo.Context) error {
 		return Error(c, http.StatusNotFound, "NOT_FOUND", "channel not found")
 	}
 
-	if err := h.requirePermission(c, channel.GuildID, userID, permissions.PermReadMessageHistory); err != nil {
+	if err := h.requirePermission(c, channel.GuildID, channelID, userID, permissions.PermReadMessageHistory); err != nil {
 		return err
 	}
 
@@ -297,7 +297,7 @@ func (h *MessageHandler) DeleteMessage(c echo.Context) error {
 
 	// Author can always delete their own messages; otherwise need MANAGE_MESSAGES.
 	if msg.AuthorID != userID {
-		if err := h.requirePermission(c, channel.GuildID, userID, permissions.PermManageMessages); err != nil {
+		if err := h.requirePermission(c, channel.GuildID, channelID, userID, permissions.PermManageMessages); err != nil {
 			return err
 		}
 	}
@@ -332,6 +332,10 @@ func (h *MessageHandler) Typing(c echo.Context) error {
 		return Error(c, http.StatusNotFound, "NOT_FOUND", "channel not found")
 	}
 
+	if err := h.requirePermission(c, channel.GuildID, channelID, userID, permissions.PermSendMessages); err != nil {
+		return err
+	}
+
 	h.gateway.DispatchToGuild(channel.GuildID, gateway.EventTypingStart, gateway.TypingStartData{
 		ChannelID: channelID,
 		GuildID:   channel.GuildID,
@@ -342,9 +346,10 @@ func (h *MessageHandler) Typing(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-// requirePermission checks that the user has the given permission in the guild.
+// requirePermission checks that the user has the given permission in the channel,
+// applying channel-level overrides on top of guild-level base permissions.
 // Guild owners implicitly have all permissions.
-func (h *MessageHandler) requirePermission(c echo.Context, guildID, userID int64, perm permissions.Permission) error {
+func (h *MessageHandler) requirePermission(c echo.Context, guildID, channelID, userID int64, perm permissions.Permission) error {
 	ctx := c.Request().Context()
 
 	guild, err := h.guilds.GetByID(ctx, guildID)
@@ -384,7 +389,33 @@ func (h *MessageHandler) requirePermission(c echo.Context, guildID, userID int64
 		}
 	}
 
-	computed := permissions.ComputeBasePermissions(everyoneRole, memberRoles)
+	basePerms := permissions.ComputeBasePermissions(everyoneRole, memberRoles)
+
+	// Fetch channel overrides.
+	channelOverrides, err := h.overrides.GetByChannel(ctx, channelID)
+	if err != nil {
+		return Error(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
+	}
+
+	// Separate @everyone override from role-specific overrides.
+	var everyoneOverride *models.ChannelOverride
+	var roleOverrides []models.ChannelOverride
+
+	// Build set of member's role IDs for filtering.
+	memberRoleIDs := make(map[int64]bool, len(memberRoles))
+	for _, r := range memberRoles {
+		memberRoleIDs[r.ID] = true
+	}
+
+	for i := range channelOverrides {
+		if channelOverrides[i].RoleID == everyoneRole.ID {
+			everyoneOverride = &channelOverrides[i]
+		} else if memberRoleIDs[channelOverrides[i].RoleID] {
+			roleOverrides = append(roleOverrides, channelOverrides[i])
+		}
+	}
+
+	computed := permissions.ComputeChannelPermissions(basePerms, everyoneOverride, roleOverrides)
 	if !computed.Has(perm) {
 		return Error(c, http.StatusForbidden, "MISSING_PERMISSIONS", "you do not have the required permissions")
 	}
