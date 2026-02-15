@@ -154,6 +154,7 @@ func (h *MemberHandler) UpdateSelf(c echo.Context) error {
 		return errorJSON(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
 
+	h.gateway.DispatchToGuild(guildID, gateway.EventGuildMemberUpdate, member)
 	return c.JSON(http.StatusOK, map[string]any{"data": member})
 }
 
@@ -252,6 +253,7 @@ func (h *MemberHandler) UpdateMember(c echo.Context) error {
 		}
 	}
 
+	h.gateway.DispatchToGuild(guildID, gateway.EventGuildMemberUpdate, member)
 	return c.JSON(http.StatusOK, map[string]any{"data": member})
 }
 
@@ -295,6 +297,7 @@ func (h *MemberHandler) KickMember(c echo.Context) error {
 		return errorJSON(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
 
+	h.gateway.DispatchToGuild(guildID, gateway.EventGuildMemberRemove, map[string]any{"guild_id": guildID, "user_id": targetUserID})
 	return c.NoContent(http.StatusNoContent)
 }
 
@@ -329,5 +332,6 @@ func (h *MemberHandler) LeaveGuild(c echo.Context) error {
 		return errorJSON(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
 
+	h.gateway.DispatchToGuild(guildID, gateway.EventGuildMemberRemove, map[string]any{"guild_id": guildID, "user_id": userID})
 	return c.NoContent(http.StatusNoContent)
 }

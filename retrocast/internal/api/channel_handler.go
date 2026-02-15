@@ -100,6 +100,7 @@ func (h *ChannelHandler) CreateChannel(c echo.Context) error {
 		return errorJSON(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
 
+	h.gateway.DispatchToGuild(guildID, gateway.EventChannelCreate, ch)
 	return c.JSON(http.StatusCreated, map[string]any{"data": ch})
 }
 
@@ -213,6 +214,7 @@ func (h *ChannelHandler) UpdateChannel(c echo.Context) error {
 		return errorJSON(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
 
+	h.gateway.DispatchToGuild(ch.GuildID, gateway.EventChannelUpdate, ch)
 	return c.JSON(http.StatusOK, map[string]any{"data": ch})
 }
 
@@ -242,5 +244,6 @@ func (h *ChannelHandler) DeleteChannel(c echo.Context) error {
 		return errorJSON(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
 
+	h.gateway.DispatchToGuild(ch.GuildID, gateway.EventChannelDelete, map[string]any{"id": channelID, "guild_id": ch.GuildID})
 	return c.NoContent(http.StatusNoContent)
 }

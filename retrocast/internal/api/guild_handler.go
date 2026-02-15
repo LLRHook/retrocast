@@ -146,6 +146,7 @@ func (h *GuildHandler) CreateGuild(c echo.Context) error {
 		return errorJSON(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
 
+	h.gateway.DispatchToUser(userID, gateway.EventGuildCreate, guild)
 	return c.JSON(http.StatusCreated, map[string]any{"data": guild})
 }
 
@@ -225,6 +226,7 @@ func (h *GuildHandler) UpdateGuild(c echo.Context) error {
 		return errorJSON(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
 
+	h.gateway.DispatchToGuild(guildID, gateway.EventGuildUpdate, guild)
 	return c.JSON(http.StatusOK, map[string]any{"data": guild})
 }
 
@@ -255,6 +257,7 @@ func (h *GuildHandler) DeleteGuild(c echo.Context) error {
 		return errorJSON(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
 
+	h.gateway.DispatchToGuild(guildID, gateway.EventGuildDelete, map[string]any{"id": guildID})
 	return c.NoContent(http.StatusNoContent)
 }
 

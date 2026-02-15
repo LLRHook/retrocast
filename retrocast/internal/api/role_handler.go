@@ -125,6 +125,7 @@ func (h *RoleHandler) CreateRole(c echo.Context) error {
 		return errorJSON(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
 
+	h.gateway.DispatchToGuild(guildID, gateway.EventGuildRoleCreate, map[string]any{"guild_id": guildID, "role": role})
 	return c.JSON(http.StatusCreated, role)
 }
 
@@ -216,6 +217,7 @@ func (h *RoleHandler) UpdateRole(c echo.Context) error {
 		return errorJSON(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
 
+	h.gateway.DispatchToGuild(guildID, gateway.EventGuildRoleUpdate, map[string]any{"guild_id": guildID, "role": role})
 	return c.JSON(http.StatusOK, role)
 }
 
@@ -263,6 +265,7 @@ func (h *RoleHandler) DeleteRole(c echo.Context) error {
 		return errorJSON(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
 
+	h.gateway.DispatchToGuild(guildID, gateway.EventGuildRoleDelete, map[string]any{"guild_id": guildID, "role_id": roleID})
 	return c.NoContent(http.StatusNoContent)
 }
 
