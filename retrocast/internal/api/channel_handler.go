@@ -9,6 +9,7 @@ import (
 	"github.com/victorivanov/retrocast/internal/database"
 	"github.com/victorivanov/retrocast/internal/gateway"
 	"github.com/victorivanov/retrocast/internal/models"
+	"github.com/victorivanov/retrocast/internal/permissions"
 	"github.com/victorivanov/retrocast/internal/snowflake"
 )
 
@@ -60,7 +61,7 @@ func (h *ChannelHandler) CreateChannel(c echo.Context) error {
 	}
 
 	userID := auth.GetUserID(c)
-	if err := h.guildPerm(c, guildID, userID, PermManageChannels); err != nil {
+	if err := h.guildPerm(c, guildID, userID, int64(permissions.PermManageChannels)); err != nil {
 		return err
 	}
 
@@ -188,7 +189,7 @@ func (h *ChannelHandler) UpdateChannel(c echo.Context) error {
 		return errorJSON(c, http.StatusNotFound, "NOT_FOUND", "channel not found")
 	}
 
-	if err := h.guildPerm(c, ch.GuildID, userID, PermManageChannels); err != nil {
+	if err := h.guildPerm(c, ch.GuildID, userID, int64(permissions.PermManageChannels)); err != nil {
 		return err
 	}
 
@@ -236,7 +237,7 @@ func (h *ChannelHandler) DeleteChannel(c echo.Context) error {
 		return errorJSON(c, http.StatusNotFound, "NOT_FOUND", "channel not found")
 	}
 
-	if err := h.guildPerm(c, ch.GuildID, userID, PermManageChannels); err != nil {
+	if err := h.guildPerm(c, ch.GuildID, userID, int64(permissions.PermManageChannels)); err != nil {
 		return err
 	}
 

@@ -10,17 +10,8 @@ import (
 	"github.com/victorivanov/retrocast/internal/database"
 	"github.com/victorivanov/retrocast/internal/gateway"
 	"github.com/victorivanov/retrocast/internal/models"
+	"github.com/victorivanov/retrocast/internal/permissions"
 	"github.com/victorivanov/retrocast/internal/snowflake"
-)
-
-// Permission bitfield constants used by guild/channel/member handlers.
-const (
-	PermManageGuild    int64 = 1 << 5
-	PermManageChannels int64 = 1 << 4
-	PermManageRoles    int64 = 1 << 28
-	PermManageNicks    int64 = 1 << 27
-	PermKickMembers    int64 = 1 << 1
-	PermAdministrator  int64 = 1 << 3
 )
 
 // GuildHandler handles guild CRUD endpoints.
@@ -85,7 +76,7 @@ func (h *GuildHandler) CreateGuild(c echo.Context) error {
 		ID:          h.snowflake.Generate().Int64(),
 		GuildID:     guild.ID,
 		Name:        "@everyone",
-		Permissions: 0x00000400 | 0x00000800 | 0x00010000, // VIEW_CHANNEL | SEND_MESSAGES | READ_MESSAGE_HISTORY
+		Permissions: int64(permissions.PermViewChannel | permissions.PermSendMessages | permissions.PermReadMessageHistory),
 		Position:    0,
 		IsDefault:   true,
 	}
@@ -98,7 +89,7 @@ func (h *GuildHandler) CreateGuild(c echo.Context) error {
 		ID:          h.snowflake.Generate().Int64(),
 		GuildID:     guild.ID,
 		Name:        "Admin",
-		Permissions: PermAdministrator,
+		Permissions: int64(permissions.PermAdministrator),
 		Position:    1,
 	}
 	if err := h.roles.Create(ctx, adminRole); err != nil {
@@ -195,7 +186,7 @@ func (h *GuildHandler) UpdateGuild(c echo.Context) error {
 	ctx := c.Request().Context()
 	userID := auth.GetUserID(c)
 
-	if err := h.requirePermission(c, guildID, userID, PermManageGuild); err != nil {
+	if err := h.requirePermission(c, guildID, userID, int64(permissions.PermManageGuild)); err != nil {
 		return err
 	}
 
@@ -319,7 +310,7 @@ func (h *GuildHandler) requirePermission(ctx echo.Context, guildID, userID, perm
 	}
 
 	// Administrator implies all permissions.
-	if perms&PermAdministrator != 0 {
+	if perms&int64(permissions.PermAdministrator) != 0 {
 		return nil
 	}
 

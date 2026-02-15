@@ -9,6 +9,7 @@ import (
 	"github.com/victorivanov/retrocast/internal/database"
 	"github.com/victorivanov/retrocast/internal/gateway"
 	"github.com/victorivanov/retrocast/internal/models"
+	"github.com/victorivanov/retrocast/internal/permissions"
 )
 
 // MemberHandler handles member endpoints.
@@ -180,12 +181,12 @@ func (h *MemberHandler) UpdateMember(c echo.Context) error {
 
 	// Check required permissions based on what's being changed.
 	if req.Nickname != nil {
-		if err := h.guildPerm(c, guildID, callerID, PermManageNicks); err != nil {
+		if err := h.guildPerm(c, guildID, callerID, int64(permissions.PermManageNicknames)); err != nil {
 			return err
 		}
 	}
 	if req.Roles != nil {
-		if err := h.guildPerm(c, guildID, callerID, PermManageRoles); err != nil {
+		if err := h.guildPerm(c, guildID, callerID, int64(permissions.PermManageRoles)); err != nil {
 			return err
 		}
 	}
@@ -272,7 +273,7 @@ func (h *MemberHandler) KickMember(c echo.Context) error {
 	ctx := c.Request().Context()
 	callerID := auth.GetUserID(c)
 
-	if err := h.guildPerm(c, guildID, callerID, PermKickMembers); err != nil {
+	if err := h.guildPerm(c, guildID, callerID, int64(permissions.PermKickMembers)); err != nil {
 		return err
 	}
 
