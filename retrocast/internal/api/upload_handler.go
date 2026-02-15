@@ -37,7 +37,7 @@ func (h *UploadHandler) Upload(c echo.Context) error {
 	if err != nil {
 		return Error(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
-	defer src.Close()
+	defer func() { _ = src.Close() }()
 
 	contentType := file.Header.Get("Content-Type")
 

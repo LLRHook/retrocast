@@ -132,7 +132,7 @@ func runMigrate() int {
 		fmt.Fprintf(os.Stderr, "error: migration init failed: %v\n", err)
 		return exitConnectFailure
 	}
-	defer m.Close()
+	defer func() { _, _ = m.Close() }()
 
 	fmt.Println("running migrations...")
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
@@ -205,7 +205,7 @@ func runSeed() int {
 		fmt.Fprintf(os.Stderr, "error: starting transaction: %v\n", err)
 		return exitError
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	// Users.
 	fmt.Println("creating users...")
@@ -324,7 +324,7 @@ func runHealth() int {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		return exitConnectFailure
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, _ := io.ReadAll(resp.Body)
 	fmt.Printf("status: %d\n", resp.StatusCode)

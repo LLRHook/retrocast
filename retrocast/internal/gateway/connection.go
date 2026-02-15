@@ -84,7 +84,7 @@ func (c *Connection) SendEvent(name string, data any) {
 func (c *Connection) Close() {
 	c.closeOnce.Do(func() {
 		close(c.done)
-		c.Conn.Close()
+		_ = c.Conn.Close()
 	})
 }
 
@@ -96,9 +96,9 @@ func (c *Connection) readPump() {
 	}()
 
 	c.Conn.SetReadLimit(maxMessageSize)
-	c.Conn.SetReadDeadline(time.Now().Add(pongWait))
+	_ = c.Conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.Conn.SetPongHandler(func(string) error {
-		c.Conn.SetReadDeadline(time.Now().Add(pongWait))
+		_ = c.Conn.SetReadDeadline(time.Now().Add(pongWait))
 		return nil
 	})
 
@@ -126,9 +126,9 @@ func (c *Connection) writePump() {
 	for {
 		select {
 		case message, ok := <-c.Send:
-			c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
+			_ = c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
-				c.Conn.WriteMessage(websocket.CloseMessage, nil)
+				_ = c.Conn.WriteMessage(websocket.CloseMessage, nil)
 				return
 			}
 			if err := c.Conn.WriteMessage(websocket.TextMessage, message); err != nil {
@@ -143,7 +143,7 @@ func (c *Connection) writePump() {
 				return
 			}
 
-			c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
+			_ = c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
 			c.SendPayload(GatewayPayload{Op: OpHeartbeat})
 
 		case <-c.done:

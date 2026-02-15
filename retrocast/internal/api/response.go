@@ -29,11 +29,6 @@ func Error(c echo.Context, status int, code, message string) error {
 // errorJSON is an alias for Error (used by some handlers).
 var errorJSON = Error
 
-// successJSON sends a JSON success response with a data envelope.
-func successJSON(c echo.Context, status int, data interface{}) error {
-	return c.JSON(status, map[string]interface{}{"data": data})
-}
-
 // mapServiceError converts a service-layer error into the appropriate HTTP response.
 func mapServiceError(c echo.Context, err error) error {
 	var svcErr *service.ServiceError

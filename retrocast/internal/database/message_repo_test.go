@@ -74,7 +74,6 @@ func TestMessageRepo_GetByChannelID(t *testing.T) {
 	ch := createTestChannel(t, channelRepo, guild.ID)
 
 	// Create 3 messages with ascending IDs
-	var msgIDs []int64
 	for i := 0; i < 3; i++ {
 		msg := &models.Message{
 			ID:        nextID(),
@@ -86,7 +85,6 @@ func TestMessageRepo_GetByChannelID(t *testing.T) {
 		if err := repo.Create(ctx, msg); err != nil {
 			t.Fatalf("Create msg %d: %v", i, err)
 		}
-		msgIDs = append(msgIDs, msg.ID)
 		msgID := msg.ID
 		t.Cleanup(func() { _ = repo.Delete(ctx, msgID) })
 	}

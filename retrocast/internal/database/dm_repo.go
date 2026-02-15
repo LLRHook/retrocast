@@ -22,7 +22,7 @@ func (r *dmChannelRepo) Create(ctx context.Context, dm *models.DMChannel) error 
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	_, err = tx.Exec(ctx,
 		`INSERT INTO dm_channels (id, type, created_at) VALUES ($1, $2, $3)`,

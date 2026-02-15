@@ -28,7 +28,7 @@ func newTestRedis(t *testing.T) *redisclient.Client {
 	if err != nil {
 		t.Fatalf("creating test redis client: %v", err)
 	}
-	t.Cleanup(func() { rdb.Close() })
+	t.Cleanup(func() { _ = rdb.Close() })
 	return rdb
 }
 
@@ -375,9 +375,9 @@ func TestDispatchToGuild_SendsToAllSubscribed(t *testing.T) {
 	c1 := fakeConn(m, 100, "s1")
 	c2 := fakeConn(m, 200, "s2")
 	c3 := fakeConn(m, 300, "s3")
-	defer c1.Conn.Close()
-	defer c2.Conn.Close()
-	defer c3.Conn.Close()
+	defer func() { _ = c1.Conn.Close() }()
+	defer func() { _ = c2.Conn.Close() }()
+	defer func() { _ = c3.Conn.Close() }()
 
 	m.SubscribeToGuild(100, 1)
 	m.SubscribeToGuild(200, 1)
@@ -412,7 +412,7 @@ func TestDispatchToGuild_StoresInReplayBuffer(t *testing.T) {
 	m := newTestManager(t, &mockGuildRepo{})
 
 	c1 := fakeConn(m, 100, "s1")
-	defer c1.Conn.Close()
+	defer func() { _ = c1.Conn.Close() }()
 	m.SubscribeToGuild(100, 1)
 
 	m.DispatchToGuild(1, EventMessageCreate, "msg1")
@@ -437,8 +437,8 @@ func TestDispatchToUser_SendsOnlyToTarget(t *testing.T) {
 
 	c1 := fakeConn(m, 100, "s1")
 	c2 := fakeConn(m, 200, "s2")
-	defer c1.Conn.Close()
-	defer c2.Conn.Close()
+	defer func() { _ = c1.Conn.Close() }()
+	defer func() { _ = c2.Conn.Close() }()
 
 	m.DispatchToUser(100, EventReady, map[string]string{"hello": "world"})
 
@@ -468,9 +468,9 @@ func TestDispatchToGuildExcept_ExcludesSpecifiedUser(t *testing.T) {
 	c1 := fakeConn(m, 100, "s1")
 	c2 := fakeConn(m, 200, "s2")
 	c3 := fakeConn(m, 300, "s3")
-	defer c1.Conn.Close()
-	defer c2.Conn.Close()
-	defer c3.Conn.Close()
+	defer func() { _ = c1.Conn.Close() }()
+	defer func() { _ = c2.Conn.Close() }()
+	defer func() { _ = c3.Conn.Close() }()
 
 	m.SubscribeToGuild(100, 1)
 	m.SubscribeToGuild(200, 1)
@@ -499,7 +499,7 @@ func TestDispatchToGuildExcept_StoresInReplayBuffer(t *testing.T) {
 	m := newTestManager(t, &mockGuildRepo{})
 
 	c1 := fakeConn(m, 100, "s1")
-	defer c1.Conn.Close()
+	defer func() { _ = c1.Conn.Close() }()
 	m.SubscribeToGuild(100, 1)
 
 	m.DispatchToGuildExcept(1, 100, EventMessageCreate, "msg")
@@ -540,7 +540,7 @@ func TestRegister_DisplacesExistingConnection(t *testing.T) {
 	m := newTestManager(t, &mockGuildRepo{})
 
 	c1 := fakeConn(m, 100, "s1")
-	defer c1.Conn.Close()
+	defer func() { _ = c1.Conn.Close() }()
 
 	// Register a second connection for the same user.
 	c2 := &Connection{
@@ -573,7 +573,7 @@ func TestUnregister_RemovesFromAllGuildSubscriptions(t *testing.T) {
 	m := newTestManager(t, &mockGuildRepo{})
 
 	c := fakeConn(m, 100, "s1")
-	defer c.Conn.Close()
+	defer func() { _ = c.Conn.Close() }()
 
 	m.SubscribeToGuild(100, 1)
 	m.SubscribeToGuild(100, 2)
@@ -600,7 +600,7 @@ func TestUnregister_IgnoresMismatchedConnection(t *testing.T) {
 	m := newTestManager(t, &mockGuildRepo{})
 
 	c1 := fakeConn(m, 100, "s1")
-	defer c1.Conn.Close()
+	defer func() { _ = c1.Conn.Close() }()
 
 	// Create a different Connection object for the same user that is NOT registered.
 	c2 := &Connection{
@@ -687,13 +687,13 @@ func dialWS(t *testing.T, srv *httptest.Server) *websocket.Conn {
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	t.Cleanup(func() { ws.Close() })
+	t.Cleanup(func() { _ = ws.Close() })
 	return ws
 }
 
 func readPayload(t *testing.T, ws *websocket.Conn) GatewayPayload {
 	t.Helper()
-	ws.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_ = ws.SetReadDeadline(time.Now().Add(2 * time.Second))
 	_, msg, err := ws.ReadMessage()
 	if err != nil {
 		t.Fatalf("read: %v", err)
@@ -807,7 +807,7 @@ func TestWSLifecycle_InvalidTokenClosesConnection(t *testing.T) {
 	sendPayload(t, ws, GatewayPayload{Op: OpIdentify, Data: identifyData})
 
 	// The server should close the connection. The next read should fail.
-	ws.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_ = ws.SetReadDeadline(time.Now().Add(2 * time.Second))
 	_, _, err := ws.ReadMessage()
 	if err == nil {
 		t.Error("expected read error after invalid identify, got nil")
@@ -926,7 +926,7 @@ func TestConcurrentDispatch(t *testing.T) {
 	for i := range conns {
 		uid := int64(i + 1)
 		conns[i] = fakeConn(m, uid, "s"+string(rune('0'+i)))
-		defer conns[i].Conn.Close()
+		defer func() { _ = conns[i].Conn.Close() }()
 		m.SubscribeToGuild(uid, 1)
 	}
 

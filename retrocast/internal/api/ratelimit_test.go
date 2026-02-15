@@ -103,7 +103,7 @@ func TestRateLimit_FailOpen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("creating test redis client: %v", err)
 	}
-	t.Cleanup(func() { rdb.Close() })
+	t.Cleanup(func() { _ = rdb.Close() })
 	mr.Close()
 
 	handlerCalled := false

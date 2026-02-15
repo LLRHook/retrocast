@@ -21,7 +21,7 @@ func newTestRedis(t *testing.T) *redisclient.Client {
 	if err != nil {
 		t.Fatalf("creating test redis client: %v", err)
 	}
-	t.Cleanup(func() { rdb.Close() })
+	t.Cleanup(func() { _ = rdb.Close() })
 	return rdb
 }
 

@@ -115,7 +115,7 @@ func newMultipartContext(t *testing.T, filename, contentType string, fileContent
 	if _, err := part.Write(fileContent); err != nil {
 		t.Fatalf("write file content: %v", err)
 	}
-	writer.Close()
+	_ = writer.Close()
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/channels/2000/attachments", body)
@@ -211,8 +211,8 @@ func TestUpload_InvalidContentType(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create part: %v", err)
 	}
-	part.Write([]byte("evil binary data"))
-	writer.Close()
+	_, _ = part.Write([]byte("evil binary data"))
+	_ = writer.Close()
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/channels/2000/attachments", body)
