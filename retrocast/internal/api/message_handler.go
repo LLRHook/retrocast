@@ -16,20 +16,22 @@ import (
 
 // MessageHandler handles message CRUD endpoints.
 type MessageHandler struct {
-	messages  database.MessageRepository
-	channels  database.ChannelRepository
-	members   database.MemberRepository
-	roles     database.RoleRepository
-	guilds    database.GuildRepository
-	overrides database.ChannelOverrideRepository
-	snowflake *snowflake.Generator
-	gateway   gateway.Dispatcher
+	messages   database.MessageRepository
+	channels   database.ChannelRepository
+	dmChannels database.DMChannelRepository
+	members    database.MemberRepository
+	roles      database.RoleRepository
+	guilds     database.GuildRepository
+	overrides  database.ChannelOverrideRepository
+	snowflake  *snowflake.Generator
+	gateway    gateway.Dispatcher
 }
 
 // NewMessageHandler creates a MessageHandler.
 func NewMessageHandler(
 	messages database.MessageRepository,
 	channels database.ChannelRepository,
+	dmChannels database.DMChannelRepository,
 	members database.MemberRepository,
 	roles database.RoleRepository,
 	guilds database.GuildRepository,
@@ -38,14 +40,15 @@ func NewMessageHandler(
 	gw gateway.Dispatcher,
 ) *MessageHandler {
 	return &MessageHandler{
-		messages:  messages,
-		channels:  channels,
-		members:   members,
-		roles:     roles,
-		guilds:    guilds,
-		overrides: overrides,
-		snowflake: sf,
-		gateway:   gw,
+		messages:   messages,
+		channels:   channels,
+		dmChannels: dmChannels,
+		members:    members,
+		roles:      roles,
+		guilds:     guilds,
+		overrides:  overrides,
+		snowflake:  sf,
+		gateway:    gw,
 	}
 }
 
@@ -63,16 +66,37 @@ func (h *MessageHandler) SendMessage(c echo.Context) error {
 	userID := auth.GetUserID(c)
 	ctx := c.Request().Context()
 
+	// Try guild channel first, then DM channel.
 	channel, err := h.channels.GetByID(ctx, channelID)
 	if err != nil {
 		return Error(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
-	if channel == nil {
+
+	var isDM bool
+	if channel == nil && h.dmChannels != nil {
+		dm, dmErr := h.dmChannels.GetByID(ctx, channelID)
+		if dmErr != nil {
+			return Error(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
+		}
+		if dm == nil {
+			return Error(c, http.StatusNotFound, "NOT_FOUND", "channel not found")
+		}
+		ok, recipErr := h.dmChannels.IsRecipient(ctx, channelID, userID)
+		if recipErr != nil {
+			return Error(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
+		}
+		if !ok {
+			return Error(c, http.StatusForbidden, "FORBIDDEN", "you are not a recipient of this DM")
+		}
+		isDM = true
+	} else if channel == nil {
 		return Error(c, http.StatusNotFound, "NOT_FOUND", "channel not found")
 	}
 
-	if err := h.requirePermission(c, channel.GuildID, channelID, userID, permissions.PermSendMessages); err != nil {
-		return err
+	if !isDM {
+		if err := h.requirePermission(c, channel.GuildID, channelID, userID, permissions.PermSendMessages); err != nil {
+			return err
+		}
 	}
 
 	var req sendMessageRequest
@@ -101,7 +125,16 @@ func (h *MessageHandler) SendMessage(c echo.Context) error {
 		return Error(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
 
-	h.gateway.DispatchToGuild(channel.GuildID, gateway.EventMessageCreate, full)
+	if isDM {
+		dm, _ := h.dmChannels.GetByID(ctx, channelID)
+		if dm != nil {
+			for _, r := range dm.Recipients {
+				h.gateway.DispatchToUser(r.ID, gateway.EventMessageCreate, full)
+			}
+		}
+	} else {
+		h.gateway.DispatchToGuild(channel.GuildID, gateway.EventMessageCreate, full)
+	}
 
 	return c.JSON(http.StatusCreated, full)
 }
@@ -120,12 +153,17 @@ func (h *MessageHandler) GetMessages(c echo.Context) error {
 	if err != nil {
 		return Error(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
-	if channel == nil {
-		return Error(c, http.StatusNotFound, "NOT_FOUND", "channel not found")
-	}
 
-	if err := h.requirePermission(c, channel.GuildID, channelID, userID, permissions.PermReadMessageHistory); err != nil {
-		return err
+	if channel == nil && h.dmChannels != nil {
+		if err := h.requireDMRecipient(c, channelID, userID); err != nil {
+			return err
+		}
+	} else if channel == nil {
+		return Error(c, http.StatusNotFound, "NOT_FOUND", "channel not found")
+	} else {
+		if err := h.requirePermission(c, channel.GuildID, channelID, userID, permissions.PermReadMessageHistory); err != nil {
+			return err
+		}
 	}
 
 	limit := 50
@@ -176,12 +214,17 @@ func (h *MessageHandler) GetMessage(c echo.Context) error {
 	if err != nil {
 		return Error(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
-	if channel == nil {
-		return Error(c, http.StatusNotFound, "NOT_FOUND", "channel not found")
-	}
 
-	if err := h.requirePermission(c, channel.GuildID, channelID, userID, permissions.PermReadMessageHistory); err != nil {
-		return err
+	if channel == nil && h.dmChannels != nil {
+		if err := h.requireDMRecipient(c, channelID, userID); err != nil {
+			return err
+		}
+	} else if channel == nil {
+		return Error(c, http.StatusNotFound, "NOT_FOUND", "channel not found")
+	} else {
+		if err := h.requirePermission(c, channel.GuildID, channelID, userID, permissions.PermReadMessageHistory); err != nil {
+			return err
+		}
 	}
 
 	msg, err := h.messages.GetByID(ctx, msgID)
@@ -218,7 +261,14 @@ func (h *MessageHandler) EditMessage(c echo.Context) error {
 	if err != nil {
 		return Error(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
-	if channel == nil {
+
+	var isDM bool
+	if channel == nil && h.dmChannels != nil {
+		if err := h.requireDMRecipient(c, channelID, userID); err != nil {
+			return err
+		}
+		isDM = true
+	} else if channel == nil {
 		return Error(c, http.StatusNotFound, "NOT_FOUND", "channel not found")
 	}
 
@@ -259,7 +309,16 @@ func (h *MessageHandler) EditMessage(c echo.Context) error {
 		return Error(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
 
-	h.gateway.DispatchToGuild(channel.GuildID, gateway.EventMessageUpdate, full)
+	if isDM {
+		dm, _ := h.dmChannels.GetByID(ctx, channelID)
+		if dm != nil {
+			for _, r := range dm.Recipients {
+				h.gateway.DispatchToUser(r.ID, gateway.EventMessageUpdate, full)
+			}
+		}
+	} else {
+		h.gateway.DispatchToGuild(channel.GuildID, gateway.EventMessageUpdate, full)
+	}
 
 	return c.JSON(http.StatusOK, full)
 }
@@ -283,7 +342,14 @@ func (h *MessageHandler) DeleteMessage(c echo.Context) error {
 	if err != nil {
 		return Error(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
-	if channel == nil {
+
+	var isDM bool
+	if channel == nil && h.dmChannels != nil {
+		if err := h.requireDMRecipient(c, channelID, userID); err != nil {
+			return err
+		}
+		isDM = true
+	} else if channel == nil {
 		return Error(c, http.StatusNotFound, "NOT_FOUND", "channel not found")
 	}
 
@@ -295,8 +361,12 @@ func (h *MessageHandler) DeleteMessage(c echo.Context) error {
 		return Error(c, http.StatusNotFound, "NOT_FOUND", "message not found")
 	}
 
-	// Author can always delete their own messages; otherwise need MANAGE_MESSAGES.
+	// In DMs, only the author can delete their own messages.
+	// In guilds, author can delete their own; otherwise need MANAGE_MESSAGES.
 	if msg.AuthorID != userID {
+		if isDM {
+			return Error(c, http.StatusForbidden, "FORBIDDEN", "you can only delete your own messages in DMs")
+		}
 		if err := h.requirePermission(c, channel.GuildID, channelID, userID, permissions.PermManageMessages); err != nil {
 			return err
 		}
@@ -306,10 +376,21 @@ func (h *MessageHandler) DeleteMessage(c echo.Context) error {
 		return Error(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
 
-	h.gateway.DispatchToGuild(channel.GuildID, gateway.EventMessageDelete, struct {
+	deletePayload := struct {
 		ID        int64 `json:"id,string"`
 		ChannelID int64 `json:"channel_id,string"`
-	}{ID: msgID, ChannelID: channelID})
+	}{ID: msgID, ChannelID: channelID}
+
+	if isDM {
+		dm, _ := h.dmChannels.GetByID(ctx, channelID)
+		if dm != nil {
+			for _, r := range dm.Recipients {
+				h.gateway.DispatchToUser(r.ID, gateway.EventMessageDelete, deletePayload)
+			}
+		}
+	} else {
+		h.gateway.DispatchToGuild(channel.GuildID, gateway.EventMessageDelete, deletePayload)
+	}
 
 	return c.NoContent(http.StatusNoContent)
 }
@@ -328,22 +409,64 @@ func (h *MessageHandler) Typing(c echo.Context) error {
 	if err != nil {
 		return Error(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
-	if channel == nil {
+
+	var isDM bool
+	if channel == nil && h.dmChannels != nil {
+		if err := h.requireDMRecipient(c, channelID, userID); err != nil {
+			return err
+		}
+		isDM = true
+	} else if channel == nil {
 		return Error(c, http.StatusNotFound, "NOT_FOUND", "channel not found")
 	}
 
-	if err := h.requirePermission(c, channel.GuildID, channelID, userID, permissions.PermSendMessages); err != nil {
-		return err
+	if !isDM {
+		if err := h.requirePermission(c, channel.GuildID, channelID, userID, permissions.PermSendMessages); err != nil {
+			return err
+		}
 	}
 
-	h.gateway.DispatchToGuild(channel.GuildID, gateway.EventTypingStart, gateway.TypingStartData{
+	typingData := gateway.TypingStartData{
 		ChannelID: channelID,
-		GuildID:   channel.GuildID,
 		UserID:    userID,
 		Timestamp: time.Now().Unix(),
-	})
+	}
+
+	if isDM {
+		dm, _ := h.dmChannels.GetByID(ctx, channelID)
+		if dm != nil {
+			for _, r := range dm.Recipients {
+				if r.ID != userID {
+					h.gateway.DispatchToUser(r.ID, gateway.EventTypingStart, typingData)
+				}
+			}
+		}
+	} else {
+		typingData.GuildID = channel.GuildID
+		h.gateway.DispatchToGuild(channel.GuildID, gateway.EventTypingStart, typingData)
+	}
 
 	return c.NoContent(http.StatusNoContent)
+}
+
+// requireDMRecipient checks that the DM channel exists and the user is a recipient.
+func (h *MessageHandler) requireDMRecipient(c echo.Context, channelID, userID int64) error {
+	ctx := c.Request().Context()
+	dm, err := h.dmChannels.GetByID(ctx, channelID)
+	if err != nil {
+		return Error(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
+	}
+	if dm == nil {
+		return Error(c, http.StatusNotFound, "NOT_FOUND", "channel not found")
+	}
+	ok, err := h.dmChannels.IsRecipient(ctx, channelID, userID)
+	if err != nil {
+		return Error(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
+	}
+	if !ok {
+		return Error(c, http.StatusForbidden, "FORBIDDEN", "you are not a recipient of this DM")
+	}
+	return nil
 }
 
 // requirePermission checks that the user has the given permission in the channel,

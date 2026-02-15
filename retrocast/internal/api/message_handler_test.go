@@ -36,7 +36,7 @@ func newMessageHandler(
 	overrides *mockChannelOverrideRepo,
 	gw *mockGateway,
 ) *MessageHandler {
-	return NewMessageHandler(msgs, chs, mems, roles, guilds, overrides, testSnowflake(), gw)
+	return NewMessageHandler(msgs, chs, &mockDMChannelRepo{}, mems, roles, guilds, overrides, testSnowflake(), gw)
 }
 
 // permMocks sets up the standard guild/member/role/override mocks so that a
