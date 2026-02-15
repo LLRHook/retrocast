@@ -2,7 +2,7 @@ package gateway
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -54,13 +54,13 @@ func (c *Connection) NextSequence() int64 {
 func (c *Connection) SendPayload(p GatewayPayload) {
 	data, err := json.Marshal(p)
 	if err != nil {
-		log.Printf("gateway: marshal error for user %d: %v", c.UserID, err)
+		slog.Error("marshal error", "userID", c.UserID, "error", err)
 		return
 	}
 	select {
 	case c.Send <- data:
 	default:
-		log.Printf("gateway: send buffer full for user %d, dropping", c.UserID)
+		slog.Warn("send buffer full, dropping message", "userID", c.UserID)
 	}
 }
 
@@ -68,7 +68,7 @@ func (c *Connection) SendPayload(p GatewayPayload) {
 func (c *Connection) SendEvent(name string, data any) {
 	raw, err := json.Marshal(data)
 	if err != nil {
-		log.Printf("gateway: marshal event %s error: %v", name, err)
+		slog.Error("marshal event error", "event", name, "error", err)
 		return
 	}
 	seq := c.NextSequence()
@@ -106,7 +106,7 @@ func (c *Connection) readPump() {
 		_, message, err := c.Conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
-				log.Printf("gateway: read error for user %d: %v", c.UserID, err)
+				slog.Error("read error", "userID", c.UserID, "error", err)
 			}
 			return
 		}
@@ -139,7 +139,7 @@ func (c *Connection) writePump() {
 			// Check if client responded to last heartbeat.
 			lastAck := c.lastHeartbeat.Load()
 			if time.Since(time.UnixMilli(lastAck)) > heartbeatInterval+heartbeatTimeout {
-				log.Printf("gateway: heartbeat timeout for user %d", c.UserID)
+				slog.Warn("heartbeat timeout", "userID", c.UserID)
 				return
 			}
 
@@ -156,7 +156,7 @@ func (c *Connection) writePump() {
 func (c *Connection) handleMessage(data []byte) {
 	var payload GatewayPayload
 	if err := json.Unmarshal(data, &payload); err != nil {
-		log.Printf("gateway: invalid payload from user %d: %v", c.UserID, err)
+		slog.Error("invalid payload", "userID", c.UserID, "error", err)
 		return
 	}
 

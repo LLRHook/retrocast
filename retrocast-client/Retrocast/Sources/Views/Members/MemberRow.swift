@@ -4,6 +4,8 @@ struct MemberRow: View {
     let member: Member
     @Environment(AppState.self) private var appState
 
+    @State private var showProfile = false
+
     var body: some View {
         HStack(spacing: 8) {
             ZStack(alignment: .bottomTrailing) {
@@ -28,6 +30,19 @@ struct MemberRow: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .clipShape(RoundedRectangle(cornerRadius: 4))
+        .contentShape(Rectangle())
+        .onTapGesture { showProfile = true }
+        .popover(isPresented: $showProfile) {
+            UserProfilePopover(
+                member: member,
+                roles: guildRoles
+            )
+        }
+    }
+
+    private var guildRoles: [Role] {
+        guard let guildID = appState.selectedGuildID else { return [] }
+        return appState.roles[guildID] ?? []
     }
 
     private var displayName: String {

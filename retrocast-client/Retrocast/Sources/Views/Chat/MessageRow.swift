@@ -4,8 +4,12 @@ struct MessageRow: View {
     let message: Message
     let isGrouped: Bool
     let currentUserID: Snowflake?
+    var onEdit: ((String) -> Void)?
+    var onDelete: (() -> Void)?
 
     @State private var showActions = false
+    @State private var showEditAlert = false
+    @State private var editText = ""
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -42,10 +46,53 @@ struct MessageRow: View {
                 }
 
                 // Message content
-                Text(message.content)
-                    .font(.body)
-                    .foregroundStyle(.retroText)
-                    .textSelection(.enabled)
+                if !message.content.isEmpty {
+                    Text(message.content)
+                        .font(.body)
+                        .foregroundStyle(.retroText)
+                        .textSelection(.enabled)
+                }
+
+                // Attachments
+                if let attachments = message.attachments, !attachments.isEmpty {
+                    ForEach(attachments) { attachment in
+                        if attachment.contentType.hasPrefix("image/") {
+                            AsyncImage(url: URL(string: attachment.url)) { phase in
+                                switch phase {
+                                case .success(let image):
+                                    image
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fit)
+                                        .frame(maxWidth: 300, maxHeight: 300)
+                                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                                case .failure:
+                                    Label(attachment.filename, systemImage: "photo")
+                                        .font(.caption)
+                                        .foregroundStyle(.retroMuted)
+                                default:
+                                    ProgressView()
+                                        .frame(width: 100, height: 100)
+                                }
+                            }
+                        } else {
+                            HStack(spacing: 8) {
+                                Image(systemName: "doc")
+                                    .foregroundStyle(.retroMuted)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(attachment.filename)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.retroText)
+                                    Text(formatFileSize(attachment.size))
+                                        .font(.caption)
+                                        .foregroundStyle(.retroMuted)
+                                }
+                            }
+                            .padding(8)
+                            .background(Color.retroDark.opacity(0.5))
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                        }
+                    }
+                }
             }
 
             Spacer(minLength: 0)
@@ -57,10 +104,11 @@ struct MessageRow: View {
             if let userID = currentUserID {
                 if message.authorID == userID {
                     Button("Edit Message") {
-                        // TODO: implement inline editing
+                        editText = message.content
+                        showEditAlert = true
                     }
                     Button("Delete Message", role: .destructive) {
-                        // TODO: implement delete
+                        onDelete?()
                     }
                 }
                 Button("Copy Text") {
@@ -68,5 +116,21 @@ struct MessageRow: View {
                 }
             }
         }
+        .alert("Edit Message", isPresented: $showEditAlert) {
+            TextField("Message", text: $editText)
+            Button("Save") {
+                let trimmed = editText.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty, trimmed != message.content {
+                    onEdit?(trimmed)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    private func formatFileSize(_ bytes: Int64) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: bytes)
     }
 }

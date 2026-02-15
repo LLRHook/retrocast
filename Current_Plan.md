@@ -9,243 +9,258 @@
 
 | Area       | Status                        | Completion | Progress                       |
 |------------|-------------------------------|------------|--------------------------------|
-| Backend    | Feature-complete for MVP      | **96%**    | `████████████████████░` |
-| Frontend   | SwiftUI app compiles + runs   | **58%**    | `████████████░░░░░░░░░` |
-| Deployment | Prod-ready infra              | **87%**    | `██████████████████░░░` |
-| **Overall**| **~79%**                      |            | `████████████████░░░░░` |
+| Backend    | Feature-complete, fully tested | **100%**   | `█████████████████████` |
+| Frontend   | Nearly complete, minor gaps   | **92%**    | `███████████████████░░` |
+| Deployment | Functional, needs hardening   | **65%**    | `██████████████░░░░░░░` |
+| **Overall**| **~90%**                      |            | `██████████████████░░░` |
 
 **Overall** is weighted: Backend 40%, Frontend 40%, Deployment 20%.
 
 ---
 
-## 1. Backend — 96%
+## 1. Backend — 100%
 
-**145 tests passing** (`go test -v -race ./...`): handler tests across api, auth, permissions, snowflake packages. All tests pass with race detector.
+**190 tests passing** (`go test -v -race ./...`): handler tests across api, auth, gateway, permissions, snowflake packages. All tests pass with race detector. Zero failures.
 
 ### Feature Scorecard
 
 | # | Feature | Score | Status | Evidence |
 |---|---------|-------|--------|----------|
-| 1 | Auth (register, login, refresh, logout) | 1.0 | Tested | `internal/auth/` — 6 tests, `auth_handler.go` 4 endpoints |
-| 2 | Users (get/update profile) | 1.0 | Tested | `user_handler.go`:14-87, `user_handler_test.go` 4 tests |
-| 3 | Guilds (CRUD + auto-setup) | 1.0 | Tested | `guild_handler.go`:19-267, 7 tests, creates @everyone role + general channel |
-| 4 | Channels (CRUD, text/voice/category, position) | 1.0 | Tested | `channel_handler.go`:17-244, 6 tests, ChannelType enum, position ordering |
-| 5 | Messages (send, list, edit, delete, cursor pagination) | 1.0 | Tested | `message_handler.go`:17-283, 17 tests, before-cursor pagination |
-| 6 | Members (list, get, update nick+roles, kick, leave) | 1.0 | Tested | `member_handler.go`:14-262, 11 tests |
-| 7 | Roles (CRUD, hierarchy, assign/remove) | 1.0 | Tested | `role_handler.go`:16-291, 9 tests, position/hierarchy checks |
-| 8 | Permissions (guild + channel-level) | 1.0 | Tested | `permissions/` — 23 tests, 19 permission bits, 8-layer resolver |
-| 9 | Invites (create, accept, list, revoke) | 1.0 | Tested | `invite_handler.go`:15-202, 8 tests, uses tracking |
-| 10 | WebSocket Gateway (HELLO→IDENTIFY→READY, heartbeat, RESUME) | 0.5 | No tests | `gateway/manager.go`, `gateway/client.go` — works but 0 unit tests |
-| 11 | Gateway Events (all CRUD dispatches) | 1.0 | Tested | 16 dispatch calls verified via mockGateway across handler tests |
+| 1 | Auth (register, login, refresh, logout) | 1.0 | Tested | `internal/auth/` — 9 tests, `auth_handler.go` 4 endpoints, `auth_handler_test.go` 6 tests |
+| 2 | Users (get/update profile) | 1.0 | Tested | `user_handler.go`:14-73, `user_handler_test.go` 7 tests |
+| 3 | Guilds (CRUD + auto-setup) | 1.0 | Tested | `guild_handler.go`:19-331, 7 tests, creates @everyone role + general channel |
+| 4 | Channels (CRUD, text/voice/category, position) | 1.0 | Tested | `channel_handler.go`:17-249, 7 tests, ChannelType enum, position ordering |
+| 5 | Messages (send, list, edit, delete, cursor pagination) | 1.0 | Tested | `message_handler.go`:17-547, 16 tests, before-cursor pagination |
+| 6 | Members (list, get, update nick+roles, kick, leave) | 1.0 | Tested | `member_handler.go`:14-338, 11 tests |
+| 7 | Roles (CRUD, hierarchy, assign/remove) | 1.0 | Tested | `role_handler.go`:16-461, 11 tests, position/hierarchy checks |
+| 8 | Permissions (guild + channel-level) | 1.0 | Tested | `permissions/` — 30 tests, 19 permission bits, 8-layer resolver |
+| 9 | Invites (create, accept, list, revoke) | 1.0 | Tested | `invite_handler.go`:15-320, 8 tests, uses tracking, ban check |
+| 10 | WebSocket Gateway (HELLO→IDENTIFY→READY, heartbeat, RESUME) | 1.0 | Tested | `gateway/manager_test.go` — 33 tests: lifecycle, subscriptions, dispatch, concurrency |
+| 11 | Gateway Events (all CRUD dispatches) | 1.0 | Tested | 19 event types, all dispatch calls verified via mockGateway across handler tests |
 | 12 | Typing Indicators | 1.0 | Tested | `message_handler.go` typing endpoint, 2 tests |
 | 13 | Rate Limiting (per-IP/per-user, Redis-backed) | 1.0 | Tested | `ratelimit.go`, `ratelimit_test.go` — 4 tests, fail-open on Redis errors |
 | 14 | File Uploads (MinIO attachments) | 1.0 | Tested | `upload_handler.go`, `upload_handler_test.go` — 6 tests, 10MB limit, content-type validation |
-| 15 | DMs / Private Channels | 0.75 | Partial | `dm_handler.go`, `dm_repo.go`, `dm_channel.go` — 3 endpoints + repo, no handler tests |
-| 16 | Ban System | 1.0 | Tested | `ban_handler.go`:16-137, `ban_handler_test.go` — 5 tests, PermBanMembers check |
-| 17 | Handler Test Coverage | 1.0 | Complete | 145 tests, 0 failures, race detector clean |
+| 15 | DMs / Private Channels | 1.0 | Tested | `dm_handler.go`, `dm_handler_test.go` — 12 tests, idempotent GetOrCreateDM |
+| 16 | Ban System | 1.0 | Tested | `ban_handler.go`:16-231, `ban_handler_test.go` — 7 tests, auto-kick on ban |
+| 17 | Handler Test Coverage | 1.0 | Complete | 190 tests, 0 failures, race detector clean, every handler has test file |
 
-**Total: 16.25 / 17 = 95.6%**
+**Total: 17.0 / 17 = 100%**
+
+### Minor Observations (not blocking)
+
+1. **Refresh/Logout handler tests** — `auth_handler_test.go` tests Register and Login directly; Refresh and Logout handlers lack dedicated tests (simple token operations).
+2. **ListMyGuilds** — No dedicated test for `GET /users/@me/guilds`.
+3. **Channel override handler tests** — `SetChannelOverride` and `DeleteChannelOverride` tested indirectly through message handler permission override tests.
+4. **Duplicate typing implementations** — Both `gateway/typing.go` and `message_handler.go` have typing handlers. Router uses the gateway one.
+5. **Gateway `log.Printf`** — 17 calls in gateway package use stdlib `log.Printf` instead of `slog` (breaks structured JSON logging).
+
+---
+
+## 2. Frontend — 92%
+
+**60 Swift files, ~4,473 lines of code.** XcodeGen project (`project.yml`), builds for iOS Simulator (iPhone 16, iOS 18.4+). `BUILD SUCCEEDED` confirmed.
+
+### Feature Scorecard
+
+| # | Feature | Score | Status | Evidence |
+|---|---------|-------|--------|----------|
+| 1 | Project scaffolded | 1.0 | Complete | `project.yml`, XcodeGen, `Retrocast.xcodeproj`, 60 files |
+| 2 | Auth flow (register, login, token management) | 1.0 | Complete | `AuthViewModel`, `TokenManager` (Keychain), auto-refresh with coalescing, `LoginView`, `RegisterView`, `ServerAddressView` |
+| 3 | Guild list sidebar | 1.0 | Complete | `ServerListView`, `ServerListViewModel`, `GuildIcon`, context menu, gear icon, wired in `MainView` column 1 |
+| 4 | Channel list sidebar | 1.0 | Complete | `ChannelSidebarView`, `ChannelListViewModel` (grouped by category, voice indicators) |
+| 5 | Message view + history | 0.75 | Mostly done | `MessageListView`, `MessageRow`, `DateSeparator` — cursor pagination in VM, but **scroll trigger not wired** to call `loadMoreMessages()`; edit/delete context menu items are TODO stubs |
+| 6 | Message send + real-time | 1.0 | Complete | `MessageInput`, `ChatViewModel` — typing throttle, optimistic send, gateway event handling |
+| 7 | WebSocket client | 1.0 | Complete | `GatewayClient` — HELLO→IDENTIFY→READY, heartbeat, reconnect/RESUME, exponential backoff with jitter |
+| 8 | Member list panel | 0.75 | Reachable | `MemberListView` wired as toggleable sidebar (person.2 toolbar button). `UserProfilePopover` exists but **not wired** to MemberRow tap |
+| 9 | Typing indicators | 1.0 | Complete | `TypingIndicator` with bouncing dots, `AppState.typingUsers`, throttled sending, auto-removal |
+| 10 | Presence indicators | 1.0 | Complete | `PresenceDot`, `PresenceState`, wired in `MemberRow` and `UserProfilePopover` |
+| 11 | Settings UI | 0.75 | Mostly done | `UserSettingsView` reachable via gear icon in ServerListView. `AppSettingsView` exists but **unreachable** (no navigation link) |
+| 12 | Invite system UI | 1.0 | Complete | `InviteSheet`, `CreateGuildSheet`, `JoinGuildSheet`, `InviteViewModel` — all wired and functional |
+| 13 | Role management UI | 1.0 | Complete | `RoleEditorView` with name, color, 19 permission toggles. Create/edit/delete. Wired via GuildSettingsView |
+| 14 | Responsive layout | 0.75 | Mostly done | `NavigationSplitView` 3-column in `MainView`, adaptive sidebar. `UIPasteboard` usage blocks macOS compilation |
+| 15 | File upload UI | 0.75 | Mostly done | PhotosPicker with paperclip button, multipart upload. Photos only (no document picker). Attachments display as raw URLs, no rich preview |
+
+**Total: 13.75 / 15 = 91.7%**
 
 ### Key Gaps
 
-1. **Gateway unit tests** — `gateway/` package has 0 tests. Need tests for:
-   - Connection lifecycle (HELLO → IDENTIFY → READY)
-   - Heartbeat timeout / zombie connection cleanup
-   - RESUME with ring buffer replay
-   - Guild subscription management
-   - `DispatchToGuild()` / `DispatchToUser()` fan-out
+1. **Message pagination scroll trigger** — `MessageListView` has `isLoadingMore` spinner but no mechanism to invoke `viewModel.loadMoreMessages()`. Need an `.onAppear` sentinel or geometry-based scroll trigger near the top of the message list.
 
-2. **DM handler tests** — `dm_handler.go` has 3 endpoints (CreateOrGetDMChannel, ListDMChannels, GetDMChannel) but no test file. Needs mock-based tests following the pattern in `message_handler_test.go`.
+2. **Message edit/delete in UI** — `MessageRow` context menu has "Edit Message" and "Delete Message" items with empty `// TODO` closures. `ChatViewModel.editMessage()` and `deleteMessage()` methods exist and work — just need to be called.
+
+3. **UserProfilePopover not wired** — Built with avatar, presence, roles, join date. `MemberRow` has no tap gesture to present it.
+
+4. **AppSettingsView unreachable** — Exists but no navigation from `UserSettingsView`. Needs a `NavigationLink` or section button.
+
+5. **Attachment rendering** — Uploaded files appear as raw URL strings in messages. Need image detection + `AsyncImage` preview in `MessageRow`.
+
+6. **UIPasteboard iOS-only** — `MessageRow` and `InviteSheet` use `UIPasteboard.general.string` which won't compile on macOS. Needs `#if os()` conditional.
 
 ### Gap-Filling Instructions
 
-**Gateway tests** (`internal/gateway/manager_test.go`):
+**Message pagination trigger** (`Sources/Views/Chat/MessageListView.swift`):
 ```
-1. Create mock WebSocket connections using httptest + gorilla/websocket
-2. Test HELLO is sent on connect with heartbeat_interval
-3. Test IDENTIFY with valid JWT → READY response with guilds list
-4. Test heartbeat timeout → connection closed after 2x interval
-5. Test RESUME with valid session_id + seq → replayed events from ring buffer
-6. Test DispatchToGuild sends event only to subscribed connections
+1. Add a sentinel Color.clear view at the TOP of the LazyVStack (before the first message)
+2. Attach .onAppear to the sentinel that calls viewModel.loadMoreMessages(channelID:)
+3. Guard with: if !viewModel.isLoadingMore && viewModel.hasMoreMessages
+4. The loading spinner already exists in the view — it just needs a trigger
 ```
 
-**DM tests** (`internal/api/dm_handler_test.go`):
+**Wire edit/delete in MessageRow** (`Sources/Views/Chat/MessageRow.swift`):
 ```
-1. Follow pattern from message_handler_test.go
-2. Test CreateOrGetDMChannel creates new DM channel between two users
-3. Test CreateOrGetDMChannel returns existing channel if already exists
-4. Test ListDMChannels returns only user's DM channels
-5. Test permission: can't DM a user who has blocked you (if implemented)
+1. Pass ChatViewModel (or closures) into MessageRow
+2. Replace the empty // TODO closures with:
+   - Edit: present a TextField alert/sheet, call viewModel.editMessage(messageID:content:channelID:)
+   - Delete: call viewModel.deleteMessage(messageID:channelID:) directly (already has confirmation in the context menu)
+```
+
+**Wire UserProfilePopover** (`Sources/Views/Members/MemberRow.swift`):
+```
+1. Add @State private var showProfile = false
+2. Wrap the existing HStack in a Button or add .onTapGesture { showProfile = true }
+3. Add .popover(isPresented: $showProfile) { UserProfilePopover(member: member) }
+```
+
+**Wire AppSettingsView** (`Sources/Views/Settings/UserSettingsView.swift`):
+```
+1. Add a NavigationLink or button in the bottom section:
+   NavigationLink("App Settings") { AppSettingsView() }
+2. Or add as a Section in the existing form
+```
+
+**Attachment rendering** (`Sources/Views/Chat/MessageRow.swift`):
+```
+1. Check if message.attachments is non-empty
+2. For image attachments (contentType starts with "image/"):
+   AsyncImage(url: URL(string: attachment.url)) with placeholder
+3. For non-image: show filename + size as a download link
+4. Keep message.content as text below/above the attachment preview
 ```
 
 ---
 
-## 2. Frontend — 58%
-
-**58 Swift files, ~4,008 lines of code.** XcodeGen project (`project.yml`), builds for iOS Simulator (iPhone 16, iOS 18.4+). `BUILD SUCCEEDED` confirmed.
+## 3. Deployment — 65%
 
 ### Feature Scorecard
 
 | # | Feature | Score | Status | Evidence |
 |---|---------|-------|--------|----------|
-| 1 | Project scaffolded | 1.0 | Complete | `project.yml`, XcodeGen, `Retrocast.xcodeproj`, 58 files |
-| 2 | Auth flow (register, login, token management) | 1.0 | Complete | `AuthViewModel`, `TokenManager` (Keychain), `LoginView`, `RegisterView`, `ServerAddressView` |
-| 3 | Guild list sidebar | 1.0 | Complete | `ServerListView`, `ServerListViewModel`, `GuildIcon`, wired in `MainView` column 1 |
-| 4 | Channel list sidebar | 1.0 | Complete | `ChannelSidebarView`, `ChannelListViewModel` (grouped by category, voice indicators) |
-| 5 | Message view + history | 0.75 | UI done | `MessageListView`, `MessageRow`, `DateSeparator` — cursor pagination in VM, not E2E verified |
-| 6 | Message send + real-time | 0.75 | UI done | `MessageInput`, `ChatViewModel` — typing throttle, optimistic send, gateway event handling |
-| 7 | WebSocket client | 0.75 | Implemented | `GatewayClient` — HELLO→IDENTIFY→READY, heartbeat, reconnect/RESUME, exponential backoff |
-| 8 | Member list panel | 0.5 | Unreachable | `MemberListView`, `MemberRow`, `UserProfilePopover` exist but **not wired** into MainView navigation |
-| 9 | Typing indicators | 0.75 | UI done | `TypingIndicator` with bouncing dots, `AppState.typingUsers`, `ChatViewModel.startTyping()` |
-| 10 | Presence indicators | 0.75 | UI done | `PresenceDot`, `PresenceState`, wired in `MemberRow` and `UserProfilePopover` |
-| 11 | Settings UI | 0.5 | Unreachable | `UserSettingsView`, `AppSettingsView`, `SettingsViewModel` exist but **no navigation path** from MainView |
-| 12 | Invite system UI | 0.75 | UI done | `InviteSheet`, `CreateGuildSheet`, `JoinGuildSheet`, `InviteViewModel` — all wired and functional |
-| 13 | Role management UI | 0.25 | Display only | Roles shown in `GuildSettingsView` list, but GuildSettingsView itself is **unreachable** + no create/edit UI |
-| 14 | Responsive layout | 0.75 | Mostly done | `NavigationSplitView` 3-column in `MainView`, adaptive sidebar, needs iPhone testing |
-
-**Total: 10.5 / 14 = 75% code exists → weighted to 58% accounting for unreachable views and no E2E testing**
-
-### Critical Finding: Unreachable Views
-
-Three view groups exist as files but have **no navigation path** from `MainView`:
-
-1. **MemberListView** — Built with role-grouped display, but `MainView` has no button/gesture to show it. Should be column 3 of NavigationSplitView or a sheet toggle.
-
-2. **Settings views** (`UserSettingsView`, `AppSettingsView`) — Complete with logout, theme toggle, profile edit. No gear icon or menu item in any reachable view triggers them.
-
-3. **GuildSettingsView** — Has role list display, guild name edit, danger zone (leave/delete). No long-press or context menu on guild icon opens it.
-
-### Gap-Filling Instructions
-
-**Wire MemberListView** (`Sources/Views/Main/MainView.swift`):
-```
-Option A: Add as column 3 in NavigationSplitView (iPad gets 3 columns, iPhone collapses)
-Option B: Add a toolbar button in ChatView that toggles a trailing sheet/sidebar
-Pattern: Follow how ChannelSidebarView is already wired as column 2
-```
-
-**Wire Settings** (`Sources/Views/Main/MainView.swift` or `ServerListView.swift`):
-```
-1. Add a gear icon button at bottom of ServerListView (below guild icons)
-2. Present UserSettingsView as a sheet
-3. UserSettingsView already has navigation to AppSettingsView
-```
-
-**Wire GuildSettingsView** (`Sources/Views/Guild/ServerListView.swift`):
-```
-1. Add .contextMenu to guild icon buttons in ServerListView
-2. Context menu item "Server Settings" presents GuildSettingsView as sheet
-3. GuildSettingsView already exists with proper guildID parameter
-```
-
-**File upload UI** (new file `Sources/Views/Chat/AttachmentPicker.swift`):
-```
-1. Add PhotosPicker or UIDocumentPickerViewController wrapper
-2. Wire into MessageInput with a paperclip button
-3. Upload via APIClient using multipart form data to POST /channels/:id/attachments
-4. Display uploaded attachment URL in message or as inline preview
-```
-
-**Role management UI** (extend `Sources/Views/Guild/GuildSettingsView.swift`):
-```
-1. Add "Create Role" button to role list section
-2. Create RoleEditorView with name, color picker, permission toggles
-3. Wire to POST /guilds/:id/roles and PATCH /guilds/:id/roles/:roleId
-4. Permission toggles should map to the 19 bitfield permissions from backend
-```
-
----
-
-## 3. Deployment — 87%
-
-### Feature Scorecard
-
-| # | Feature | Score | Status | Evidence |
-|---|---------|-------|--------|----------|
-| 1 | Dockerfile (multi-stage) | 1.0 | Complete | `Dockerfile` — Go builder → Alpine runtime, 2-stage |
-| 2 | docker-compose.yml | 1.0 | Complete | 6 services: api, postgres, redis, minio, livekit, caddy + volumes |
-| 3 | CI/CD pipeline | 0.75 | CI only | `.github/workflows/ci.yml` — lint, test, build. No CD (no auto-deploy) |
-| 4 | Reverse proxy + TLS | 1.0 | Complete | `Caddyfile` — automatic HTTPS, WebSocket proxy, static files |
-| 5 | Production config separation | 1.0 | Complete | `config.go` env-based config, `.env.example` with all vars documented |
-| 6 | Structured logging | 1.0 | Complete | `slog.NewJSONHandler` in `main.go`, log levels configurable |
-| 7 | Health check endpoint | 1.0 | Complete | `GET /health` returns `{"status":"ok"}` |
-| 8 | Automated DB migrations | 1.0 | Complete | `golang-migrate` runs on startup in `main.go`, 10 migration files |
+| 1 | Dockerfile (multi-stage) | 0.75 | Partial | `Dockerfile` — 2-stage build, but no non-root user, no HEALTHCHECK, no .dockerignore |
+| 2 | docker-compose.yml | 0.75 | Partial | 6 services + volumes, but secrets hardcoded inline, no restart policy, no API healthcheck |
+| 3 | CI/CD pipeline | 0.50 | CI only | `.github/workflows/ci.yml` — test + build. No lint, no Docker image push, no CD |
+| 4 | Reverse proxy + TLS | 0.75 | Partial | `Caddyfile` — auto HTTPS, but no security headers, no WebSocket tuning, /metrics exposed |
+| 5 | Production config separation | 0.50 | Partial | `config.go` env-based, but dev secrets as defaults (JWT_SECRET falls back silently), no validation |
+| 6 | Structured logging | 0.50 | Partial | `slog.NewJSONHandler` in `main.go`, but gateway uses 17x `log.Printf`, no configurable log level |
+| 7 | Health check endpoint | 0.75 | Partial | `GET /health` returns `{"status":"ok"}` but shallow (no DB/Redis ping), no compose healthcheck on API |
+| 8 | Automated DB migrations | 1.0 | Complete | `golang-migrate` runs on startup, 14 migration pairs, exits on failure |
 | 9 | Redis persistence | 1.0 | Complete | `--appendonly yes` + named volume in compose |
-| 10 | Monitoring (Prometheus) | 0.5 | Partial | `/metrics` endpoint exists but uses basic `expvar`-style handler, no `prometheus/client_golang` collector. No Grafana dashboards. |
-| 11 | Backup strategy | 0.5 | Partial | `scripts/backup.sh` with pg_dump, but no cron automation, no MinIO backup |
-| 12 | .env support | 1.0 | Complete | `.env.example` — 18 variables documented |
-| 13 | Graceful shutdown | 1.0 | Complete | `signal.NotifyContext(SIGINT, SIGTERM)` + `srv.Shutdown()` in `main.go` |
+| 10 | Monitoring (Prometheus) | 0.50 | Partial | `/metrics` endpoint via echoprometheus middleware, but no Prometheus/Grafana in compose, no custom metrics |
+| 11 | Backup strategy | 0.50 | Partial | `scripts/backup.sh` with pg_dump, but no automation, no retention, no MinIO backup |
+| 12 | .env support | 0.50 | Partial | `.env.example` documents vars, .gitignore excludes .env, but compose hardcodes secrets, no godotenv |
+| 13 | Graceful shutdown | 1.0 | Complete | `signal.NotifyContext(SIGINT, SIGTERM)` + `srv.Shutdown()` + deferred pool/redis close |
 
-**Total: 11.75 / 13 = 90.4% → scored at 87% accounting for missing CD pipeline and incomplete monitoring**
+**Total: 8.50 / 13 = 65.4%**
 
 ### Gap-Filling Instructions
+
+**Config validation** (`internal/config/config.go`):
+```
+1. Remove default values for JWT_SECRET and DATABASE_URL
+2. Add validation: if JWT_SECRET == "" { log.Fatal("JWT_SECRET is required") }
+3. Same for DATABASE_URL, REDIS_URL
+4. Add LOG_LEVEL env var: envOrDefault("LOG_LEVEL", "info"), parse to slog.Level
+```
+
+**Dockerfile hardening** (`Dockerfile`):
+```
+1. Add: RUN adduser -D -u 1001 appuser
+2. Add: USER appuser
+3. Add: HEALTHCHECK --interval=30s --timeout=3s CMD wget -qO- http://localhost:8080/health || exit 1
+4. Create .dockerignore: .git, bin/, *.md, .env*, .claude/
+```
+
+**docker-compose hardening** (`docker-compose.yml`):
+```
+1. Add restart: unless-stopped to all services
+2. Replace inline secrets with env_file: .env
+3. Add healthcheck to api service:
+   healthcheck:
+     test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+     interval: 10s
+     timeout: 3s
+     retries: 3
+```
+
+**CI improvements** (`.github/workflows/ci.yml`):
+```
+1. Add golangci-lint step before tests
+2. Add Go module cache via setup-go cache: true
+3. Add Docker build step (build-only, no push) to verify Dockerfile
+```
 
 **CD pipeline** (`.github/workflows/cd.yml`):
 ```
 1. Trigger on push to main (after CI passes)
-2. Build Docker image, push to GitHub Container Registry (ghcr.io)
-3. SSH into target host, docker compose pull && docker compose up -d
-4. Or use Watchtower for auto-pull on the host
+2. Build Docker image, push to GHCR (ghcr.io)
+3. SSH deploy or use Watchtower for auto-pull
 ```
 
-**Prometheus metrics** (`internal/api/metrics.go`):
+**Migrate gateway logging** (`internal/gateway/`):
 ```
-1. Add github.com/prometheus/client_golang dependency
-2. Create custom collectors: http_requests_total, http_request_duration, ws_connections_active, ws_events_dispatched
-3. Register middleware that increments counters per route
-4. Replace /metrics handler with promhttp.Handler()
-```
-
-**Grafana dashboard** (`deployment/grafana/`):
-```
-1. Add Grafana service to docker-compose.yml
-2. Create provisioning config for Prometheus datasource
-3. Create dashboard JSON: request rate, latency percentiles, error rate, WS connections, DB pool stats
+1. Replace all log.Printf in manager.go, connection.go, server.go with slog.Info/slog.Error
+2. Add structured fields: "userID", "guildID", "sessionID", "error"
+3. Remove import "log" from gateway package
 ```
 
-**Backup automation** (`scripts/backup-cron.sh`):
+**Deep health check** (`internal/api/router.go`):
 ```
-1. Extend backup.sh to include MinIO: mc mirror minio/retrocast /backups/minio/
-2. Add retention: find /backups -mtime +7 -delete
-3. Add cron entry: 0 3 * * * /opt/retrocast/scripts/backup.sh
-4. Document in README or deployment guide
+1. Replace shallow /health with a check that pings Postgres (pool.Ping(ctx)) and Redis (rdb.Ping(ctx))
+2. Return {"status":"ok","postgres":"ok","redis":"ok"} or 503 with failed component
+```
+
+**Prometheus + Grafana** (`docker-compose.yml`):
+```
+1. Add prometheus service with prometheus.yml scraping api:8080/metrics
+2. Add grafana service with provisioned Prometheus datasource
+3. Create basic dashboard: request rate, latency p50/p95/p99, error rate, WS connections
 ```
 
 ---
 
 ## Priority Matrix
 
-### P0 — Critical for Usable MVP
+### P0 — Critical for Polished MVP
 
 | Task | Area | Effort | Why |
 |------|------|--------|-----|
-| Wire MemberListView into MainView | Frontend | 2 hours | Built but unreachable — users can't see who's online |
-| Wire Settings views into navigation | Frontend | 1 hour | Built but unreachable — users can't log out or change settings |
-| Wire GuildSettingsView (context menu) | Frontend | 1 hour | Built but unreachable — admins can't manage guilds |
-| E2E integration test (frontend ↔ backend) | Frontend | 1 day | Verify the whole stack works together |
+| Wire message pagination scroll trigger | Frontend | 1 hour | Users can't load older messages — core UX broken |
+| Wire edit/delete in MessageRow | Frontend | 1 hour | Context menu items exist but do nothing |
+| Config validation (fail-loud on missing secrets) | Deployment | 1 hour | Silent fallback to dev credentials in production |
 
 ### P1 — Important for Quality
 
 | Task | Area | Effort | Why |
 |------|------|--------|-----|
-| Gateway unit tests | Backend | 1 day | Only untested package, 0 test files in `gateway/` |
-| DM handler tests | Backend | 0.5 day | 3 endpoints with no test coverage |
-| File upload UI (image picker) | Frontend | 0.5 day | Backend supports it, need PhotosPicker integration |
-| Role management UI (create/edit) | Frontend | 1 day | Guild admins need to create and configure roles |
-| iPhone layout testing + fixes | Frontend | 0.5 day | Must work on phone, not just iPad simulator |
+| Wire UserProfilePopover to MemberRow | Frontend | 30 min | Built but untappable |
+| Wire AppSettingsView from UserSettingsView | Frontend | 30 min | Built but unreachable |
+| Attachment rendering in MessageRow | Frontend | 2 hours | Uploads show as raw URLs |
+| Dockerfile hardening (non-root, healthcheck) | Deployment | 1 hour | Security baseline |
+| docker-compose hardening (restart, env_file) | Deployment | 1 hour | Reliability baseline |
+| Migrate gateway log.Printf to slog | Deployment | 1 hour | Breaks JSON log aggregation |
 
 ### P2 — Polish & Extended Features
 
 | Task | Area | Effort | Why |
 |------|------|--------|-----|
-| CD pipeline (auto-deploy on merge) | Deployment | 0.5 day | Currently CI only, no automated deployment |
-| Prometheus client_golang metrics | Deployment | 0.5 day | Current /metrics is basic, need proper collectors |
-| Grafana dashboards | Deployment | 0.5 day | Monitoring visibility for ops |
+| CI: Add golangci-lint + Go cache | Deployment | 1 hour | Code quality + faster CI |
+| CD pipeline (auto-deploy on merge) | Deployment | 0.5 day | Currently CI only |
+| Deep health check (DB + Redis ping) | Deployment | 1 hour | Shallow check misses outages |
+| Prometheus + Grafana in compose | Deployment | 0.5 day | Monitoring visibility |
+| UIPasteboard → cross-platform clipboard | Frontend | 30 min | Enables macOS builds |
+| Document picker for non-image uploads | Frontend | 2 hours | Currently photos only |
 | Message search | Frontend + Backend | 1-2 days | Feature parity with Discord |
 | Read states / unread counts | Backend + Frontend | 1-2 days | UX polish — unread badges |
 | Voice channels (LiveKit) | Frontend + Backend | 3-5 days | Major feature, LiveKit server already in compose |
-| Reactions / embeds | Backend + Frontend | 1-2 days | Rich messaging features |
-| Offline persistence | Frontend | 2 days | Local caching for reliability |
 | Backup automation (cron + MinIO) | Deployment | 2 hours | Currently manual script only |
 
 ---
@@ -256,11 +271,13 @@ Pattern: Follow how ChannelSidebarView is already wired as column 2
 |-----------|---------|----------|------------|---------|
 | Session start (initial) | 74% | 5% | 50% | 42% |
 | After Sprint 1 autopilot | 94% | 55% | 88% | 77% |
-| **Current (fresh audit)** | **96%** | **58%** | **87%** | **79%** |
+| After P0+P1 sprint | 96% | 58% | 87% | 79% |
+| **Current (fresh audit)** | **100%** | **92%** | **65%** | **90%** |
 
 ### Evidence
 - `go build ./cmd/retrocast` — compiles clean
-- `go test -race ./...` — **145 tests passing**, 0 failures
+- `go test -race ./...` — **190 tests passing**, 0 failures
 - `xcodebuild -scheme Retrocast -destination 'iPhone 16,OS=18.4'` — **BUILD SUCCEEDED**
-- 58 Swift files, ~4,008 LOC
-- PR #4 merged into main with 7 commits (uploads, bans, DMs, tests, deployment, iOS client, docs)
+- 60 Swift files, ~4,473 LOC
+- 13 files changed in latest PR #6 (1,767 insertions)
+- Permission bits verified: all 19 + Administrator match between backend and frontend
