@@ -1,7 +1,6 @@
 # Claude Code config
 .claude/
 CLAUDE.md
-Current_Plan.md
 
 # Go
 *.exe
@@ -28,6 +27,6 @@ Current_Plan.md
 Thumbs.db
 
 # Binary output
-/bin/
+bin/
 /dist/
 retrocast/retrocast

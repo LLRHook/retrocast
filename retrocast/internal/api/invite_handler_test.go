@@ -16,9 +16,10 @@ func newInviteHandler(
 	guilds *mockGuildRepo,
 	members *mockMemberRepo,
 	roles *mockRoleRepo,
+	bans *mockBanRepo,
 	gw *mockGateway,
 ) *InviteHandler {
-	return NewInviteHandler(invites, guilds, members, roles, gw)
+	return NewInviteHandler(invites, guilds, members, roles, bans, gw)
 }
 
 func TestCreateInvite_Success(t *testing.T) {
@@ -36,7 +37,7 @@ func TestCreateInvite_Success(t *testing.T) {
 		},
 	}
 	// Owner bypasses permission checks, so no member/role mocking needed.
-	h := newInviteHandler(invites, guilds, &mockMemberRepo{}, &mockRoleRepo{}, gw)
+	h := newInviteHandler(invites, guilds, &mockMemberRepo{}, &mockRoleRepo{}, &mockBanRepo{}, gw)
 
 	body := `{"max_uses":10,"max_age_seconds":3600}`
 	c, rec := newTestContext(http.MethodPost, "/api/v1/guilds/1/invites", strings.NewReader(body))
@@ -95,7 +96,7 @@ func TestGetInvite_Public(t *testing.T) {
 			}, nil
 		},
 	}
-	h := newInviteHandler(invites, guilds, members, &mockRoleRepo{}, gw)
+	h := newInviteHandler(invites, guilds, members, &mockRoleRepo{}, &mockBanRepo{}, gw)
 
 	c, rec := newTestContext(http.MethodGet, "/api/v1/invites/abc12345", nil)
 	c.SetParamNames("code")
@@ -135,7 +136,7 @@ func TestGetInvite_Expired(t *testing.T) {
 			}, nil
 		},
 	}
-	h := newInviteHandler(invites, &mockGuildRepo{}, &mockMemberRepo{}, &mockRoleRepo{}, gw)
+	h := newInviteHandler(invites, &mockGuildRepo{}, &mockMemberRepo{}, &mockRoleRepo{}, &mockBanRepo{}, gw)
 
 	c, rec := newTestContext(http.MethodGet, "/api/v1/invites/expired1", nil)
 	c.SetParamNames("code")
@@ -188,7 +189,7 @@ func TestAcceptInvite_Success(t *testing.T) {
 			return nil
 		},
 	}
-	h := newInviteHandler(invites, guilds, members, &mockRoleRepo{}, gw)
+	h := newInviteHandler(invites, guilds, members, &mockRoleRepo{}, &mockBanRepo{}, gw)
 
 	c, rec := newTestContext(http.MethodPost, "/api/v1/invites/valid123", nil)
 	c.SetParamNames("code")
@@ -231,7 +232,7 @@ func TestAcceptInvite_AlreadyMember(t *testing.T) {
 			return &models.Member{GuildID: guildID, UserID: userID, JoinedAt: now}, nil // already member
 		},
 	}
-	h := newInviteHandler(invites, &mockGuildRepo{}, members, &mockRoleRepo{}, gw)
+	h := newInviteHandler(invites, &mockGuildRepo{}, members, &mockRoleRepo{}, &mockBanRepo{}, gw)
 
 	c, rec := newTestContext(http.MethodPost, "/api/v1/invites/valid123", nil)
 	c.SetParamNames("code")
@@ -273,7 +274,7 @@ func TestAcceptInvite_MaxUsesReached(t *testing.T) {
 			}, nil
 		},
 	}
-	h := newInviteHandler(invites, &mockGuildRepo{}, &mockMemberRepo{}, &mockRoleRepo{}, gw)
+	h := newInviteHandler(invites, &mockGuildRepo{}, &mockMemberRepo{}, &mockRoleRepo{}, &mockBanRepo{}, gw)
 
 	c, rec := newTestContext(http.MethodPost, "/api/v1/invites/maxed123", nil)
 	c.SetParamNames("code")
@@ -313,7 +314,7 @@ func TestRevokeInvite_AsCreator(t *testing.T) {
 			return nil
 		},
 	}
-	h := newInviteHandler(invites, &mockGuildRepo{}, &mockMemberRepo{}, &mockRoleRepo{}, gw)
+	h := newInviteHandler(invites, &mockGuildRepo{}, &mockMemberRepo{}, &mockRoleRepo{}, &mockBanRepo{}, gw)
 
 	c, rec := newTestContext(http.MethodDelete, "/api/v1/invites/myinvite", nil)
 	c.SetParamNames("code")
@@ -353,7 +354,7 @@ func TestRevokeInvite_WithManageGuild(t *testing.T) {
 			return &models.Guild{ID: 1, OwnerID: 100}, nil // caller is owner, bypasses permission check
 		},
 	}
-	h := newInviteHandler(invites, guilds, &mockMemberRepo{}, &mockRoleRepo{}, gw)
+	h := newInviteHandler(invites, guilds, &mockMemberRepo{}, &mockRoleRepo{}, &mockBanRepo{}, gw)
 
 	c, rec := newTestContext(http.MethodDelete, "/api/v1/invites/other", nil)
 	c.SetParamNames("code")

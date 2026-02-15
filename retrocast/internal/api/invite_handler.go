@@ -21,6 +21,7 @@ type InviteHandler struct {
 	guilds  database.GuildRepository
 	members database.MemberRepository
 	roles   database.RoleRepository
+	bans    database.BanRepository
 	gateway gateway.Dispatcher
 }
 
@@ -30,6 +31,7 @@ func NewInviteHandler(
 	guilds database.GuildRepository,
 	members database.MemberRepository,
 	roles database.RoleRepository,
+	bans database.BanRepository,
 	gw gateway.Dispatcher,
 ) *InviteHandler {
 	return &InviteHandler{
@@ -37,6 +39,7 @@ func NewInviteHandler(
 		guilds:  guilds,
 		members: members,
 		roles:   roles,
+		bans:    bans,
 		gateway: gw,
 	}
 }
@@ -195,6 +198,15 @@ func (h *InviteHandler) AcceptInvite(c echo.Context) error {
 	}
 	if existing != nil {
 		return Error(c, http.StatusConflict, "ALREADY_MEMBER", "you are already a member of this guild")
+	}
+
+	// Check if user is banned.
+	ban, err := h.bans.GetByGuildAndUser(ctx, invite.GuildID, userID)
+	if err != nil {
+		return Error(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
+	}
+	if ban != nil {
+		return Error(c, http.StatusForbidden, "BANNED", "you are banned from this guild")
 	}
 
 	member := &models.Member{

@@ -3,6 +3,7 @@ package api
 import (
 	"time"
 
+	"github.com/labstack/echo-contrib/echoprometheus"
 	"github.com/labstack/echo/v4"
 	"github.com/victorivanov/retrocast/internal/auth"
 	"github.com/victorivanov/retrocast/internal/gateway"
@@ -19,6 +20,9 @@ type Dependencies struct {
 	Messages *MessageHandler
 	Invites  *InviteHandler
 	Roles    *RoleHandler
+	Uploads  *UploadHandler
+	Bans     *BanHandler
+	DMs      *DMHandler
 	Typing   *gateway.TypingHandler
 	Gateway  *gateway.Manager
 
@@ -32,6 +36,10 @@ func SetupRouter(e *echo.Echo, deps *Dependencies) {
 	e.GET("/health", func(c echo.Context) error {
 		return c.JSON(200, map[string]string{"status": "ok"})
 	})
+
+	// Prometheus metrics
+	e.Use(echoprometheus.NewMiddleware("retrocast"))
+	e.GET("/metrics", echoprometheus.NewHandler())
 
 	// WebSocket gateway
 	e.GET("/gateway", deps.Gateway.HandleWebSocket)
@@ -62,6 +70,10 @@ func SetupRouter(e *echo.Echo, deps *Dependencies) {
 	protected.GET("/users/@me", deps.Users.GetMe)
 	protected.PATCH("/users/@me", deps.Users.UpdateMe)
 	protected.GET("/users/@me/guilds", deps.Guilds.ListMyGuilds)
+
+	// DM channels
+	protected.POST("/users/@me/channels", deps.DMs.CreateDM)
+	protected.GET("/users/@me/channels", deps.DMs.ListDMs)
 
 	// Guilds
 	protected.POST("/guilds", deps.Guilds.CreateGuild)
@@ -103,8 +115,16 @@ func SetupRouter(e *echo.Echo, deps *Dependencies) {
 	protected.PATCH("/channels/:id/messages/:message_id", deps.Messages.EditMessage)
 	protected.DELETE("/channels/:id/messages/:message_id", deps.Messages.DeleteMessage)
 
+	// Attachments
+	protected.POST("/channels/:id/attachments", deps.Uploads.Upload)
+
 	// Typing
 	protected.POST("/channels/:id/typing", deps.Typing.Handle)
+
+	// Bans
+	protected.PUT("/guilds/:id/bans/:user_id", deps.Bans.BanMember)
+	protected.DELETE("/guilds/:id/bans/:user_id", deps.Bans.UnbanMember)
+	protected.GET("/guilds/:id/bans", deps.Bans.ListBans)
 
 	// Invites (protected)
 	protected.POST("/guilds/:id/invites", deps.Invites.CreateInvite)

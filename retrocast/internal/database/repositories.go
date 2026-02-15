@@ -70,3 +70,25 @@ type ChannelOverrideRepository interface {
 	GetByChannel(ctx context.Context, channelID int64) ([]models.ChannelOverride, error)
 	Delete(ctx context.Context, channelID, roleID int64) error
 }
+
+type AttachmentRepository interface {
+	Create(ctx context.Context, attachment *models.Attachment) error
+	GetByMessageID(ctx context.Context, messageID int64) ([]models.Attachment, error)
+	Delete(ctx context.Context, id int64) error
+}
+
+type BanRepository interface {
+	Create(ctx context.Context, ban *models.Ban) error
+	GetByGuildAndUser(ctx context.Context, guildID, userID int64) (*models.Ban, error)
+	GetByGuildID(ctx context.Context, guildID int64) ([]models.Ban, error)
+	Delete(ctx context.Context, guildID, userID int64) error
+}
+
+type DMChannelRepository interface {
+	Create(ctx context.Context, dm *models.DMChannel) error
+	GetByID(ctx context.Context, id int64) (*models.DMChannel, error)
+	GetByUserID(ctx context.Context, userID int64) ([]models.DMChannel, error)
+	GetOrCreateDM(ctx context.Context, user1ID, user2ID, newID int64) (*models.DMChannel, error)
+	AddRecipient(ctx context.Context, channelID, userID int64) error
+	IsRecipient(ctx context.Context, channelID, userID int64) (bool, error)
+}

@@ -2,11 +2,15 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/victorivanov/retrocast/internal/api"
@@ -16,9 +20,12 @@ import (
 	"github.com/victorivanov/retrocast/internal/gateway"
 	redisclient "github.com/victorivanov/retrocast/internal/redis"
 	"github.com/victorivanov/retrocast/internal/snowflake"
+	"github.com/victorivanov/retrocast/internal/storage"
 )
 
 func main() {
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
+
 	cfg := config.Load()
 	ctx := context.Background()
 
@@ -26,19 +33,34 @@ func main() {
 
 	pool, err := database.NewPostgresPool(ctx, cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("postgres: %v", err)
+		slog.Error("postgres connection failed", "error", err)
+		os.Exit(1)
 	}
 	defer pool.Close()
 
+	// Run migrations
+	m, err := migrate.New("file://migrations", cfg.DatabaseURL)
+	if err != nil {
+		slog.Error("migration init failed", "error", err)
+		os.Exit(1)
+	}
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		slog.Error("migration failed", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("migrations applied")
+
 	rdb, err := redisclient.NewClient(cfg.RedisURL)
 	if err != nil {
-		log.Fatalf("redis: %v", err)
+		slog.Error("redis connection failed", "error", err)
+		os.Exit(1)
 	}
 	defer rdb.Close()
 
 	sf, err := snowflake.NewGenerator(1, 1)
 	if err != nil {
-		log.Fatalf("snowflake: %v", err)
+		slog.Error("snowflake generator failed", "error", err)
+		os.Exit(1)
 	}
 	tokenSvc := auth.NewTokenService(cfg.JWTSecret)
 
@@ -52,6 +74,19 @@ func main() {
 	messages := database.NewMessageRepository(pool)
 	invites := database.NewInviteRepository(pool)
 	overrides := database.NewChannelOverrideRepository(pool)
+	attachments := database.NewAttachmentRepository(pool)
+	bans := database.NewBanRepository(pool)
+	dmChannels := database.NewDMChannelRepository(pool)
+
+	// --- Storage ---
+
+	minioClient, err := storage.NewMinIOClient(
+		cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey, "retrocast",
+	)
+	if err != nil {
+		slog.Error("minio connection failed", "error", err)
+		os.Exit(1)
+	}
 
 	// --- Gateway ---
 
@@ -64,9 +99,12 @@ func main() {
 	memberHandler := api.NewMemberHandler(members, guilds, roles, guildHandler.RequirePermission(), gwManager)
 	userHandler := api.NewUserHandler(users)
 	authHandler := api.NewAuthHandler(users, tokenSvc, rdb, sf)
-	messageHandler := api.NewMessageHandler(messages, channels, members, roles, guilds, overrides, sf, gwManager)
-	inviteHandler := api.NewInviteHandler(invites, guilds, members, roles, gwManager)
+	messageHandler := api.NewMessageHandler(messages, channels, dmChannels, members, roles, guilds, overrides, sf, gwManager)
+	dmHandler := api.NewDMHandler(dmChannels, users, sf, gwManager)
+	inviteHandler := api.NewInviteHandler(invites, guilds, members, roles, bans, gwManager)
+	banHandler := api.NewBanHandler(guilds, members, roles, bans, gwManager)
 	roleHandler := api.NewRoleHandler(guilds, roles, members, channels, overrides, sf, gwManager)
+	uploadHandler := api.NewUploadHandler(attachments, channels, members, roles, guilds, overrides, sf, minioClient)
 	typingHandler := gateway.NewTypingHandler(channels, rdb, gwManager)
 
 	deps := &api.Dependencies{
@@ -78,6 +116,9 @@ func main() {
 		Messages:     messageHandler,
 		Invites:      inviteHandler,
 		Roles:        roleHandler,
+		Uploads:      uploadHandler,
+		Bans:         banHandler,
+		DMs:          dmHandler,
 		Typing:       typingHandler,
 		Gateway:      gwManager,
 		TokenService: tokenSvc,
@@ -105,15 +146,17 @@ func main() {
 	defer stop()
 
 	go func() {
-		log.Printf("retrocast starting on %s", cfg.ServerAddr)
+		slog.Info("retrocast starting", "addr", cfg.ServerAddr)
 		if err := e.Start(cfg.ServerAddr); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("server error: %v", err)
+			slog.Error("server error", "error", err)
+			os.Exit(1)
 		}
 	}()
 
 	<-sigCtx.Done()
-	log.Println("shutting down...")
+	slog.Info("shutting down")
 	if err := e.Shutdown(context.Background()); err != nil {
-		log.Fatalf("shutdown error: %v", err)
+		slog.Error("shutdown error", "error", err)
+		os.Exit(1)
 	}
 }
