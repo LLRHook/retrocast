@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: retrocast
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: retrocast
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: Run tests
+        working-directory: retrocast
+        env:
+          DATABASE_URL: postgres://retrocast:password@localhost:5432/retrocast?sslmode=disable
+          REDIS_URL: redis://localhost:6379
+        run: go test -v -race ./...
+      - name: Build
+        working-directory: retrocast
+        run: go build ./cmd/retrocast
