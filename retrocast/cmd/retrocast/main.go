@@ -122,6 +122,7 @@ func main() {
 		Typing:       typingHandler,
 		Gateway:      gwManager,
 		TokenService: tokenSvc,
+		Pool:         pool,
 		Redis:        rdb,
 	}
 

@@ -1,8 +1,10 @@
 package api
 
 import (
+	"net/http"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo-contrib/echoprometheus"
 	"github.com/labstack/echo/v4"
 	"github.com/victorivanov/retrocast/internal/auth"
@@ -27,14 +29,30 @@ type Dependencies struct {
 	Gateway  *gateway.Manager
 
 	TokenService *auth.TokenService
+	Pool         *pgxpool.Pool
 	Redis        *redis.Client
 }
 
 // SetupRouter registers all API routes on the Echo instance.
 func SetupRouter(e *echo.Echo, deps *Dependencies) {
-	// Health check
+	// Health check — deep: pings Postgres and Redis
 	e.GET("/health", func(c echo.Context) error {
-		return c.JSON(200, map[string]string{"status": "ok"})
+		ctx := c.Request().Context()
+
+		if err := deps.Pool.Ping(ctx); err != nil {
+			return c.JSON(http.StatusServiceUnavailable, map[string]string{
+				"status":    "error",
+				"component": "postgres",
+			})
+		}
+		if err := deps.Redis.Ping(ctx); err != nil {
+			return c.JSON(http.StatusServiceUnavailable, map[string]string{
+				"status":    "error",
+				"component": "redis",
+			})
+		}
+
+		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 	})
 
 	// Prometheus metrics

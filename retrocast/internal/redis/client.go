@@ -31,6 +31,11 @@ func NewClient(redisURL string) (*Client, error) {
 	return &Client{rdb: rdb}, nil
 }
 
+// Ping checks the Redis connection.
+func (c *Client) Ping(ctx context.Context) error {
+	return c.rdb.Ping(ctx).Err()
+}
+
 // Close closes the Redis connection.
 func (c *Client) Close() error {
 	return c.rdb.Close()
