@@ -7,6 +7,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/victorivanov/retrocast/internal/auth"
 	"github.com/victorivanov/retrocast/internal/database"
+	"github.com/victorivanov/retrocast/internal/gateway"
 	"github.com/victorivanov/retrocast/internal/models"
 	"github.com/victorivanov/retrocast/internal/snowflake"
 )
@@ -19,6 +20,7 @@ type ChannelHandler struct {
 	roles     database.RoleRepository
 	snowflake *snowflake.Generator
 	guildPerm func(ctx echo.Context, guildID, userID, perm int64) error
+	gateway   gateway.Dispatcher
 }
 
 // NewChannelHandler creates a ChannelHandler. It takes the guild handler's
@@ -30,6 +32,7 @@ func NewChannelHandler(
 	roles database.RoleRepository,
 	sf *snowflake.Generator,
 	guildPerm func(ctx echo.Context, guildID, userID, perm int64) error,
+	gw gateway.Dispatcher,
 ) *ChannelHandler {
 	return &ChannelHandler{
 		channels:  channels,
@@ -38,6 +41,7 @@ func NewChannelHandler(
 		roles:     roles,
 		snowflake: sf,
 		guildPerm: guildPerm,
+		gateway:   gw,
 	}
 }
 
@@ -96,6 +100,7 @@ func (h *ChannelHandler) CreateChannel(c echo.Context) error {
 		return errorJSON(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
 
+	h.gateway.DispatchToGuild(guildID, gateway.EventChannelCreate, ch)
 	return c.JSON(http.StatusCreated, map[string]any{"data": ch})
 }
 
@@ -209,6 +214,7 @@ func (h *ChannelHandler) UpdateChannel(c echo.Context) error {
 		return errorJSON(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
 
+	h.gateway.DispatchToGuild(ch.GuildID, gateway.EventChannelUpdate, ch)
 	return c.JSON(http.StatusOK, map[string]any{"data": ch})
 }
 
@@ -238,5 +244,6 @@ func (h *ChannelHandler) DeleteChannel(c echo.Context) error {
 		return errorJSON(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
 
+	h.gateway.DispatchToGuild(ch.GuildID, gateway.EventChannelDelete, map[string]any{"id": channelID, "guild_id": ch.GuildID})
 	return c.NoContent(http.StatusNoContent)
 }

@@ -59,14 +59,14 @@ func main() {
 
 	// --- Handlers ---
 
-	guildHandler := api.NewGuildHandler(guilds, channels, members, roles, sf)
-	channelHandler := api.NewChannelHandler(channels, guilds, members, roles, sf, guildHandler.RequirePermission())
-	memberHandler := api.NewMemberHandler(members, guilds, roles, guildHandler.RequirePermission())
+	guildHandler := api.NewGuildHandler(guilds, channels, members, roles, sf, gwManager)
+	channelHandler := api.NewChannelHandler(channels, guilds, members, roles, sf, guildHandler.RequirePermission(), gwManager)
+	memberHandler := api.NewMemberHandler(members, guilds, roles, guildHandler.RequirePermission(), gwManager)
 	userHandler := api.NewUserHandler(users)
 	authHandler := api.NewAuthHandler(users, tokenSvc, rdb, sf)
-	messageHandler := api.NewMessageHandler(messages, channels, members, roles, guilds, sf, gwManager)
+	messageHandler := api.NewMessageHandler(messages, channels, members, roles, guilds, overrides, sf, gwManager)
 	inviteHandler := api.NewInviteHandler(invites, guilds, members, roles, gwManager)
-	roleHandler := api.NewRoleHandler(guilds, roles, members, channels, overrides, sf)
+	roleHandler := api.NewRoleHandler(guilds, roles, members, channels, overrides, sf, gwManager)
 	typingHandler := gateway.NewTypingHandler(channels, rdb, gwManager)
 
 	deps := &api.Dependencies{

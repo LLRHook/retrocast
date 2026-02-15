@@ -1,6 +1,7 @@
 # Claude Code config
 .claude/
 CLAUDE.md
+Current_Plan.md
 
 # Go
 *.exe

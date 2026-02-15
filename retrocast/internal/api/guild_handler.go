@@ -8,6 +8,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/victorivanov/retrocast/internal/auth"
 	"github.com/victorivanov/retrocast/internal/database"
+	"github.com/victorivanov/retrocast/internal/gateway"
 	"github.com/victorivanov/retrocast/internal/models"
 	"github.com/victorivanov/retrocast/internal/snowflake"
 )
@@ -29,6 +30,7 @@ type GuildHandler struct {
 	members   database.MemberRepository
 	roles     database.RoleRepository
 	snowflake *snowflake.Generator
+	gateway   gateway.Dispatcher
 }
 
 // NewGuildHandler creates a GuildHandler.
@@ -38,6 +40,7 @@ func NewGuildHandler(
 	members database.MemberRepository,
 	roles database.RoleRepository,
 	sf *snowflake.Generator,
+	gw gateway.Dispatcher,
 ) *GuildHandler {
 	return &GuildHandler{
 		guilds:    guilds,
@@ -45,6 +48,7 @@ func NewGuildHandler(
 		members:   members,
 		roles:     roles,
 		snowflake: sf,
+		gateway:   gw,
 	}
 }
 
@@ -142,6 +146,7 @@ func (h *GuildHandler) CreateGuild(c echo.Context) error {
 		return errorJSON(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
 
+	h.gateway.DispatchToUser(userID, gateway.EventGuildCreate, guild)
 	return c.JSON(http.StatusCreated, map[string]any{"data": guild})
 }
 
@@ -221,6 +226,7 @@ func (h *GuildHandler) UpdateGuild(c echo.Context) error {
 		return errorJSON(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
 
+	h.gateway.DispatchToGuild(guildID, gateway.EventGuildUpdate, guild)
 	return c.JSON(http.StatusOK, map[string]any{"data": guild})
 }
 
@@ -251,6 +257,7 @@ func (h *GuildHandler) DeleteGuild(c echo.Context) error {
 		return errorJSON(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
 
+	h.gateway.DispatchToGuild(guildID, gateway.EventGuildDelete, map[string]any{"id": guildID})
 	return c.NoContent(http.StatusNoContent)
 }
 

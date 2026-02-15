@@ -7,6 +7,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/victorivanov/retrocast/internal/auth"
 	"github.com/victorivanov/retrocast/internal/database"
+	"github.com/victorivanov/retrocast/internal/gateway"
 	"github.com/victorivanov/retrocast/internal/models"
 )
 
@@ -16,6 +17,7 @@ type MemberHandler struct {
 	guilds    database.GuildRepository
 	roles     database.RoleRepository
 	guildPerm func(ctx echo.Context, guildID, userID, perm int64) error
+	gateway   gateway.Dispatcher
 }
 
 // NewMemberHandler creates a MemberHandler.
@@ -24,12 +26,14 @@ func NewMemberHandler(
 	guilds database.GuildRepository,
 	roles database.RoleRepository,
 	guildPerm func(ctx echo.Context, guildID, userID, perm int64) error,
+	gw gateway.Dispatcher,
 ) *MemberHandler {
 	return &MemberHandler{
 		members:   members,
 		guilds:    guilds,
 		roles:     roles,
 		guildPerm: guildPerm,
+		gateway:   gw,
 	}
 }
 
@@ -150,6 +154,7 @@ func (h *MemberHandler) UpdateSelf(c echo.Context) error {
 		return errorJSON(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
 
+	h.gateway.DispatchToGuild(guildID, gateway.EventGuildMemberUpdate, member)
 	return c.JSON(http.StatusOK, map[string]any{"data": member})
 }
 
@@ -248,6 +253,7 @@ func (h *MemberHandler) UpdateMember(c echo.Context) error {
 		}
 	}
 
+	h.gateway.DispatchToGuild(guildID, gateway.EventGuildMemberUpdate, member)
 	return c.JSON(http.StatusOK, map[string]any{"data": member})
 }
 
@@ -291,6 +297,7 @@ func (h *MemberHandler) KickMember(c echo.Context) error {
 		return errorJSON(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
 
+	h.gateway.DispatchToGuild(guildID, gateway.EventGuildMemberRemove, map[string]any{"guild_id": guildID, "user_id": targetUserID})
 	return c.NoContent(http.StatusNoContent)
 }
 
@@ -325,5 +332,6 @@ func (h *MemberHandler) LeaveGuild(c echo.Context) error {
 		return errorJSON(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
 
+	h.gateway.DispatchToGuild(guildID, gateway.EventGuildMemberRemove, map[string]any{"guild_id": guildID, "user_id": userID})
 	return c.NoContent(http.StatusNoContent)
 }

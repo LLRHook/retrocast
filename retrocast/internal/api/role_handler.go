@@ -7,6 +7,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/victorivanov/retrocast/internal/auth"
 	"github.com/victorivanov/retrocast/internal/database"
+	"github.com/victorivanov/retrocast/internal/gateway"
 	"github.com/victorivanov/retrocast/internal/models"
 	"github.com/victorivanov/retrocast/internal/snowflake"
 )
@@ -19,6 +20,7 @@ type RoleHandler struct {
 	channels  database.ChannelRepository
 	overrides database.ChannelOverrideRepository
 	snowflake *snowflake.Generator
+	gateway   gateway.Dispatcher
 }
 
 // NewRoleHandler creates a RoleHandler.
@@ -29,6 +31,7 @@ func NewRoleHandler(
 	channels database.ChannelRepository,
 	overrides database.ChannelOverrideRepository,
 	sf *snowflake.Generator,
+	gw gateway.Dispatcher,
 ) *RoleHandler {
 	return &RoleHandler{
 		guilds:    guilds,
@@ -37,6 +40,7 @@ func NewRoleHandler(
 		channels:  channels,
 		overrides: overrides,
 		snowflake: sf,
+		gateway:   gw,
 	}
 }
 
@@ -121,6 +125,7 @@ func (h *RoleHandler) CreateRole(c echo.Context) error {
 		return errorJSON(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
 
+	h.gateway.DispatchToGuild(guildID, gateway.EventGuildRoleCreate, map[string]any{"guild_id": guildID, "role": role})
 	return c.JSON(http.StatusCreated, role)
 }
 
@@ -212,6 +217,7 @@ func (h *RoleHandler) UpdateRole(c echo.Context) error {
 		return errorJSON(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
 
+	h.gateway.DispatchToGuild(guildID, gateway.EventGuildRoleUpdate, map[string]any{"guild_id": guildID, "role": role})
 	return c.JSON(http.StatusOK, role)
 }
 
@@ -259,6 +265,7 @@ func (h *RoleHandler) DeleteRole(c echo.Context) error {
 		return errorJSON(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 	}
 
+	h.gateway.DispatchToGuild(guildID, gateway.EventGuildRoleDelete, map[string]any{"guild_id": guildID, "role_id": roleID})
 	return c.NoContent(http.StatusNoContent)
 }
 
