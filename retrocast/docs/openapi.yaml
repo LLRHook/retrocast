@@ -1,0 +1,1753 @@
+openapi: "3.0.3"
+info:
+  title: Retrocast API
+  description: |
+    Discord-compatible chat platform API. All IDs are snowflake integers
+    serialized as strings in JSON to avoid JavaScript precision loss.
+  version: "1.0.0"
+  license:
+    name: MIT
+
+servers:
+  - url: /api/v1
+    description: API v1
+
+tags:
+  - name: Auth
+    description: Authentication (register, login, token refresh, logout)
+  - name: Users
+    description: Current user profile
+  - name: Guilds
+    description: Guild (server) CRUD
+  - name: Channels
+    description: Channel CRUD within guilds
+  - name: Messages
+    description: Send, list, edit, and delete messages
+  - name: Members
+    description: Guild membership management
+  - name: Roles
+    description: Role CRUD and assignment
+  - name: Invites
+    description: Invite creation, lookup, acceptance, and revocation
+  - name: Bans
+    description: Guild ban management
+  - name: DMs
+    description: Direct message channels
+  - name: Uploads
+    description: File attachment uploads
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: 15-minute HS256 access token
+
+  schemas:
+    # ── Envelopes ──────────────────────────────────────────────
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              example: NOT_FOUND
+            message:
+              type: string
+              example: resource not found
+
+    # ── Domain models ──────────────────────────────────────────
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "175928847299117056"
+        username:
+          type: string
+          example: alice
+        display_name:
+          type: string
+          example: Alice
+        avatar_hash:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    Guild:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "175928847299117057"
+        name:
+          type: string
+          example: My Server
+        icon_hash:
+          type: string
+          nullable: true
+        owner_id:
+          type: string
+          example: "175928847299117056"
+        created_at:
+          type: string
+          format: date-time
+
+    Channel:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "175928847299117058"
+        guild_id:
+          type: string
+        name:
+          type: string
+          example: general
+        type:
+          type: integer
+          description: "0 = text, 2 = voice, 4 = category"
+          enum: [0, 2, 4]
+        position:
+          type: integer
+        topic:
+          type: string
+          nullable: true
+        parent_id:
+          type: string
+          nullable: true
+
+    Role:
+      type: object
+      properties:
+        id:
+          type: string
+        guild_id:
+          type: string
+        name:
+          type: string
+          example: Moderator
+        color:
+          type: integer
+          description: Integer color value
+        permissions:
+          type: string
+          description: Permission bitfield as string
+          example: "104324097"
+        position:
+          type: integer
+        is_default:
+          type: boolean
+
+    Member:
+      type: object
+      properties:
+        guild_id:
+          type: string
+        user_id:
+          type: string
+        nickname:
+          type: string
+          nullable: true
+        joined_at:
+          type: string
+          format: date-time
+        roles:
+          type: array
+          items:
+            type: string
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+        channel_id:
+          type: string
+        author_id:
+          type: string
+        content:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        edited_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    MessageWithAuthor:
+      allOf:
+        - $ref: "#/components/schemas/Message"
+        - type: object
+          properties:
+            author_username:
+              type: string
+            author_display_name:
+              type: string
+            author_avatar_hash:
+              type: string
+              nullable: true
+            attachments:
+              type: array
+              items:
+                $ref: "#/components/schemas/Attachment"
+
+    Attachment:
+      type: object
+      properties:
+        id:
+          type: string
+        message_id:
+          type: string
+        filename:
+          type: string
+        content_type:
+          type: string
+        size:
+          type: integer
+          format: int64
+        url:
+          type: string
+
+    Invite:
+      type: object
+      properties:
+        code:
+          type: string
+          example: abc123
+        guild_id:
+          type: string
+        channel_id:
+          type: string
+          nullable: true
+        creator_id:
+          type: string
+        max_uses:
+          type: integer
+        uses:
+          type: integer
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    Ban:
+      type: object
+      properties:
+        guild_id:
+          type: string
+        user_id:
+          type: string
+        reason:
+          type: string
+          nullable: true
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    ChannelOverride:
+      type: object
+      properties:
+        channel_id:
+          type: string
+        role_id:
+          type: string
+        allow:
+          type: string
+          description: Permission bitfield (allow)
+        deny:
+          type: string
+          description: Permission bitfield (deny)
+
+    DMChannel:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: integer
+          description: "1 = DM, 3 = group DM"
+          enum: [1, 3]
+        recipients:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+        created_at:
+          type: string
+          format: date-time
+
+    # ── Auth payloads ──────────────────────────────────────────
+    AuthResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+
+    RefreshResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Missing or invalid authentication
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: Resource already exists
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+paths:
+  # ════════════════════════════════════════════════════════════
+  #  AUTH
+  # ════════════════════════════════════════════════════════════
+  /auth/register:
+    post:
+      operationId: register
+      tags: [Auth]
+      summary: Register a new account
+      description: Creates a user account and returns tokens.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                  example: alice
+                password:
+                  type: string
+                  format: password
+                  example: s3cret!
+      responses:
+        "200":
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [Auth]
+      summary: Log in
+      description: Authenticates with username and password, returns tokens.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+                  format: password
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/refresh:
+    post:
+      operationId: refreshToken
+      tags: [Auth]
+      summary: Refresh access token
+      description: Exchanges a refresh token for a new token pair.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        "200":
+          description: Tokens refreshed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefreshResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [Auth]
+      summary: Log out
+      description: Revokes the given refresh token.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        "204":
+          description: Logged out
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ════════════════════════════════════════════════════════════
+  #  USERS
+  # ════════════════════════════════════════════════════════════
+  /users/@me:
+    get:
+      operationId: getMe
+      tags: [Users]
+      summary: Get current user
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    patch:
+      operationId: updateMe
+      tags: [Users]
+      summary: Update current user profile
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                display_name:
+                  type: string
+                avatar:
+                  type: string
+                  description: Avatar hash or base64 data
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /users/@me/guilds:
+    get:
+      operationId: listMyGuilds
+      tags: [Users]
+      summary: List guilds the current user belongs to
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: List of guilds
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Guild"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /users/@me/channels:
+    post:
+      operationId: createDM
+      tags: [DMs]
+      summary: Open a DM channel
+      description: Creates or returns an existing DM channel with the recipient.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recipient_id]
+              properties:
+                recipient_id:
+                  type: string
+                  description: Snowflake ID of the recipient user
+      responses:
+        "200":
+          description: DM channel
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DMChannel"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    get:
+      operationId: listDMs
+      tags: [DMs]
+      summary: List open DM channels
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: DM channel list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DMChannel"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ════════════════════════════════════════════════════════════
+  #  GUILDS
+  # ════════════════════════════════════════════════════════════
+  /guilds:
+    post:
+      operationId: createGuild
+      tags: [Guilds]
+      summary: Create a guild
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  example: My Server
+      responses:
+        "201":
+          description: Guild created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Guild"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /guilds/{guildId}:
+    parameters:
+      - name: guildId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Guild snowflake ID
+
+    get:
+      operationId: getGuild
+      tags: [Guilds]
+      summary: Get guild details
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Guild object
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Guild"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    patch:
+      operationId: updateGuild
+      tags: [Guilds]
+      summary: Update guild settings
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                icon:
+                  type: string
+                  description: Icon hash or base64 data
+      responses:
+        "200":
+          description: Updated guild
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Guild"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+    delete:
+      operationId: deleteGuild
+      tags: [Guilds]
+      summary: Delete a guild
+      description: Only the guild owner can delete it.
+      security:
+        - BearerAuth: []
+      responses:
+        "204":
+          description: Guild deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ════════════════════════════════════════════════════════════
+  #  CHANNELS
+  # ════════════════════════════════════════════════════════════
+  /guilds/{guildId}/channels:
+    parameters:
+      - name: guildId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    post:
+      operationId: createChannel
+      tags: [Channels]
+      summary: Create a channel in a guild
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, type]
+              properties:
+                name:
+                  type: string
+                  example: general
+                type:
+                  type: integer
+                  description: "0 = text, 2 = voice, 4 = category"
+                  enum: [0, 2, 4]
+                topic:
+                  type: string
+                  nullable: true
+                parent_id:
+                  type: string
+                  nullable: true
+                  description: Category channel ID
+      responses:
+        "201":
+          description: Channel created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Channel"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+    get:
+      operationId: listChannels
+      tags: [Channels]
+      summary: List channels in a guild
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Channel list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Channel"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /channels/{channelId}:
+    parameters:
+      - name: channelId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Channel snowflake ID
+
+    get:
+      operationId: getChannel
+      tags: [Channels]
+      summary: Get a channel
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Channel object
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Channel"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    patch:
+      operationId: updateChannel
+      tags: [Channels]
+      summary: Update a channel
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                topic:
+                  type: string
+                position:
+                  type: integer
+      responses:
+        "200":
+          description: Updated channel
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Channel"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+    delete:
+      operationId: deleteChannel
+      tags: [Channels]
+      summary: Delete a channel
+      security:
+        - BearerAuth: []
+      responses:
+        "204":
+          description: Channel deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ════════════════════════════════════════════════════════════
+  #  MESSAGES
+  # ════════════════════════════════════════════════════════════
+  /channels/{channelId}/messages:
+    parameters:
+      - name: channelId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    post:
+      operationId: sendMessage
+      tags: [Messages]
+      summary: Send a message
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content:
+                  type: string
+                  example: Hello world!
+      responses:
+        "201":
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageWithAuthor"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+    get:
+      operationId: getMessages
+      tags: [Messages]
+      summary: List messages in a channel
+      description: Cursor-based pagination using the `before` parameter.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+          description: Number of messages to return (1-100, default 50)
+        - name: before
+          in: query
+          schema:
+            type: string
+          description: Return messages before this message ID (cursor)
+      responses:
+        "200":
+          description: Message list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MessageWithAuthor"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /channels/{channelId}/messages/{messageId}:
+    parameters:
+      - name: channelId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: messageId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    get:
+      operationId: getMessage
+      tags: [Messages]
+      summary: Get a single message
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Message object
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageWithAuthor"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    patch:
+      operationId: editMessage
+      tags: [Messages]
+      summary: Edit a message
+      description: Only the message author can edit it.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content:
+                  type: string
+      responses:
+        "200":
+          description: Edited message
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageWithAuthor"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+    delete:
+      operationId: deleteMessage
+      tags: [Messages]
+      summary: Delete a message
+      description: Author or users with MANAGE_MESSAGES can delete.
+      security:
+        - BearerAuth: []
+      responses:
+        "204":
+          description: Message deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ════════════════════════════════════════════════════════════
+  #  ATTACHMENTS / UPLOADS
+  # ════════════════════════════════════════════════════════════
+  /channels/{channelId}/attachments:
+    parameters:
+      - name: channelId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    post:
+      operationId: uploadAttachment
+      tags: [Uploads]
+      summary: Upload a file attachment
+      description: Upload a file to a channel. Use the returned attachment in a message.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: Attachment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Attachment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  # ════════════════════════════════════════════════════════════
+  #  TYPING
+  # ════════════════════════════════════════════════════════════
+  /channels/{channelId}/typing:
+    parameters:
+      - name: channelId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    post:
+      operationId: triggerTyping
+      tags: [Messages]
+      summary: Send typing indicator
+      description: Fires a TYPING_START gateway event to the channel's guild.
+      security:
+        - BearerAuth: []
+      responses:
+        "204":
+          description: Typing indicator sent
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ════════════════════════════════════════════════════════════
+  #  MEMBERS
+  # ════════════════════════════════════════════════════════════
+  /guilds/{guildId}/members:
+    parameters:
+      - name: guildId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    get:
+      operationId: listMembers
+      tags: [Members]
+      summary: List guild members
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+          description: Max members to return
+        - name: offset
+          in: query
+          schema:
+            type: integer
+          description: Offset for pagination
+      responses:
+        "200":
+          description: Member list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Member"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /guilds/{guildId}/members/@me:
+    parameters:
+      - name: guildId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    patch:
+      operationId: updateSelf
+      tags: [Members]
+      summary: Update own guild membership
+      description: Change your own nickname in a guild.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nickname:
+                  type: string
+                  nullable: true
+      responses:
+        "200":
+          description: Updated member
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Member"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    delete:
+      operationId: leaveGuild
+      tags: [Members]
+      summary: Leave a guild
+      security:
+        - BearerAuth: []
+      responses:
+        "204":
+          description: Left guild
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /guilds/{guildId}/members/{userId}:
+    parameters:
+      - name: guildId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    get:
+      operationId: getMember
+      tags: [Members]
+      summary: Get a guild member
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Member object
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Member"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    patch:
+      operationId: updateMember
+      tags: [Members]
+      summary: Update a guild member
+      description: Requires MANAGE_MEMBERS permission to change nickname or roles.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nickname:
+                  type: string
+                  nullable: true
+                roles:
+                  type: array
+                  items:
+                    type: integer
+                    format: int64
+      responses:
+        "200":
+          description: Updated member
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Member"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+    delete:
+      operationId: kickMember
+      tags: [Members]
+      summary: Kick a member from the guild
+      security:
+        - BearerAuth: []
+      responses:
+        "204":
+          description: Member kicked
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ════════════════════════════════════════════════════════════
+  #  ROLES
+  # ════════════════════════════════════════════════════════════
+  /guilds/{guildId}/roles:
+    parameters:
+      - name: guildId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    post:
+      operationId: createRole
+      tags: [Roles]
+      summary: Create a role
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  example: Moderator
+                color:
+                  type: integer
+                  default: 0
+                permissions:
+                  type: string
+                  description: Permission bitfield as string
+                  example: "0"
+                position:
+                  type: integer
+                  default: 0
+      responses:
+        "201":
+          description: Role created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Role"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+    get:
+      operationId: listRoles
+      tags: [Roles]
+      summary: List roles in a guild
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Role list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Role"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /guilds/{guildId}/roles/{roleId}:
+    parameters:
+      - name: guildId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: roleId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    patch:
+      operationId: updateRole
+      tags: [Roles]
+      summary: Update a role
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                color:
+                  type: integer
+                permissions:
+                  type: string
+                  description: Permission bitfield as string
+                position:
+                  type: integer
+      responses:
+        "200":
+          description: Updated role
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Role"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+    delete:
+      operationId: deleteRole
+      tags: [Roles]
+      summary: Delete a role
+      security:
+        - BearerAuth: []
+      responses:
+        "204":
+          description: Role deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /guilds/{guildId}/members/{userId}/roles/{roleId}:
+    parameters:
+      - name: guildId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: roleId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    put:
+      operationId: assignRole
+      tags: [Roles]
+      summary: Assign a role to a member
+      security:
+        - BearerAuth: []
+      responses:
+        "204":
+          description: Role assigned
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      operationId: removeRole
+      tags: [Roles]
+      summary: Remove a role from a member
+      security:
+        - BearerAuth: []
+      responses:
+        "204":
+          description: Role removed
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Channel Permission Overrides ─────────────────────────
+  /channels/{channelId}/permissions/{roleId}:
+    parameters:
+      - name: channelId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: roleId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    put:
+      operationId: setChannelOverride
+      tags: [Roles]
+      summary: Set channel permission override for a role
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [allow, deny]
+              properties:
+                allow:
+                  type: string
+                  description: Permission bitfield to allow
+                  example: "2048"
+                deny:
+                  type: string
+                  description: Permission bitfield to deny
+                  example: "0"
+      responses:
+        "200":
+          description: Override set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChannelOverride"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+    delete:
+      operationId: deleteChannelOverride
+      tags: [Roles]
+      summary: Delete a channel permission override
+      security:
+        - BearerAuth: []
+      responses:
+        "204":
+          description: Override deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ════════════════════════════════════════════════════════════
+  #  INVITES
+  # ════════════════════════════════════════════════════════════
+  /guilds/{guildId}/invites:
+    parameters:
+      - name: guildId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    post:
+      operationId: createInvite
+      tags: [Invites]
+      summary: Create a guild invite
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                max_uses:
+                  type: integer
+                  default: 0
+                  description: "0 = unlimited"
+                max_age_seconds:
+                  type: integer
+                  default: 0
+                  description: "0 = never expires"
+      responses:
+        "201":
+          description: Invite created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invite"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+    get:
+      operationId: listInvites
+      tags: [Invites]
+      summary: List guild invites
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Invite list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Invite"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /invites/{code}:
+    parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Invite code
+
+    get:
+      operationId: getInvite
+      tags: [Invites]
+      summary: Get invite info (public)
+      description: No authentication required. Returns basic invite and guild info.
+      responses:
+        "200":
+          description: Invite info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invite"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    post:
+      operationId: acceptInvite
+      tags: [Invites]
+      summary: Accept an invite
+      description: Join the guild associated with this invite code.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Guild joined
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Guild"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+    delete:
+      operationId: revokeInvite
+      tags: [Invites]
+      summary: Revoke an invite
+      security:
+        - BearerAuth: []
+      responses:
+        "204":
+          description: Invite revoked
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ════════════════════════════════════════════════════════════
+  #  BANS
+  # ════════════════════════════════════════════════════════════
+  /guilds/{guildId}/bans:
+    parameters:
+      - name: guildId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    get:
+      operationId: listBans
+      tags: [Bans]
+      summary: List guild bans
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Ban list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Ban"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /guilds/{guildId}/bans/{userId}:
+    parameters:
+      - name: guildId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    put:
+      operationId: banMember
+      tags: [Bans]
+      summary: Ban a member
+      security:
+        - BearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  nullable: true
+      responses:
+        "204":
+          description: Member banned
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      operationId: unbanMember
+      tags: [Bans]
+      summary: Unban a user
+      security:
+        - BearerAuth: []
+      responses:
+        "204":
+          description: User unbanned
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
