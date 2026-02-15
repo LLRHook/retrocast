@@ -1,0 +1,28 @@
+# Retrocast server configuration file.
+#
+# Place this file at one of:
+#   1. Path specified by $RETROCAST_CONFIG environment variable
+#   2. ./retrocast.toml (working directory)
+#   3. /etc/retrocast/config.toml
+#
+# Environment variables always take priority over values in this file.
+# Lines starting with # are comments.
+
+# Required
+DATABASE_URL = "postgres://retrocast:password@localhost:5432/retrocast?sslmode=disable"
+JWT_SECRET = "change-me-in-production"
+
+# Optional (defaults shown)
+REDIS_URL = "redis://localhost:6379"
+SERVER_ADDR = ":8080"
+LOG_LEVEL = "info"
+
+# MinIO / S3 storage
+MINIO_ENDPOINT = "localhost:9000"
+MINIO_ACCESS_KEY = "retrocast"
+MINIO_SECRET_KEY = "changeme"
+
+# LiveKit voice server
+LIVEKIT_URL = "ws://localhost:7880"
+LIVEKIT_API_KEY = "devkey"
+LIVEKIT_API_SECRET = "devsecret"
