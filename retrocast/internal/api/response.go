@@ -1,6 +1,12 @@
 package api
 
-import "github.com/labstack/echo/v4"
+import (
+	"errors"
+	"net/http"
+
+	"github.com/labstack/echo/v4"
+	"github.com/victorivanov/retrocast/internal/service"
+)
 
 // ErrorResponse is the standard error envelope.
 type ErrorResponse struct {
@@ -26,4 +32,30 @@ var errorJSON = Error
 // successJSON sends a JSON success response with a data envelope.
 func successJSON(c echo.Context, status int, data interface{}) error {
 	return c.JSON(status, map[string]interface{}{"data": data})
+}
+
+// mapServiceError converts a service-layer error into the appropriate HTTP response.
+func mapServiceError(c echo.Context, err error) error {
+	var svcErr *service.ServiceError
+	if errors.As(err, &svcErr) {
+		status := http.StatusInternalServerError
+		switch {
+		case errors.Is(svcErr.Err, service.ErrNotFound):
+			status = http.StatusNotFound
+		case errors.Is(svcErr.Err, service.ErrForbidden):
+			status = http.StatusForbidden
+		case errors.Is(svcErr.Err, service.ErrBadRequest):
+			status = http.StatusBadRequest
+		case errors.Is(svcErr.Err, service.ErrConflict):
+			status = http.StatusConflict
+		case errors.Is(svcErr.Err, service.ErrUnauthorized):
+			status = http.StatusUnauthorized
+		case errors.Is(svcErr.Err, service.ErrGone):
+			status = http.StatusGone
+		case errors.Is(svcErr.Err, service.ErrRoleHierarchy):
+			status = http.StatusForbidden
+		}
+		return Error(c, status, svcErr.Code, svcErr.Message)
+	}
+	return Error(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 }

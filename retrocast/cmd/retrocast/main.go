@@ -19,6 +19,7 @@ import (
 	"github.com/victorivanov/retrocast/internal/database"
 	"github.com/victorivanov/retrocast/internal/gateway"
 	redisclient "github.com/victorivanov/retrocast/internal/redis"
+	"github.com/victorivanov/retrocast/internal/service"
 	"github.com/victorivanov/retrocast/internal/snowflake"
 	"github.com/victorivanov/retrocast/internal/storage"
 )
@@ -92,19 +93,35 @@ func main() {
 
 	gwManager := gateway.NewManager(tokenSvc, guilds, rdb)
 
+	// --- Services ---
+
+	permChecker := service.NewPermissionChecker(guilds, members, roles, overrides)
+
+	authSvc := service.NewAuthService(users, tokenSvc, rdb, sf)
+	userSvc := service.NewUserService(users)
+	guildSvc := service.NewGuildService(guilds, channels, members, roles, sf, gwManager, permChecker)
+	channelSvc := service.NewChannelService(channels, members, sf, gwManager, permChecker)
+	memberSvc := service.NewMemberService(members, guilds, roles, gwManager, permChecker)
+	roleSvc := service.NewRoleService(guilds, roles, members, channels, overrides, sf, gwManager, permChecker)
+	messageSvc := service.NewMessageService(messages, channels, dmChannels, sf, gwManager, permChecker)
+	inviteSvc := service.NewInviteService(invites, guilds, members, bans, gwManager, permChecker)
+	banSvc := service.NewBanService(guilds, members, roles, bans, gwManager, permChecker)
+	dmSvc := service.NewDMService(dmChannels, users, sf, gwManager)
+	uploadSvc := service.NewUploadService(attachments, channels, sf, minioClient, permChecker)
+
 	// --- Handlers ---
 
-	guildHandler := api.NewGuildHandler(guilds, channels, members, roles, sf, gwManager)
-	channelHandler := api.NewChannelHandler(channels, guilds, members, roles, sf, guildHandler.RequirePermission(), gwManager)
-	memberHandler := api.NewMemberHandler(members, guilds, roles, guildHandler.RequirePermission(), gwManager)
-	userHandler := api.NewUserHandler(users)
-	authHandler := api.NewAuthHandler(users, tokenSvc, rdb, sf)
-	messageHandler := api.NewMessageHandler(messages, channels, dmChannels, members, roles, guilds, overrides, sf, gwManager)
-	dmHandler := api.NewDMHandler(dmChannels, users, sf, gwManager)
-	inviteHandler := api.NewInviteHandler(invites, guilds, members, roles, bans, gwManager)
-	banHandler := api.NewBanHandler(guilds, members, roles, bans, gwManager)
-	roleHandler := api.NewRoleHandler(guilds, roles, members, channels, overrides, sf, gwManager)
-	uploadHandler := api.NewUploadHandler(attachments, channels, members, roles, guilds, overrides, sf, minioClient)
+	authHandler := api.NewAuthHandler(authSvc)
+	userHandler := api.NewUserHandler(userSvc)
+	guildHandler := api.NewGuildHandler(guildSvc)
+	channelHandler := api.NewChannelHandler(channelSvc)
+	memberHandler := api.NewMemberHandler(memberSvc)
+	roleHandler := api.NewRoleHandler(roleSvc)
+	messageHandler := api.NewMessageHandler(messageSvc)
+	inviteHandler := api.NewInviteHandler(inviteSvc)
+	banHandler := api.NewBanHandler(banSvc)
+	dmHandler := api.NewDMHandler(dmSvc)
+	uploadHandler := api.NewUploadHandler(uploadSvc)
 	typingHandler := gateway.NewTypingHandler(channels, rdb, gwManager)
 
 	deps := &api.Dependencies{
