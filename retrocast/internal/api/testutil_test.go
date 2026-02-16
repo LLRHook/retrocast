@@ -491,6 +491,42 @@ type mockDMChannelRepo struct {
 	IsRecipientFn   func(ctx context.Context, channelID, userID int64) (bool, error)
 }
 
+// mockReadStateRepo implements database.ReadStateRepository.
+type mockReadStateRepo struct {
+	UpsertFn              func(ctx context.Context, userID, channelID, lastMessageID int64) error
+	GetByUserFn           func(ctx context.Context, userID int64) ([]models.ReadState, error)
+	GetByUserAndChannelFn func(ctx context.Context, userID, channelID int64) (*models.ReadState, error)
+	IncrementMentionCountFn func(ctx context.Context, userID, channelID int64) error
+}
+
+func (m *mockReadStateRepo) Upsert(ctx context.Context, userID, channelID, lastMessageID int64) error {
+	if m.UpsertFn != nil {
+		return m.UpsertFn(ctx, userID, channelID, lastMessageID)
+	}
+	return nil
+}
+
+func (m *mockReadStateRepo) GetByUser(ctx context.Context, userID int64) ([]models.ReadState, error) {
+	if m.GetByUserFn != nil {
+		return m.GetByUserFn(ctx, userID)
+	}
+	return nil, nil
+}
+
+func (m *mockReadStateRepo) GetByUserAndChannel(ctx context.Context, userID, channelID int64) (*models.ReadState, error) {
+	if m.GetByUserAndChannelFn != nil {
+		return m.GetByUserAndChannelFn(ctx, userID, channelID)
+	}
+	return nil, nil
+}
+
+func (m *mockReadStateRepo) IncrementMentionCount(ctx context.Context, userID, channelID int64) error {
+	if m.IncrementMentionCountFn != nil {
+		return m.IncrementMentionCountFn(ctx, userID, channelID)
+	}
+	return nil
+}
+
 func (m *mockDMChannelRepo) Create(ctx context.Context, dm *models.DMChannel) error {
 	if m.CreateFn != nil {
 		return m.CreateFn(ctx, dm)

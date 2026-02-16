@@ -48,9 +48,10 @@ type Dependencies struct {
 	Roles    *RoleHandler
 	Uploads  *UploadHandler
 	Bans     *BanHandler
-	DMs      *DMHandler
-	Search   *SearchHandler
-	Typing   *gateway.TypingHandler
+	DMs        *DMHandler
+	ReadStates *ReadStateHandler
+	Search     *SearchHandler
+	Typing     *gateway.TypingHandler
 	Gateway  *gateway.Manager
 
 	TokenService *auth.TokenService
@@ -126,6 +127,9 @@ func SetupRouter(e *echo.Echo, deps *Dependencies) {
 	protected.POST("/users/@me/channels", deps.DMs.CreateDM)
 	protected.GET("/users/@me/channels", deps.DMs.ListDMs)
 
+	// Read states
+	protected.GET("/users/@me/read-states", deps.ReadStates.GetReadStates)
+
 	// Guilds
 	protected.POST("/guilds", deps.Guilds.CreateGuild)
 	protected.GET("/guilds/:id", deps.Guilds.GetGuild)
@@ -174,6 +178,9 @@ func SetupRouter(e *echo.Echo, deps *Dependencies) {
 
 	// Typing
 	protected.POST("/channels/:id/typing", deps.Typing.Handle)
+
+	// Read states (ack)
+	protected.PUT("/channels/:id/ack/:message_id", deps.ReadStates.Ack)
 
 	// Bans
 	protected.PUT("/guilds/:id/bans/:user_id", deps.Bans.BanMember)

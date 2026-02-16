@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/victorivanov/retrocast/internal/auth"
 	"github.com/victorivanov/retrocast/internal/database"
+	"github.com/victorivanov/retrocast/internal/models"
 	"github.com/victorivanov/retrocast/internal/redis"
 )
 
@@ -28,15 +29,17 @@ type Manager struct {
 	replayMu     sync.RWMutex
 	replayBuffer map[int64]*ringBuffer // guildID → ring buffer of events
 
-	tokens   *auth.TokenService
-	guilds   database.GuildRepository
-	redis    *redis.Client
+	tokens     *auth.TokenService
+	guilds     database.GuildRepository
+	readStates database.ReadStateRepository
+	redis      *redis.Client
 }
 
 // NewManager creates a new gateway Manager.
 func NewManager(
 	tokens *auth.TokenService,
 	guilds database.GuildRepository,
+	readStates database.ReadStateRepository,
 	redisClient *redis.Client,
 ) *Manager {
 	return &Manager{
@@ -46,6 +49,7 @@ func NewManager(
 		replayBuffer:  make(map[int64]*ringBuffer),
 		tokens:        tokens,
 		guilds:        guilds,
+		readStates:    readStates,
 		redis:         redisClient,
 	}
 }
@@ -256,11 +260,23 @@ func (m *Manager) handleIdentify(c *Connection, data json.RawMessage) {
 		slog.Error("failed to set presence", "userID", c.UserID, "error", err)
 	}
 
+	// Fetch read states for READY payload.
+	var readStates []models.ReadState
+	if m.readStates != nil {
+		rs, err := m.readStates.GetByUser(ctx, c.UserID)
+		if err != nil {
+			slog.Error("failed to get read states", "userID", c.UserID, "error", err)
+		} else {
+			readStates = rs
+		}
+	}
+
 	// Send READY.
 	c.SendEvent(EventReady, ReadyData{
-		SessionID: c.SessionID,
-		UserID:    c.UserID,
-		Guilds:    guildIDs,
+		SessionID:  c.SessionID,
+		UserID:     c.UserID,
+		Guilds:     guildIDs,
+		ReadStates: readStates,
 	})
 
 	// Broadcast presence online to guild members.
