@@ -79,6 +79,7 @@ func main() {
 	bans := database.NewBanRepository(pool)
 	dmChannels := database.NewDMChannelRepository(pool)
 	readStates := database.NewReadStateRepository(pool)
+	reactions := database.NewReactionRepository(pool)
 
 	// --- Storage ---
 
@@ -110,6 +111,7 @@ func main() {
 	dmSvc := service.NewDMService(dmChannels, users, sf, gwManager)
 	uploadSvc := service.NewUploadService(attachments, channels, sf, minioClient, permChecker)
 	readStateSvc := service.NewReadStateService(readStates, channels, dmChannels, permChecker)
+	reactionSvc := service.NewReactionService(reactions, messages, channels, dmChannels, gwManager, permChecker)
 	searchSvc := service.NewSearchService(messages, members, permChecker)
 
 	// --- Handlers ---
@@ -127,6 +129,7 @@ func main() {
 	uploadHandler := api.NewUploadHandler(uploadSvc)
 	typingHandler := gateway.NewTypingHandler(channels, rdb, gwManager)
 	readStateHandler := api.NewReadStateHandler(readStateSvc)
+	reactionHandler := api.NewReactionHandler(reactionSvc)
 	searchHandler := api.NewSearchHandler(searchSvc)
 
 	deps := &api.Dependencies{
@@ -142,6 +145,7 @@ func main() {
 		Bans:         banHandler,
 		DMs:          dmHandler,
 		ReadStates:   readStateHandler,
+		Reactions:    reactionHandler,
 		Search:       searchHandler,
 		Typing:       typingHandler,
 		Gateway:      gwManager,

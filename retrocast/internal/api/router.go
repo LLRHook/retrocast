@@ -50,6 +50,7 @@ type Dependencies struct {
 	Bans     *BanHandler
 	DMs        *DMHandler
 	ReadStates *ReadStateHandler
+	Reactions  *ReactionHandler
 	Search     *SearchHandler
 	Typing     *gateway.TypingHandler
 	Gateway  *gateway.Manager
@@ -172,6 +173,11 @@ func SetupRouter(e *echo.Echo, deps *Dependencies) {
 
 	// Message search
 	protected.GET("/guilds/:id/messages/search", deps.Search.SearchMessages)
+
+	// Reactions
+	protected.PUT("/channels/:id/messages/:message_id/reactions/:emoji/@me", deps.Reactions.AddReaction)
+	protected.DELETE("/channels/:id/messages/:message_id/reactions/:emoji/@me", deps.Reactions.RemoveReaction)
+	protected.GET("/channels/:id/messages/:message_id/reactions/:emoji", deps.Reactions.GetReactions)
 
 	// Attachments
 	protected.POST("/channels/:id/attachments", deps.Uploads.Upload)

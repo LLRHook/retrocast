@@ -101,3 +101,11 @@ type ReadStateRepository interface {
 	GetByUserAndChannel(ctx context.Context, userID, channelID int64) (*models.ReadState, error)
 	IncrementMentionCount(ctx context.Context, userID, channelID int64) error
 }
+
+type ReactionRepository interface {
+	Add(ctx context.Context, messageID, userID int64, emoji string) error
+	Remove(ctx context.Context, messageID, userID int64, emoji string) error
+	GetByMessage(ctx context.Context, messageID int64) ([]models.Reaction, error)
+	GetCountsByMessage(ctx context.Context, messageID, currentUserID int64) ([]models.ReactionCount, error)
+	GetUsersByReaction(ctx context.Context, messageID int64, emoji string, limit int) ([]int64, error)
+}

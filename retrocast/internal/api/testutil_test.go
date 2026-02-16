@@ -527,6 +527,50 @@ func (m *mockReadStateRepo) IncrementMentionCount(ctx context.Context, userID, c
 	return nil
 }
 
+// mockReactionRepo implements database.ReactionRepository.
+type mockReactionRepo struct {
+	AddFn                func(ctx context.Context, messageID, userID int64, emoji string) error
+	RemoveFn             func(ctx context.Context, messageID, userID int64, emoji string) error
+	GetByMessageFn       func(ctx context.Context, messageID int64) ([]models.Reaction, error)
+	GetCountsByMessageFn func(ctx context.Context, messageID, currentUserID int64) ([]models.ReactionCount, error)
+	GetUsersByReactionFn func(ctx context.Context, messageID int64, emoji string, limit int) ([]int64, error)
+}
+
+func (m *mockReactionRepo) Add(ctx context.Context, messageID, userID int64, emoji string) error {
+	if m.AddFn != nil {
+		return m.AddFn(ctx, messageID, userID, emoji)
+	}
+	return nil
+}
+
+func (m *mockReactionRepo) Remove(ctx context.Context, messageID, userID int64, emoji string) error {
+	if m.RemoveFn != nil {
+		return m.RemoveFn(ctx, messageID, userID, emoji)
+	}
+	return nil
+}
+
+func (m *mockReactionRepo) GetByMessage(ctx context.Context, messageID int64) ([]models.Reaction, error) {
+	if m.GetByMessageFn != nil {
+		return m.GetByMessageFn(ctx, messageID)
+	}
+	return nil, nil
+}
+
+func (m *mockReactionRepo) GetCountsByMessage(ctx context.Context, messageID, currentUserID int64) ([]models.ReactionCount, error) {
+	if m.GetCountsByMessageFn != nil {
+		return m.GetCountsByMessageFn(ctx, messageID, currentUserID)
+	}
+	return nil, nil
+}
+
+func (m *mockReactionRepo) GetUsersByReaction(ctx context.Context, messageID int64, emoji string, limit int) ([]int64, error) {
+	if m.GetUsersByReactionFn != nil {
+		return m.GetUsersByReactionFn(ctx, messageID, emoji, limit)
+	}
+	return nil, nil
+}
+
 func (m *mockDMChannelRepo) Create(ctx context.Context, dm *models.DMChannel) error {
 	if m.CreateFn != nil {
 		return m.CreateFn(ctx, dm)
