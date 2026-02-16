@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -85,4 +86,39 @@ func (r *messageRepo) Update(ctx context.Context, msg *models.Message) error {
 func (r *messageRepo) Delete(ctx context.Context, id int64) error {
 	_, err := r.pool.Exec(ctx, `DELETE FROM messages WHERE id = $1`, id)
 	return err
+}
+
+func (r *messageRepo) SearchMessages(ctx context.Context, guildID int64, query string, authorID *int64, before *time.Time, after *time.Time, limit int) ([]models.MessageWithAuthor, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT m.id, m.channel_id, m.author_id, m.content, m.created_at, m.edited_at,
+		        u.username, u.display_name, u.avatar_hash
+		 FROM messages m
+		 INNER JOIN channels c ON c.id = m.channel_id
+		 INNER JOIN users u ON u.id = m.author_id
+		 WHERE c.guild_id = $1
+		   AND m.search_vector @@ plainto_tsquery('english', $2)
+		   AND ($3::BIGINT IS NULL OR m.author_id = $3)
+		   AND ($4::TIMESTAMPTZ IS NULL OR m.created_at < $4)
+		   AND ($5::TIMESTAMPTZ IS NULL OR m.created_at > $5)
+		 ORDER BY ts_rank(m.search_vector, plainto_tsquery('english', $2)) DESC, m.id DESC
+		 LIMIT $6`,
+		guildID, query, authorID, before, after, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var messages []models.MessageWithAuthor
+	for rows.Next() {
+		var m models.MessageWithAuthor
+		if err := rows.Scan(
+			&m.ID, &m.ChannelID, &m.AuthorID, &m.Content, &m.CreatedAt, &m.EditedAt,
+			&m.AuthorUsername, &m.AuthorDisplayName, &m.AuthorAvatarHash,
+		); err != nil {
+			return nil, err
+		}
+		messages = append(messages, m)
+	}
+	return messages, rows.Err()
 }

@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"time"
 
 	"github.com/victorivanov/retrocast/internal/models"
 )
@@ -55,6 +56,7 @@ type MessageRepository interface {
 	GetByChannelID(ctx context.Context, channelID int64, before *int64, limit int) ([]models.MessageWithAuthor, error)
 	Update(ctx context.Context, msg *models.Message) error
 	Delete(ctx context.Context, id int64) error
+	SearchMessages(ctx context.Context, guildID int64, query string, authorID *int64, before *time.Time, after *time.Time, limit int) ([]models.MessageWithAuthor, error)
 }
 
 type InviteRepository interface {
