@@ -128,6 +128,8 @@ func SetupRouter(e *echo.Echo, deps *Dependencies) {
 	// DM channels
 	protected.POST("/users/@me/channels", deps.DMs.CreateDM)
 	protected.GET("/users/@me/channels", deps.DMs.ListDMs)
+	protected.PUT("/channels/:id/recipients/:user_id", deps.DMs.AddGroupDMMember)
+	protected.DELETE("/channels/:id/recipients/:user_id", deps.DMs.RemoveGroupDMMember)
 
 	// Read states
 	protected.GET("/users/@me/read-states", deps.ReadStates.GetReadStates)

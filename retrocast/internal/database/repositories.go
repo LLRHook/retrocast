@@ -92,7 +92,9 @@ type DMChannelRepository interface {
 	GetByUserID(ctx context.Context, userID int64) ([]models.DMChannel, error)
 	GetOrCreateDM(ctx context.Context, user1ID, user2ID, newID int64) (*models.DMChannel, error)
 	AddRecipient(ctx context.Context, channelID, userID int64) error
+	RemoveRecipient(ctx context.Context, channelID, userID int64) error
 	IsRecipient(ctx context.Context, channelID, userID int64) (bool, error)
+	GetRecipientIDs(ctx context.Context, channelID int64) ([]int64, error)
 }
 
 type ReadStateRepository interface {

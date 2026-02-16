@@ -1,0 +1,1 @@
+ALTER TABLE dm_channels ADD COLUMN IF NOT EXISTS owner_id BIGINT;
