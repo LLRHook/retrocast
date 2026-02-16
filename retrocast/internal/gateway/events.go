@@ -1,6 +1,10 @@
 package gateway
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/victorivanov/retrocast/internal/models"
+)
 
 // Op codes for gateway payloads.
 const (
@@ -67,9 +71,10 @@ type HelloData struct {
 
 // ReadyData is sent by the server after successful IDENTIFY.
 type ReadyData struct {
-	SessionID string  `json:"session_id"`
-	UserID    int64   `json:"user_id,string"`
-	Guilds    []int64 `json:"guilds"`
+	SessionID  string             `json:"session_id"`
+	UserID     int64              `json:"user_id,string"`
+	Guilds     []int64            `json:"guilds"`
+	ReadStates []models.ReadState `json:"read_states"`
 }
 
 // Event is a dispatch event ready to broadcast.

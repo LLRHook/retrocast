@@ -94,3 +94,10 @@ type DMChannelRepository interface {
 	AddRecipient(ctx context.Context, channelID, userID int64) error
 	IsRecipient(ctx context.Context, channelID, userID int64) (bool, error)
 }
+
+type ReadStateRepository interface {
+	Upsert(ctx context.Context, userID, channelID, lastMessageID int64) error
+	GetByUser(ctx context.Context, userID int64) ([]models.ReadState, error)
+	GetByUserAndChannel(ctx context.Context, userID, channelID int64) (*models.ReadState, error)
+	IncrementMentionCount(ctx context.Context, userID, channelID int64) error
+}

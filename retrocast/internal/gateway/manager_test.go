@@ -36,7 +36,7 @@ func newTestManager(t *testing.T, guilds *mockGuildRepo) *Manager {
 	t.Helper()
 	tokens := auth.NewTokenService("test-secret")
 	rdb := newTestRedis(t)
-	return NewManager(tokens, guilds, rdb)
+	return NewManager(tokens, guilds, nil, rdb)
 }
 
 // fakeConn creates a Connection wired into the Manager with a buffered Send
@@ -752,7 +752,7 @@ func TestWSLifecycle_IdentifyAndReady(t *testing.T) {
 	}
 
 	rdb := newTestRedis(t)
-	m := NewManager(tokens, guilds, rdb)
+	m := NewManager(tokens, guilds, nil, rdb)
 	srv := setupWSServer(t, m)
 	ws := dialWS(t, srv)
 
@@ -841,7 +841,7 @@ func TestWSLifecycle_ResumeReplaysEvents(t *testing.T) {
 	}
 
 	rdb := newTestRedis(t)
-	m := NewManager(tokens, guilds, rdb)
+	m := NewManager(tokens, guilds, nil, rdb)
 
 	// Pre-populate the replay buffer for guild 1 with 3 events.
 	m.storeReplayEvent(1, Event{Name: EventMessageCreate, Data: "msg1"})
