@@ -50,8 +50,31 @@ jobs:
       - name: Build
         working-directory: retrocast
         run: go build ./cmd/retrocast
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+          cache-dependency-path: retrocast-web/pnpm-lock.yaml
+      - name: Install dependencies
+        working-directory: retrocast-web
+        run: pnpm install --frozen-lockfile
+      - name: Lint
+        working-directory: retrocast-web
+        run: pnpm lint
+      - name: Type check and build
+        working-directory: retrocast-web
+        run: pnpm build
+
   docker:
-    needs: test
+    needs: [test, web]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     permissions:
@@ -68,7 +91,7 @@ jobs:
       - name: Lowercase repository name
         id: repo
         run: echo "name=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
-      - name: Build and push Docker image
+      - name: Build and push API image
         uses: docker/build-push-action@v5
         with:
           context: retrocast
@@ -76,3 +99,11 @@ jobs:
           tags: |
             ghcr.io/${{ steps.repo.outputs.name }}:${{ github.sha }}
             ghcr.io/${{ steps.repo.outputs.name }}:latest
+      - name: Build and push Web image
+        uses: docker/build-push-action@v5
+        with:
+          context: retrocast-web
+          push: true
+          tags: |
+            ghcr.io/${{ steps.repo.outputs.name }}-web:${{ github.sha }}
+            ghcr.io/${{ steps.repo.outputs.name }}-web:latest

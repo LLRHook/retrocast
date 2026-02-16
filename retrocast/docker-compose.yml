@@ -68,6 +68,12 @@ services:
       - LIVEKIT_KEYS=${LIVEKIT_API_KEY}:${LIVEKIT_API_SECRET}
     restart: unless-stopped
 
+  web:
+    build:
+      context: ../retrocast-web
+      dockerfile: Dockerfile
+    restart: unless-stopped
+
   caddy:
     image: caddy:2-alpine
     ports:
@@ -78,6 +84,7 @@ services:
       - caddy_data:/data
     depends_on:
       - api
+      - web
     restart: unless-stopped
 
   prometheus:
