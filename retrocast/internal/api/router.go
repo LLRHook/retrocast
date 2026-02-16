@@ -49,6 +49,7 @@ type Dependencies struct {
 	Uploads  *UploadHandler
 	Bans     *BanHandler
 	DMs      *DMHandler
+	Search   *SearchHandler
 	Typing   *gateway.TypingHandler
 	Gateway  *gateway.Manager
 
@@ -164,6 +165,9 @@ func SetupRouter(e *echo.Echo, deps *Dependencies) {
 	protected.GET("/channels/:id/messages/:message_id", deps.Messages.GetMessage)
 	protected.PATCH("/channels/:id/messages/:message_id", deps.Messages.EditMessage)
 	protected.DELETE("/channels/:id/messages/:message_id", deps.Messages.DeleteMessage)
+
+	// Message search
+	protected.GET("/guilds/:id/messages/search", deps.Search.SearchMessages)
 
 	// Attachments
 	protected.POST("/channels/:id/attachments", deps.Uploads.Upload)

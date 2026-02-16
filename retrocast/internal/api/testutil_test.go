@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http/httptest"
 	"sync"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/victorivanov/retrocast/internal/models"
@@ -322,11 +323,12 @@ func (m *mockMemberRepo) RemoveRole(ctx context.Context, guildID, userID, roleID
 
 // mockMessageRepo implements database.MessageRepository.
 type mockMessageRepo struct {
-	CreateFn       func(ctx context.Context, msg *models.Message) error
-	GetByIDFn      func(ctx context.Context, id int64) (*models.MessageWithAuthor, error)
+	CreateFn         func(ctx context.Context, msg *models.Message) error
+	GetByIDFn        func(ctx context.Context, id int64) (*models.MessageWithAuthor, error)
 	GetByChannelIDFn func(ctx context.Context, channelID int64, before *int64, limit int) ([]models.MessageWithAuthor, error)
-	UpdateFn       func(ctx context.Context, msg *models.Message) error
-	DeleteFn       func(ctx context.Context, id int64) error
+	UpdateFn         func(ctx context.Context, msg *models.Message) error
+	DeleteFn         func(ctx context.Context, id int64) error
+	SearchMessagesFn func(ctx context.Context, guildID int64, query string, authorID *int64, before *time.Time, after *time.Time, limit int) ([]models.MessageWithAuthor, error)
 }
 
 func (m *mockMessageRepo) Create(ctx context.Context, msg *models.Message) error {
@@ -362,6 +364,13 @@ func (m *mockMessageRepo) Delete(ctx context.Context, id int64) error {
 		return m.DeleteFn(ctx, id)
 	}
 	return nil
+}
+
+func (m *mockMessageRepo) SearchMessages(ctx context.Context, guildID int64, query string, authorID *int64, before *time.Time, after *time.Time, limit int) ([]models.MessageWithAuthor, error) {
+	if m.SearchMessagesFn != nil {
+		return m.SearchMessagesFn(ctx, guildID, query, authorID, before, after, limit)
+	}
+	return nil, nil
 }
 
 // mockInviteRepo implements database.InviteRepository.

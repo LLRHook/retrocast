@@ -108,6 +108,7 @@ func main() {
 	banSvc := service.NewBanService(guilds, members, roles, bans, gwManager, permChecker)
 	dmSvc := service.NewDMService(dmChannels, users, sf, gwManager)
 	uploadSvc := service.NewUploadService(attachments, channels, sf, minioClient, permChecker)
+	searchSvc := service.NewSearchService(messages, members, permChecker)
 
 	// --- Handlers ---
 
@@ -123,6 +124,7 @@ func main() {
 	dmHandler := api.NewDMHandler(dmSvc)
 	uploadHandler := api.NewUploadHandler(uploadSvc)
 	typingHandler := gateway.NewTypingHandler(channels, rdb, gwManager)
+	searchHandler := api.NewSearchHandler(searchSvc)
 
 	deps := &api.Dependencies{
 		Auth:         authHandler,
@@ -136,6 +138,7 @@ func main() {
 		Uploads:      uploadHandler,
 		Bans:         banHandler,
 		DMs:          dmHandler,
+		Search:       searchHandler,
 		Typing:       typingHandler,
 		Gateway:      gwManager,
 		TokenService: tokenSvc,
