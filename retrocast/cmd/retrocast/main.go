@@ -80,6 +80,7 @@ func main() {
 	dmChannels := database.NewDMChannelRepository(pool)
 	readStates := database.NewReadStateRepository(pool)
 	reactions := database.NewReactionRepository(pool)
+	voiceStates := database.NewVoiceStateRepository(pool)
 
 	// --- Storage ---
 
@@ -113,6 +114,7 @@ func main() {
 	readStateSvc := service.NewReadStateService(readStates, channels, dmChannels, permChecker)
 	reactionSvc := service.NewReactionService(reactions, messages, channels, dmChannels, gwManager, permChecker)
 	searchSvc := service.NewSearchService(messages, members, permChecker)
+	voiceSvc := service.NewVoiceService(voiceStates, channels, users, gwManager, permChecker, cfg.LiveKitAPIKey, cfg.LiveKitAPISecret)
 
 	// --- Handlers ---
 
@@ -131,6 +133,7 @@ func main() {
 	readStateHandler := api.NewReadStateHandler(readStateSvc)
 	reactionHandler := api.NewReactionHandler(reactionSvc)
 	searchHandler := api.NewSearchHandler(searchSvc)
+	voiceHandler := api.NewVoiceHandler(voiceSvc)
 
 	deps := &api.Dependencies{
 		Auth:         authHandler,
@@ -147,6 +150,7 @@ func main() {
 		ReadStates:   readStateHandler,
 		Reactions:    reactionHandler,
 		Search:       searchHandler,
+		Voice:        voiceHandler,
 		Typing:       typingHandler,
 		Gateway:      gwManager,
 		TokenService: tokenSvc,
