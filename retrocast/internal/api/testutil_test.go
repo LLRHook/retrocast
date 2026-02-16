@@ -483,12 +483,14 @@ func (m *mockBanRepo) Delete(ctx context.Context, guildID, userID int64) error {
 
 // mockDMChannelRepo implements database.DMChannelRepository.
 type mockDMChannelRepo struct {
-	CreateFn        func(ctx context.Context, dm *models.DMChannel) error
-	GetByIDFn       func(ctx context.Context, id int64) (*models.DMChannel, error)
-	GetByUserIDFn   func(ctx context.Context, userID int64) ([]models.DMChannel, error)
-	GetOrCreateDMFn func(ctx context.Context, user1ID, user2ID, newID int64) (*models.DMChannel, error)
-	AddRecipientFn  func(ctx context.Context, channelID, userID int64) error
-	IsRecipientFn   func(ctx context.Context, channelID, userID int64) (bool, error)
+	CreateFn          func(ctx context.Context, dm *models.DMChannel) error
+	GetByIDFn         func(ctx context.Context, id int64) (*models.DMChannel, error)
+	GetByUserIDFn     func(ctx context.Context, userID int64) ([]models.DMChannel, error)
+	GetOrCreateDMFn   func(ctx context.Context, user1ID, user2ID, newID int64) (*models.DMChannel, error)
+	AddRecipientFn    func(ctx context.Context, channelID, userID int64) error
+	RemoveRecipientFn func(ctx context.Context, channelID, userID int64) error
+	IsRecipientFn     func(ctx context.Context, channelID, userID int64) (bool, error)
+	GetRecipientIDsFn func(ctx context.Context, channelID int64) ([]int64, error)
 }
 
 // mockReadStateRepo implements database.ReadStateRepository.
@@ -606,11 +608,25 @@ func (m *mockDMChannelRepo) AddRecipient(ctx context.Context, channelID, userID 
 	return nil
 }
 
+func (m *mockDMChannelRepo) RemoveRecipient(ctx context.Context, channelID, userID int64) error {
+	if m.RemoveRecipientFn != nil {
+		return m.RemoveRecipientFn(ctx, channelID, userID)
+	}
+	return nil
+}
+
 func (m *mockDMChannelRepo) IsRecipient(ctx context.Context, channelID, userID int64) (bool, error) {
 	if m.IsRecipientFn != nil {
 		return m.IsRecipientFn(ctx, channelID, userID)
 	}
 	return false, nil
+}
+
+func (m *mockDMChannelRepo) GetRecipientIDs(ctx context.Context, channelID int64) ([]int64, error) {
+	if m.GetRecipientIDsFn != nil {
+		return m.GetRecipientIDsFn(ctx, channelID)
+	}
+	return nil, nil
 }
 
 // mockVoiceStateRepo implements database.VoiceStateRepository.

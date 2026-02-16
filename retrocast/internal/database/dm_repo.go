@@ -25,8 +25,8 @@ func (r *dmChannelRepo) Create(ctx context.Context, dm *models.DMChannel) error 
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	_, err = tx.Exec(ctx,
-		`INSERT INTO dm_channels (id, type, created_at) VALUES ($1, $2, $3)`,
-		dm.ID, dm.Type, dm.CreatedAt,
+		`INSERT INTO dm_channels (id, type, owner_id, created_at) VALUES ($1, $2, $3, $4)`,
+		dm.ID, dm.Type, dm.OwnerID, dm.CreatedAt,
 	)
 	if err != nil {
 		return err
@@ -48,8 +48,8 @@ func (r *dmChannelRepo) Create(ctx context.Context, dm *models.DMChannel) error 
 func (r *dmChannelRepo) GetByID(ctx context.Context, id int64) (*models.DMChannel, error) {
 	dm := &models.DMChannel{}
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, type, created_at FROM dm_channels WHERE id = $1`, id,
-	).Scan(&dm.ID, &dm.Type, &dm.CreatedAt)
+		`SELECT id, type, owner_id, created_at FROM dm_channels WHERE id = $1`, id,
+	).Scan(&dm.ID, &dm.Type, &dm.OwnerID, &dm.CreatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
@@ -67,7 +67,7 @@ func (r *dmChannelRepo) GetByID(ctx context.Context, id int64) (*models.DMChanne
 
 func (r *dmChannelRepo) GetByUserID(ctx context.Context, userID int64) ([]models.DMChannel, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT dc.id, dc.type, dc.created_at
+		`SELECT dc.id, dc.type, dc.owner_id, dc.created_at
 		 FROM dm_channels dc
 		 INNER JOIN dm_recipients dr ON dr.channel_id = dc.id
 		 WHERE dr.user_id = $1
@@ -81,7 +81,7 @@ func (r *dmChannelRepo) GetByUserID(ctx context.Context, userID int64) ([]models
 	var channels []models.DMChannel
 	for rows.Next() {
 		var dm models.DMChannel
-		if err := rows.Scan(&dm.ID, &dm.Type, &dm.CreatedAt); err != nil {
+		if err := rows.Scan(&dm.ID, &dm.Type, &dm.OwnerID, &dm.CreatedAt); err != nil {
 			return nil, err
 		}
 		channels = append(channels, dm)
@@ -148,6 +148,14 @@ func (r *dmChannelRepo) AddRecipient(ctx context.Context, channelID, userID int6
 	return err
 }
 
+func (r *dmChannelRepo) RemoveRecipient(ctx context.Context, channelID, userID int64) error {
+	_, err := r.pool.Exec(ctx,
+		`DELETE FROM dm_recipients WHERE channel_id = $1 AND user_id = $2`,
+		channelID, userID,
+	)
+	return err
+}
+
 func (r *dmChannelRepo) IsRecipient(ctx context.Context, channelID, userID int64) (bool, error) {
 	var exists bool
 	err := r.pool.QueryRow(ctx,
@@ -155,6 +163,27 @@ func (r *dmChannelRepo) IsRecipient(ctx context.Context, channelID, userID int64
 		channelID, userID,
 	).Scan(&exists)
 	return exists, err
+}
+
+func (r *dmChannelRepo) GetRecipientIDs(ctx context.Context, channelID int64) ([]int64, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT user_id FROM dm_recipients WHERE channel_id = $1 ORDER BY user_id`,
+		channelID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 
 func (r *dmChannelRepo) getRecipients(ctx context.Context, channelID int64) ([]models.User, error) {
