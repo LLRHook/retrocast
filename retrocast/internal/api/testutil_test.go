@@ -612,3 +612,47 @@ func (m *mockDMChannelRepo) IsRecipient(ctx context.Context, channelID, userID i
 	}
 	return false, nil
 }
+
+// mockVoiceStateRepo implements database.VoiceStateRepository.
+type mockVoiceStateRepo struct {
+	UpsertFn       func(ctx context.Context, state *models.VoiceState) error
+	DeleteFn       func(ctx context.Context, guildID, userID int64) error
+	GetByChannelFn func(ctx context.Context, channelID int64) ([]models.VoiceState, error)
+	GetByGuildFn   func(ctx context.Context, guildID int64) ([]models.VoiceState, error)
+	GetByUserFn    func(ctx context.Context, guildID, userID int64) (*models.VoiceState, error)
+}
+
+func (m *mockVoiceStateRepo) Upsert(ctx context.Context, state *models.VoiceState) error {
+	if m.UpsertFn != nil {
+		return m.UpsertFn(ctx, state)
+	}
+	return nil
+}
+
+func (m *mockVoiceStateRepo) Delete(ctx context.Context, guildID, userID int64) error {
+	if m.DeleteFn != nil {
+		return m.DeleteFn(ctx, guildID, userID)
+	}
+	return nil
+}
+
+func (m *mockVoiceStateRepo) GetByChannel(ctx context.Context, channelID int64) ([]models.VoiceState, error) {
+	if m.GetByChannelFn != nil {
+		return m.GetByChannelFn(ctx, channelID)
+	}
+	return nil, nil
+}
+
+func (m *mockVoiceStateRepo) GetByGuild(ctx context.Context, guildID int64) ([]models.VoiceState, error) {
+	if m.GetByGuildFn != nil {
+		return m.GetByGuildFn(ctx, guildID)
+	}
+	return nil, nil
+}
+
+func (m *mockVoiceStateRepo) GetByUser(ctx context.Context, guildID, userID int64) (*models.VoiceState, error) {
+	if m.GetByUserFn != nil {
+		return m.GetByUserFn(ctx, guildID, userID)
+	}
+	return nil, nil
+}

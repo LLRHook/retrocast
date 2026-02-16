@@ -109,3 +109,11 @@ type ReactionRepository interface {
 	GetCountsByMessage(ctx context.Context, messageID, currentUserID int64) ([]models.ReactionCount, error)
 	GetUsersByReaction(ctx context.Context, messageID int64, emoji string, limit int) ([]int64, error)
 }
+
+type VoiceStateRepository interface {
+	Upsert(ctx context.Context, state *models.VoiceState) error
+	Delete(ctx context.Context, guildID, userID int64) error
+	GetByChannel(ctx context.Context, channelID int64) ([]models.VoiceState, error)
+	GetByGuild(ctx context.Context, guildID int64) ([]models.VoiceState, error)
+	GetByUser(ctx context.Context, guildID, userID int64) (*models.VoiceState, error)
+}

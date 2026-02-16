@@ -52,6 +52,7 @@ type Dependencies struct {
 	ReadStates *ReadStateHandler
 	Reactions  *ReactionHandler
 	Search     *SearchHandler
+	Voice      *VoiceHandler
 	Typing     *gateway.TypingHandler
 	Gateway  *gateway.Manager
 
@@ -178,6 +179,11 @@ func SetupRouter(e *echo.Echo, deps *Dependencies) {
 	protected.PUT("/channels/:id/messages/:message_id/reactions/:emoji/@me", deps.Reactions.AddReaction)
 	protected.DELETE("/channels/:id/messages/:message_id/reactions/:emoji/@me", deps.Reactions.RemoveReaction)
 	protected.GET("/channels/:id/messages/:message_id/reactions/:emoji", deps.Reactions.GetReactions)
+
+	// Voice
+	protected.POST("/channels/:id/voice/join", deps.Voice.JoinVoice)
+	protected.POST("/channels/:id/voice/leave", deps.Voice.LeaveVoice)
+	protected.GET("/channels/:id/voice/states", deps.Voice.GetVoiceStates)
 
 	// Attachments
 	protected.POST("/channels/:id/attachments", deps.Uploads.Upload)
