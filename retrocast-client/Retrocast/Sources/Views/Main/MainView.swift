@@ -9,7 +9,10 @@ struct MainView: View {
     @State private var channelListVM: ChannelListViewModel?
     @State private var chatVM: ChatViewModel?
     @State private var dmListVM: DMListViewModel?
+    @State private var searchVM: SearchViewModel?
+    @State private var voiceVM: VoiceViewModel?
     @State private var showMemberList = false
+    @State private var showSearch = false
 
     var body: some View {
         NavigationSplitView {
@@ -19,7 +22,7 @@ struct MainView: View {
             if appState.showDMList {
                 DMListView(viewModel: dmListVM)
             } else if appState.selectedGuildID != nil, let channelListVM {
-                ChannelSidebarView(viewModel: channelListVM)
+                ChannelSidebarView(viewModel: channelListVM, voiceVM: voiceVM)
             } else {
                 emptyGuildState
             }
@@ -35,13 +38,38 @@ struct MainView: View {
                 .toolbar {
                     if !appState.showDMList {
                         ToolbarItem(placement: .primaryAction) {
-                            Button {
-                                withAnimation { showMemberList.toggle() }
-                            } label: {
-                                Image(systemName: "person.2")
-                                    .foregroundStyle(showMemberList ? .retroText : .retroMuted)
+                            HStack(spacing: 12) {
+                                Button {
+                                    showSearch = true
+                                } label: {
+                                    Image(systemName: "magnifyingglass")
+                                        .foregroundStyle(.retroMuted)
+                                }
+                                Button {
+                                    withAnimation { showMemberList.toggle() }
+                                } label: {
+                                    Image(systemName: "person.2")
+                                        .foregroundStyle(showMemberList ? .retroText : .retroMuted)
+                                }
                             }
                         }
+                    }
+                }
+                .sheet(isPresented: $showSearch) {
+                    if let searchVM {
+                        NavigationStack {
+                            SearchView(viewModel: searchVM)
+                                .navigationTitle("Search")
+                                #if os(iOS)
+                                .navigationBarTitleDisplayMode(.inline)
+                                #endif
+                                .toolbar {
+                                    ToolbarItem(placement: .cancellationAction) {
+                                        Button("Done") { showSearch = false }
+                                    }
+                                }
+                        }
+                        .presentationDetents([.medium, .large])
                     }
                 }
             } else {
@@ -54,10 +82,14 @@ struct MainView: View {
             let clVM = ChannelListViewModel(api: api, appState: appState)
             let cVM = ChatViewModel(api: api, appState: appState)
             let dlVM = DMListViewModel(api: api, appState: appState)
+            let sVM = SearchViewModel(api: api, appState: appState)
+            let vVM = VoiceViewModel(api: api, appState: appState)
             serverListVM = slVM
             channelListVM = clVM
             chatVM = cVM
             dmListVM = dlVM
+            searchVM = sVM
+            voiceVM = vVM
 
             setupGatewayEventHandler()
             await slVM.loadGuilds()
@@ -174,6 +206,10 @@ struct MainView: View {
                 case .guildMemberRemove:
                     if let member = try? decoder.decode(Member.self, from: data) {
                         appState.members[member.guildID]?.removeAll { $0.userID == member.userID }
+                    }
+                case .voiceStateUpdate:
+                    if let state = try? decoder.decode(VoiceState.self, from: data) {
+                        voiceVM?.handleVoiceStateUpdate(state)
                     }
                 default:
                     break

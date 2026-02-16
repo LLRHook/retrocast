@@ -252,10 +252,36 @@ extension Endpoint {
     }
 }
 
+// MARK: - Search
+
+extension Endpoint {
+    static func searchMessages(guildID: Snowflake, query: String, limit: Int = 25) -> Endpoint {
+        let items = [URLQueryItem(name: "q", value: query),
+                     URLQueryItem(name: "limit", value: String(limit))]
+        return Endpoint(method: .GET, path: "/api/v1/guilds/\(guildID)/messages/search", queryItems: items)
+    }
+}
+
 // MARK: - Typing
 
 extension Endpoint {
     static func sendTyping(channelID: Snowflake) -> Endpoint {
         Endpoint(method: .POST, path: "/api/v1/channels/\(channelID)/typing")
+    }
+}
+
+// MARK: - Voice
+
+extension Endpoint {
+    static func joinVoice(channelID: Snowflake) -> Endpoint {
+        Endpoint(method: .POST, path: "/api/v1/channels/\(channelID)/voice/join")
+    }
+
+    static func leaveVoice(channelID: Snowflake) -> Endpoint {
+        Endpoint(method: .POST, path: "/api/v1/channels/\(channelID)/voice/leave")
+    }
+
+    static func voiceStates(channelID: Snowflake) -> Endpoint {
+        Endpoint(method: .GET, path: "/api/v1/channels/\(channelID)/voice/states")
     }
 }

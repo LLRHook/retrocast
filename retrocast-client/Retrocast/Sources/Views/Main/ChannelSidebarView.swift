@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ChannelSidebarView: View {
     @Bindable var viewModel: ChannelListViewModel
+    var voiceVM: VoiceViewModel?
     @Environment(AppState.self) private var appState
 
     var body: some View {
@@ -21,28 +22,28 @@ struct ChannelSidebarView: View {
                                 categoryHeader(category)
                             }
                             ForEach(group.channels) { channel in
-                                channelRow(channel)
-                                    .contextMenu {
-                                        Button {
-                                            viewModel.editChannelName = channel.name
-                                            viewModel.editingChannel = channel
-                                        } label: {
-                                            Label("Rename", systemImage: "pencil")
+                                if channel.type == .voice, let voiceVM {
+                                    VoiceChannelView(channel: channel, voiceVM: voiceVM)
+                                        .contextMenu {
+                                            channelContextMenu(channel)
                                         }
-                                        Button(role: .destructive) {
-                                            Task {
-                                                await viewModel.deleteChannel(channel)
-                                            }
-                                        } label: {
-                                            Label("Delete", systemImage: "trash")
+                                } else {
+                                    channelRow(channel)
+                                        .contextMenu {
+                                            channelContextMenu(channel)
                                         }
-                                    }
+                                }
                             }
                         }
                     }
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
+            }
+
+            // Voice control bar
+            if let voiceVM, voiceVM.isConnected {
+                VoiceControlBar(voiceVM: voiceVM)
             }
         }
         .background(Color.retroSidebar)
@@ -128,6 +129,23 @@ struct ChannelSidebarView: View {
             } label: {
                 Label("Delete", systemImage: "trash")
             }
+        }
+    }
+
+    @ViewBuilder
+    private func channelContextMenu(_ channel: Channel) -> some View {
+        Button {
+            viewModel.editChannelName = channel.name
+            viewModel.editingChannel = channel
+        } label: {
+            Label("Rename", systemImage: "pencil")
+        }
+        Button(role: .destructive) {
+            Task {
+                await viewModel.deleteChannel(channel)
+            }
+        } label: {
+            Label("Delete", systemImage: "trash")
         }
     }
 
