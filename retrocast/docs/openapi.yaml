@@ -35,6 +35,14 @@ tags:
     description: Direct message channels
   - name: Uploads
     description: File attachment uploads
+  - name: Reactions
+    description: Message reactions (emoji)
+  - name: ReadStates
+    description: Unread message tracking
+  - name: Search
+    description: Full-text message search within guilds
+  - name: Voice
+    description: Voice channel management (join, leave, list participants)
 
 components:
   securitySchemes:
@@ -281,6 +289,10 @@ components:
           type: integer
           description: "1 = DM, 3 = group DM"
           enum: [1, 3]
+        owner_id:
+          type: string
+          description: Owner of the group DM (null for 1-on-1 DMs)
+          nullable: true
         recipients:
           type: array
           items:
@@ -288,6 +300,68 @@ components:
         created_at:
           type: string
           format: date-time
+
+    ReactionCount:
+      type: object
+      properties:
+        emoji:
+          type: string
+          example: "\U0001F44D"
+        count:
+          type: integer
+          example: 3
+        me:
+          type: boolean
+          description: Whether the current user reacted with this emoji
+
+    ReadState:
+      type: object
+      properties:
+        user_id:
+          type: string
+          example: "175928847299117056"
+        channel_id:
+          type: string
+          example: "175928847299117058"
+        last_message_id:
+          type: string
+          example: "175928847299117100"
+        mention_count:
+          type: integer
+          example: 0
+        updated_at:
+          type: string
+          format: date-time
+
+    VoiceState:
+      type: object
+      properties:
+        guild_id:
+          type: string
+        channel_id:
+          type: string
+        user_id:
+          type: string
+        session_id:
+          type: string
+        self_mute:
+          type: boolean
+        self_deaf:
+          type: boolean
+        joined_at:
+          type: string
+          format: date-time
+
+    JoinVoiceResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: LiveKit access token for the voice room
+        voice_states:
+          type: array
+          items:
+            $ref: "#/components/schemas/VoiceState"
 
     # ── Auth payloads ──────────────────────────────────────────
     AuthResponse:
@@ -544,8 +618,11 @@ paths:
     post:
       operationId: createDM
       tags: [DMs]
-      summary: Open a DM channel
-      description: Creates or returns an existing DM channel with the recipient.
+      summary: Open a DM or group DM channel
+      description: |
+        Creates or returns an existing DM channel. Use `recipient_id` for 1-on-1 DMs
+        or `recipient_ids` (array) to create a group DM. When `recipient_ids` is provided,
+        it takes priority over `recipient_id`.
       security:
         - BearerAuth: []
       requestBody:
@@ -554,11 +631,15 @@ paths:
           application/json:
             schema:
               type: object
-              required: [recipient_id]
               properties:
                 recipient_id:
                   type: string
-                  description: Snowflake ID of the recipient user
+                  description: Snowflake ID of the recipient user (1-on-1 DM)
+                recipient_ids:
+                  type: array
+                  items:
+                    type: string
+                  description: Array of Snowflake IDs for group DM recipients (2-9 users)
       responses:
         "200":
           description: DM channel
@@ -588,6 +669,94 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/DMChannel"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /channels/{channelId}/recipients/{userId}:
+    put:
+      operationId: addGroupDMMember
+      tags: [DMs]
+      summary: Add a member to a group DM
+      description: Only the group DM owner can add members. Maximum 10 members per group DM.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: channelId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Member added
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: User is already a member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    delete:
+      operationId: removeGroupDMMember
+      tags: [DMs]
+      summary: Remove a member from a group DM
+      description: |
+        The owner can remove any member. Non-owners can only remove themselves (leave the group).
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: channelId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Member removed
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /users/@me/read-states:
+    get:
+      operationId: getReadStates
+      tags: [ReadStates]
+      summary: Get read states for current user
+      description: Returns all read states (last read message per channel) for the authenticated user.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Read state list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReadState"
         "401":
           $ref: "#/components/responses/Unauthorized"
 
@@ -1098,6 +1267,152 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+
+  # ── Read States (ack) ────────────────────────────────────
+  /channels/{channelId}/ack/{messageId}:
+    parameters:
+      - name: channelId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Channel snowflake ID
+      - name: messageId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Message snowflake ID to mark as last read
+
+    put:
+      operationId: ackMessage
+      tags: [ReadStates]
+      summary: Mark channel as read
+      description: |
+        Marks the channel as read up to the given message ID.
+        Resets the mention count to 0 for this channel.
+      security:
+        - BearerAuth: []
+      responses:
+        "204":
+          description: Read state updated
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ════════════════════════════════════════════════════════════
+  #  REACTIONS
+  # ════════════════════════════════════════════════════════════
+  /channels/{channelId}/messages/{messageId}/reactions/{emoji}/@me:
+    parameters:
+      - name: channelId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: messageId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: emoji
+        in: path
+        required: true
+        schema:
+          type: string
+        description: URL-encoded emoji (e.g. %F0%9F%91%8D for thumbs up)
+
+    put:
+      operationId: addReaction
+      tags: [Reactions]
+      summary: Add a reaction
+      description: Add an emoji reaction to a message. Requires VIEW_CHANNEL and READ_MESSAGE_HISTORY.
+      security:
+        - BearerAuth: []
+      responses:
+        "204":
+          description: Reaction added
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      operationId: removeReaction
+      tags: [Reactions]
+      summary: Remove own reaction
+      description: Remove your own emoji reaction from a message.
+      security:
+        - BearerAuth: []
+      responses:
+        "204":
+          description: Reaction removed
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /channels/{channelId}/messages/{messageId}/reactions/{emoji}:
+    parameters:
+      - name: channelId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: messageId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: emoji
+        in: path
+        required: true
+        schema:
+          type: string
+        description: URL-encoded emoji
+
+    get:
+      operationId: getReactions
+      tags: [Reactions]
+      summary: List users who reacted with an emoji
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+          description: Max users to return (1-100, default 25)
+      responses:
+        "200":
+          description: List of user IDs who reacted
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: integer
+                  format: int64
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
   # ════════════════════════════════════════════════════════════
   #  MEMBERS
@@ -1745,6 +2060,169 @@ paths:
       responses:
         "204":
           description: User unbanned
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ════════════════════════════════════════════════════════════
+  #  MESSAGE SEARCH
+  # ════════════════════════════════════════════════════════════
+  /guilds/{guildId}/messages/search:
+    parameters:
+      - name: guildId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Guild snowflake ID
+
+    get:
+      operationId: searchMessages
+      tags: [Search]
+      summary: Search messages in a guild
+      description: |
+        Full-text search across all messages in the guild.
+        Requires READ_MESSAGE_HISTORY permission.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Search query string
+        - name: author_id
+          in: query
+          schema:
+            type: string
+          description: Filter by author snowflake ID
+        - name: before
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Return messages created before this timestamp (RFC3339)
+        - name: after
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Return messages created after this timestamp (RFC3339)
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+          description: Number of results to return (1-100, default 25)
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MessageWithAuthor"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  # ════════════════════════════════════════════════════════════
+  #  VOICE
+  # ════════════════════════════════════════════════════════════
+  /channels/{channelId}/voice/join:
+    parameters:
+      - name: channelId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Voice channel snowflake ID
+
+    post:
+      operationId: joinVoice
+      tags: [Voice]
+      summary: Join a voice channel
+      description: |
+        Connects the user to a voice channel. Returns a LiveKit access token
+        and the current list of voice states in the channel.
+        Requires CONNECT permission.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Voice join response with token and participant list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JoinVoiceResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /channels/{channelId}/voice/leave:
+    parameters:
+      - name: channelId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Voice channel snowflake ID
+
+    post:
+      operationId: leaveVoice
+      tags: [Voice]
+      summary: Leave a voice channel
+      description: Disconnects the user from the voice channel.
+      security:
+        - BearerAuth: []
+      responses:
+        "204":
+          description: Left voice channel
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /channels/{channelId}/voice/states:
+    parameters:
+      - name: channelId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Voice channel snowflake ID
+
+    get:
+      operationId: getVoiceStates
+      tags: [Voice]
+      summary: List voice states in a channel
+      description: Returns the list of users currently in the voice channel. Requires VIEW_CHANNEL permission.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Voice state list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VoiceState"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
