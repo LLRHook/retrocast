@@ -23,6 +23,10 @@ final class AppState {
     var presence: [Snowflake: String] = [:]           // userID -> status ("online", "idle", "dnd", "offline")
     var typingUsers: [Snowflake: Set<Snowflake>] = [:] // channelID -> set of typing userIDs
 
+    // MARK: - Voice
+
+    var voiceStates: [Snowflake: [VoiceState]] = [:]  // channelID -> voice states
+
     // MARK: - Selection
 
     var selectedGuildID: Snowflake?
@@ -128,6 +132,40 @@ final class AppState {
         presence[userID] = status
     }
 
+    // MARK: - Voice mutations
+
+    func setVoiceStates(_ states: [VoiceState], for channelID: Snowflake) {
+        voiceStates[channelID] = states
+    }
+
+    func addVoiceState(_ state: VoiceState) {
+        if voiceStates[state.channelID] == nil {
+            voiceStates[state.channelID] = []
+        }
+        // Remove existing state for same user (they may have switched channels)
+        removeVoiceState(userID: state.userID)
+        voiceStates[state.channelID]?.append(state)
+    }
+
+    func removeVoiceState(userID: Snowflake) {
+        for channelID in voiceStates.keys {
+            voiceStates[channelID]?.removeAll { $0.userID == userID }
+            if voiceStates[channelID]?.isEmpty == true {
+                voiceStates.removeValue(forKey: channelID)
+            }
+        }
+    }
+
+    func updateVoiceState(_ state: VoiceState) {
+        guard var states = voiceStates[state.channelID],
+              let idx = states.firstIndex(where: { $0.userID == state.userID }) else {
+            addVoiceState(state)
+            return
+        }
+        states[idx] = state
+        voiceStates[state.channelID] = states
+    }
+
     func reset() {
         currentUser = nil
         guilds = [:]
@@ -142,5 +180,6 @@ final class AppState {
         selectedChannelID = nil
         messageCache = [:]
         hasMoreMessages = [:]
+        voiceStates = [:]
     }
 }
