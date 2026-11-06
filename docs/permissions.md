@@ -106,7 +106,12 @@ and unknown/future/sign bits retain the original signed `int64` bit patterns.
 ## Required Native Build and Failures
 
 `make native` builds the dependency-free Rust crate with `--locked --offline`
-and places its archive in `native/permissions/lib/`. `make build`, `make test`,
+and places its archive in `native/permissions/lib/`. It then hashes that archive
+into generated `internal/permissions/native_fingerprint.go`. Go's build cache
+does not track linked C library contents; the generated source makes native
+content part of the package inputs and forces relinking after Rust-only edits.
+Unchanged archive bytes preserve the fingerprint file and its timestamp.
+`make build`, `make test`,
 `make permission-test`, and `make package-check` require that build automatically.
 Direct Go commands require `make native` first and `CGO_ENABLED=1`. Supported
 host builds are Linux and macOS with matching Go/Rust/C architectures. The Docker
@@ -133,6 +138,9 @@ files. Exhaustive bounded masks, full-width seeded cases, synthetic repository
 fakes, and the package probe exercise the real Rust path. `make package-check`
 relocates a probe containing the Rust archive and tests absent archives, disabled cgo,
 and hostile ABI error results in isolated synthetic modules, without services.
+It also replaces the native archive twice at a stable path under warm Go caches
+and requires the second executable to observe the new native status, without
+changing host code, cleaning caches or forcing a full rebuild.
 
 The raw `RequireGuildPermission(int64)` keeps its existing assigned-roles-only,
 any-bit policy and unconditional Administrator bypass. The typed guild/channel

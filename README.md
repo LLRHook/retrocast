@@ -67,6 +67,9 @@ For a direct Go build, run `make native` first, then
 Direct `go test` also requires that native build. `CGO_ENABLED=0`, missing native
 archives, and cross-compilation without a matching native toolchain are unsupported
 and fail the build. `CARGO_TARGET_DIR` may select a shared Cargo cache.
+The native build also generates a Go source fingerprint of the archive, so a
+Rust-only change invalidates Go's cgo/link cache. Re-run `make native` before
+direct Go commands whenever native sources or artifacts change.
 See [permission resolution](docs/permissions.md) for the ABI and error policy.
 
 ### Environment variables

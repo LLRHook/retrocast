@@ -32,6 +32,10 @@ prepare_module() {
     cp scripts/testdata/permissionprobe/main.go "$module/cmd/probe/"
 }
 
+stamp_module() {
+    go run ./scripts/nativefingerprint "$module/native/permissions/lib/libretrocast_permissions.a" "$module/internal/permissions/native_fingerprint.go"
+}
+
 prepare_module missing
 if (cd "$module" && GOWORK=off CGO_ENABLED=1 go build -o probe ./cmd/probe) > "$stage/missing.log" 2>&1; then
     echo "FAIL: a missing required Rust archive built successfully" >&2
@@ -62,8 +66,24 @@ for status in 1 2 3 99; do
         "${CC:-cc}" -I native/permissions/include -DRC_TEST_STATUS="$status" -DRC_TEST_BASE_OK="$base_ok" \
             -c scripts/testdata/nativefault/permissions.c -o "$module/fault.o"
         ar crs "$module/native/permissions/lib/libretrocast_permissions.a" "$module/fault.o"
+        stamp_module
         (cd "$module" && GOWORK=off CGO_ENABLED=1 go build -ldflags='-linkmode=external' -o "$stage/fault-probe-$status-$scope" ./cmd/probe)
         (cd "$stage/runtime" && "$stage/fault-probe-$status-$scope" "$status" "$scope")
     done
 done
+
+# Replace the archive at the SAME path, leaving the host code, output path and
+# shared Go caches untouched. Without native-content fingerprinting the second
+# build can reuse the first native implementation and this regression fails.
+prepare_module warm-cache
+mkdir -p "$module/native/permissions/lib"
+for status in 1 2; do
+    "${CC:-cc}" -I native/permissions/include -DRC_TEST_STATUS="$status" -DRC_TEST_BASE_OK=0 \
+        -c scripts/testdata/nativefault/permissions.c -o "$module/fault.o"
+    ar crs "$module/native/permissions/lib/libretrocast_permissions.a" "$module/fault.o"
+    stamp_module
+    (cd "$module" && GOWORK=off CGO_ENABLED=1 go build -ldflags='-linkmode=external' -o "$stage/warm-cache-probe" ./cmd/probe)
+    (cd "$stage/runtime" && "$stage/warm-cache-probe" "$status" base)
+done
+echo "PASS stable-path warm cache: replacing the native archive changes executed authorization code"
 echo "Native package evidence retained in $stage"

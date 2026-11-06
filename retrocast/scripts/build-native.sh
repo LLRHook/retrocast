@@ -22,3 +22,6 @@ export CARGO_TARGET_DIR
 cargo build --manifest-path native/permissions/Cargo.toml --locked --offline --release
 mkdir -p native/permissions/lib
 cp "$CARGO_TARGET_DIR/release/libretrocast_permissions.a" native/permissions/lib/libretrocast_permissions.a
+# Go's build cache does not track linked C archives. Make their content a Go
+# source input so Rust-only changes invalidate the cgo package and its callers.
+go run ./scripts/nativefingerprint native/permissions/lib/libretrocast_permissions.a internal/permissions/native_fingerprint.go

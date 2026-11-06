@@ -13,6 +13,7 @@ native-test:
 	cargo fmt --manifest-path native/permissions/Cargo.toml -- --check
 
 permission-test: native
+	go test -json -count=1 ./scripts/nativefingerprint
 	go test -json -race -count=1 ./internal/permissions ./internal/service
 
 package-check: native
