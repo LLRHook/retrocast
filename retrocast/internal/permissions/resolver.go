@@ -14,7 +14,10 @@ type NativeError struct {
 }
 
 func (e *NativeError) Error() string {
-	return fmt.Sprintf("Rust permission resolver %s failed (ABI status %d)", e.Operation, e.Status)
+	// Retain the actual archive digest in observable compiled code. A private
+	// constant referenced only by _ can vanish and leave Go's package content ID
+	// unchanged even after recompilation, allowing a stale native link to survive.
+	return fmt.Sprintf("Rust permission resolver %s failed (ABI status %d; native build %s)", e.Operation, e.Status, nativeArchiveFingerprint)
 }
 
 // ComputeBasePermissions computes the union of everyone and member roles in Rust,

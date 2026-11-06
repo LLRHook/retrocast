@@ -5,13 +5,19 @@ repo=$(pwd)
 mkdir -p bin
 stage=$(mktemp -d "$repo/bin/native-package.XXXXXX")
 mkdir -p "$stage/runtime"
+case "${1:-all}" in
+    all|--warm-cache-only) mode=${1:-all} ;;
+    *) echo "usage: $0 [--warm-cache-only]" >&2; exit 2 ;;
+esac
 
 # These are test-only executables; the application/server is never started.
+if [ "$mode" = all ]; then
 go build -ldflags='-linkmode=external' -o "$stage/permission-probe" ./scripts/testdata/permissionprobe
 go tool nm "$stage/permission-probe" > "$stage/symbols.log"
 grep -q 'rc_permissions_base' "$stage/symbols.log"
 grep -q 'rc_permissions_channel' "$stage/symbols.log"
 (cd "$stage/runtime" && "$stage/permission-probe")
+fi
 
 # Assemble only the source leaves needed by the real PermissionChecker in a
 # synthetic module. This is not a checkout, does not access services, and has no
@@ -36,6 +42,7 @@ stamp_module() {
     go run ./scripts/nativefingerprint "$module/native/permissions/lib/libretrocast_permissions.a" "$module/internal/permissions/native_fingerprint.go"
 }
 
+if [ "$mode" = all ]; then
 prepare_module missing
 if (cd "$module" && GOWORK=off CGO_ENABLED=1 go build -o probe ./cmd/probe) > "$stage/missing.log" 2>&1; then
     echo "FAIL: a missing required Rust archive built successfully" >&2
@@ -71,6 +78,7 @@ for status in 1 2 3 99; do
         (cd "$stage/runtime" && "$stage/fault-probe-$status-$scope" "$status" "$scope")
     done
 done
+fi
 
 # Replace the archive at the SAME path, leaving the host code, output path and
 # shared Go caches untouched. Without native-content fingerprinting the second
@@ -83,7 +91,19 @@ for status in 1 2; do
     ar crs "$module/native/permissions/lib/libretrocast_permissions.a" "$module/fault.o"
     stamp_module
     (cd "$module" && GOWORK=off CGO_ENABLED=1 go build -ldflags='-linkmode=external' -o "$stage/warm-cache-probe" ./cmd/probe)
+    # Action IDs alone are insufficient: ensure the generated digest survives
+    # in the compiled Go package and changes the content ID used by final links.
+    package=$(cd "$module" && GOWORK=off CGO_ENABLED=1 go list -export -f '{{.Export}}' ./internal/permissions)
+    digest=$(sed -n 's/^const nativeArchiveFingerprint = "\([0-9a-f]*\)"$/\1/p' "$module/internal/permissions/native_fingerprint.go")
+    [ "${#digest}" -eq 64 ] || { echo "FAIL: missing archive fingerprint" >&2; exit 1; }
+    grep -F -q "$digest" "$package" || { echo "FAIL: archive fingerprint was optimized out of Go package" >&2; exit 1; }
+    identity=$(go tool buildid "$package")
+    printf '%s\n' "${identity##*/}" > "$stage/warm-content-$status.txt"
     (cd "$stage/runtime" && "$stage/warm-cache-probe" "$status" base)
 done
+if cmp -s "$stage/warm-content-1.txt" "$stage/warm-content-2.txt"; then
+    echo "FAIL: Rust archive replacement did not change Go package content identity" >&2
+    exit 1
+fi
 echo "PASS stable-path warm cache: replacing the native archive changes executed authorization code"
 echo "Native package evidence retained in $stage"

@@ -70,6 +70,8 @@ and fail the build. `CARGO_TARGET_DIR` may select a shared Cargo cache.
 The native build also generates a Go source fingerprint of the archive, so a
 Rust-only change invalidates Go's cgo/link cache. Re-run `make native` before
 direct Go commands whenever native sources or artifacts change.
+The digest is retained in native error diagnostics so it changes the compiled
+package identity as well as the source compilation key.
 See [permission resolution](docs/permissions.md) for the ABI and error policy.
 
 ### Environment variables
@@ -93,6 +95,7 @@ See [permission resolution](docs/permissions.md) for the ABI and error policy.
 cd retrocast
 make test              # Existing full race suite; database tests need test services
 make native-test       # Rust unit/ABI checks, Clippy, formatting (no services)
+make cache-check        # Focused stable-path native relink regression (no services)
 make permission-test   # Real Go/Rust oracle parity and repository fakes (no services)
 make package-check     # Relocated binary, missing archive, CGO/ABI faults (no services)
 ```

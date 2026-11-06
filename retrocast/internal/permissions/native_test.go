@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"reflect"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 
@@ -180,5 +181,12 @@ func TestNativeErrorNeverBecomesPermissions(t *testing.T) {
 			}()
 			_ = mustPermission(mask, err)
 		}()
+	}
+}
+
+func TestNativeErrorIncludesArchiveIdentity(t *testing.T) {
+	_, err := nativeResult("base", int64(PermAll), 99)
+	if len(nativeArchiveFingerprint) != 64 || !strings.Contains(err.Error(), "native build "+nativeArchiveFingerprint) {
+		t.Fatalf("native archive identity missing from observable error: %v", err)
 	}
 }

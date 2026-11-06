@@ -1,4 +1,4 @@
-.PHONY: build test run clean native native-test permission-test package-check
+.PHONY: build test run clean native native-test permission-test package-check cache-check
 .DEFAULT_GOAL := build
 
 CGO_ENABLED ?= 1
@@ -18,6 +18,11 @@ permission-test: native
 
 package-check: native
 	./scripts/test-native-package.sh
+
+# Focused cgo cache regression with synthetic C archives; no services or Rust
+# compilation. The full package-check still includes this regression as well.
+cache-check:
+	./scripts/test-native-package.sh --warm-cache-only
 
 build: native
 	go build -ldflags='-linkmode=external' -o bin/retrocast ./cmd/retrocast

@@ -109,7 +109,9 @@ and unknown/future/sign bits retain the original signed `int64` bit patterns.
 and places its archive in `native/permissions/lib/`. It then hashes that archive
 into generated `internal/permissions/native_fingerprint.go`. Go's build cache
 does not track linked C library contents; the generated source makes native
-content part of the package inputs and forces relinking after Rust-only edits.
+content part of the package inputs. The digest is also used in native error
+diagnostics, so it survives into the compiled Go package and changes the content
+identity used by downstream linking after Rust-only edits.
 Unchanged archive bytes preserve the fingerprint file and its timestamp.
 `make build`, `make test`,
 `make permission-test`, and `make package-check` require that build automatically.
@@ -141,6 +143,11 @@ and hostile ABI error results in isolated synthetic modules, without services.
 It also replaces the native archive twice at a stable path under warm Go caches
 and requires the second executable to observe the new native status, without
 changing host code, cleaning caches or forcing a full rebuild.
+The regression also checks that both archive fingerprints survive in the compiled
+Go packages and that their package content IDs differ. `make cache-check` runs
+only this focused synthetic-archive regression without rebuilding Rust or starting
+services. Public HTTP errors still return the existing generic `INTERNAL` response;
+the native build fingerprint is retained in internal error diagnostics.
 
 The raw `RequireGuildPermission(int64)` keeps its existing assigned-roles-only,
 any-bit policy and unconditional Administrator bypass. The typed guild/channel
