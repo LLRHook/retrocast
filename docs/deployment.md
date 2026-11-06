@@ -20,24 +20,15 @@ Defined in `retrocast/docker-compose.yml`. Seven services:
 
 Multi-stage build in `retrocast/Dockerfile`:
 
-```dockerfile
-FROM golang:1.25-alpine AS builder
-WORKDIR /app
-COPY go.mod go.sum ./
-RUN go mod download
-COPY . .
-RUN CGO_ENABLED=0 go build -o retrocast ./cmd/retrocast
-
-FROM alpine:3.21
-RUN apk add --no-cache ca-certificates curl && adduser -D -u 1001 appuser
-COPY --from=builder /app/retrocast /usr/local/bin/retrocast
-COPY --from=builder /app/migrations /migrations
-USER appuser
-EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8080/health || exit 1
-CMD ["retrocast"]
-```
+The Dockerfile takes the existing Go toolchain and a pinned
+`rust:1.99.1-alpine3.21` builder. Both languages compile in Alpine 3.21 with
+`CGO_ENABLED=1`, then Go externally links the required Rust static archive using
+`-extldflags=-static`. The build also runs an isolated synthetic permission probe;
+it does not start the API or its dependencies. Only the resulting server binary
+and migrations are copied to the Alpine 3.21 runtime. No Rust shared library or
+Rust compiler is required in the runtime image. Docker execution must be verified
+separately from the host package probe; a host-only result does not prove musl
+or container compatibility.
 
 Key details:
 - Runs as non-root user `appuser` (UID 1001)
@@ -272,9 +263,14 @@ For local development without Docker:
 
 ```bash
 cd retrocast
-make build          # Build binary to bin/retrocast
+make build          # Build required Rust archive, then Go binary to bin/retrocast
 make test           # Run all tests (race detector enabled)
 make run            # Build and run
 ```
 
-Requires a running PostgreSQL and Redis instance. Set `DATABASE_URL` and `REDIS_URL` environment variables or use a `retrocast.toml` config file.
+Host builds require Go 1.25.7+, Rust 1.93+, Cargo, Make, a C compiler, and
+`CGO_ENABLED=1` on Linux or macOS. CI pins Rust 1.99.1. Direct Go commands require
+`make native` first. Pure-Go (`CGO_ENABLED=0`) server builds are unsupported.
+`make permission-test` and `make package-check` use synthetic data and need no services.
+
+Running the application and the full integration suite requires PostgreSQL and Redis. Set `DATABASE_URL` and `REDIS_URL` environment variables or use a `retrocast.toml` config file.

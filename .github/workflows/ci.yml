@@ -5,9 +5,40 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
+  native:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      CGO_ENABLED: '1'
+      RUSTUP_TOOLCHAIN: '1.99.1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt,clippy --no-self-update
+      - name: Rust unit, ABI, lint, and format checks
+        working-directory: retrocast
+        run: make native-test
+      - name: Frozen-oracle parity and real permission service checks
+        working-directory: retrocast
+        run: make permission-test
+      - name: Relocated native package and transport failure checks
+        working-directory: retrocast
+        run: make package-check
+
   test:
     runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: '1'
+      RUSTUP_TOOLCHAIN: '1.99.1'
     services:
       postgres:
         image: postgres:17
@@ -31,6 +62,11 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt,clippy --no-self-update
+      - name: Build required Rust archive before Go analysis
+        working-directory: retrocast
+        run: make native
       - name: Lint
         uses: golangci/golangci-lint-action@v9
         with:
@@ -46,10 +82,10 @@ jobs:
         env:
           DATABASE_URL: postgres://retrocast:password@localhost:5432/retrocast?sslmode=disable
           REDIS_URL: redis://localhost:6379
-        run: go test -v -race ./...
+        run: go test -v -race -count=1 ./...
       - name: Build
         working-directory: retrocast
-        run: go build ./cmd/retrocast
+        run: go build -ldflags='-linkmode=external' ./cmd/retrocast
 
   web:
     runs-on: ubuntu-latest
@@ -74,7 +110,7 @@ jobs:
         run: pnpm build
 
   docker:
-    needs: [test, web]
+    needs: [test, web, native]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     permissions:

@@ -3,3 +3,5 @@ bin/
 *.md
 .env*
 .claude/
+native/permissions/target/
+native/permissions/lib/

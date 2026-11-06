@@ -593,6 +593,14 @@ To check permissions: `userPermissions & PermSendMessages != 0`
 
 A user's effective permissions are computed by OR-ing all their role permission bitfields, then applying any channel-specific overrides (allow/deny per role per channel).
 
+The backend implements that complete base/channel math in the required Rust crate
+`retrocast/native/permissions`, statically linked in-process through cgo. Public Go
+resolver signatures and signed 64-bit masks remain compatible. Go retains queries,
+role filtering, owner/membership policy, handlers and all other server subsystems.
+Host builds require Rust, a C compiler and `CGO_ENABLED=1`; see
+[permission resolution](docs/permissions.md) for native failure handling and
+[deployment](docs/deployment.md) for packaging.
+
 ---
 
 ## Deployment Architecture

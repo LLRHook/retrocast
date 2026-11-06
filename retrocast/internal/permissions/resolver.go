@@ -1,52 +1,57 @@
 package permissions
 
-import "github.com/victorivanov/retrocast/internal/models"
+import (
+	"fmt"
 
-// ComputeBasePermissions computes guild-level permissions for a member.
-//  1. Start with the @everyone role permissions.
-//  2. OR all the member's assigned role permissions.
-//  3. If the result includes ADMINISTRATOR, return PermAll.
-func ComputeBasePermissions(everyoneRole models.Role, memberRoles []models.Role) Permission {
-	perms := Permission(everyoneRole.Permissions)
+	"github.com/victorivanov/retrocast/internal/models"
+)
 
-	for _, role := range memberRoles {
-		perms = perms.Add(Permission(role.Permissions))
-	}
-
-	if perms.Has(PermAdministrator) {
-		return PermAll
-	}
-	return perms
+// NativeError reports an ABI/argument/panic status from the required Rust engine.
+// Permission results accompanying a nonzero status are never used.
+type NativeError struct {
+	Operation string
+	Status    int32
 }
 
-// ComputeChannelPermissions applies channel-specific overrides to base permissions.
-//  1. Start with base permissions.
-//  2. If ADMINISTRATOR, return PermAll (skip overrides).
-//  3. Apply @everyone channel override: deny first, then allow.
-//  4. Apply role overrides: OR all role allows, OR all role denies, then deny, then allow.
-//  5. Return final permissions.
+func (e *NativeError) Error() string {
+	return fmt.Sprintf("Rust permission resolver %s failed (ABI status %d)", e.Operation, e.Status)
+}
+
+// ComputeBasePermissions computes the union of everyone and member roles in Rust,
+// returning PermAll when Administrator is set. It panics on a native fault because
+// its historical signature cannot return an error; use the checked form in services.
+func ComputeBasePermissions(everyoneRole models.Role, memberRoles []models.Role) Permission {
+	return mustPermission(ComputeBasePermissionsChecked(everyoneRole, memberRoles))
+}
+
+// ComputeBasePermissionsChecked is the error-returning form used by request paths.
+func ComputeBasePermissionsChecked(everyoneRole models.Role, memberRoles []models.Role) (Permission, error) {
+	return nativeBase(nativeABIVersion, everyoneRole.Permissions, memberRoles)
+}
+
+// ComputeChannelPermissions resolves the complete channel mask in Rust: base
+// Administrator bypass, everyone deny/allow, then aggregated role deny/allow.
+// It panics on a native fault; use the checked form in services.
 func ComputeChannelPermissions(basePerms Permission, everyoneOverride *models.ChannelOverride, roleOverrides []models.ChannelOverride) Permission {
-	if basePerms.Has(PermAdministrator) {
-		return PermAll
+	return mustPermission(ComputeChannelPermissionsChecked(basePerms, everyoneOverride, roleOverrides))
+}
+
+// ComputeChannelPermissionsChecked never treats a transport fault as a mask,
+// including when the requested mask is zero or the base has Administrator.
+func ComputeChannelPermissionsChecked(basePerms Permission, everyoneOverride *models.ChannelOverride, roleOverrides []models.ChannelOverride) (Permission, error) {
+	return nativeChannel(nativeABIVersion, basePerms, everyoneOverride, roleOverrides)
+}
+
+func nativeResult(operation string, mask int64, status int32) (Permission, error) {
+	if status != 0 {
+		return 0, &NativeError{Operation: operation, Status: status}
 	}
+	return Permission(mask), nil
+}
 
-	perms := basePerms
-
-	// Apply @everyone channel override first.
-	if everyoneOverride != nil {
-		perms = perms.Remove(Permission(everyoneOverride.Deny))
-		perms = perms.Add(Permission(everyoneOverride.Allow))
+func mustPermission(mask Permission, err error) Permission {
+	if err != nil {
+		panic(err)
 	}
-
-	// Aggregate role overrides: OR all allows together, OR all denies together.
-	var roleAllow, roleDeny Permission
-	for _, o := range roleOverrides {
-		roleAllow = roleAllow.Add(Permission(o.Allow))
-		roleDeny = roleDeny.Add(Permission(o.Deny))
-	}
-
-	perms = perms.Remove(roleDeny)
-	perms = perms.Add(roleAllow)
-
-	return perms
+	return mask
 }
