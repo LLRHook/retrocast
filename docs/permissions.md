@@ -2,7 +2,11 @@
 
 Retrocast uses a two-level bitfield RBAC system modeled after Discord's permission system. Permissions are stored as `int64` bitmasks on roles, with per-channel overrides for fine-grained control.
 
-Source: `retrocast/internal/permissions/`
+Source: `retrocast/internal/permissions/` (Go API/cgo bridge) and
+`retrocast/native/permissions/` (mandatory Rust engine). Both base and channel
+resolution execute in-process in Rust on normal service and middleware paths.
+Go retains permission names, role filtering, repository queries, membership,
+ownership, and error/response policy.
 
 ## Permission Bits
 
@@ -40,7 +44,7 @@ PermAllText  = PermViewChannel | PermSendMessages | PermManageMessages |
 PermAllVoice = PermConnect | PermSpeak | PermMuteMembers |
                PermDeafenMembers | PermMoveMembers
 
-PermAll      = 0x7FFFFFFFFFFFFFFF  // every bit set
+PermAll      = 0x7FFFFFFFFFFFFFFF  // all non-sign bits; the sign bit remains clear
 ```
 
 ## Default @everyone Permissions
@@ -78,18 +82,9 @@ Computes guild-level permissions for a member:
 2. OR all the member's explicitly assigned role `permissions` bitfields
 3. If the result includes `PermAdministrator`, return `PermAll` (bypass everything)
 
-```go
-func ComputeBasePermissions(everyoneRole models.Role, memberRoles []models.Role) Permission {
-    perms := Permission(everyoneRole.Permissions)
-    for _, role := range memberRoles {
-        perms = perms.Add(Permission(role.Permissions))
-    }
-    if perms.Has(PermAdministrator) {
-        return PermAll
-    }
-    return perms
-}
-```
+The public Go signature remains `ComputeBasePermissions(models.Role, []models.Role) Permission`.
+The bridge copies only permission masks, then Rust ORs every assigned mask and
+performs the Administrator normalization. No role union is computed in Go.
 
 ### Phase 2: Channel Permissions (`ComputeChannelPermissions`)
 
@@ -101,34 +96,64 @@ Applies channel-specific overrides on top of base permissions:
 4. Apply aggregated role overrides: **deny** first, then **allow**
 5. Return final permissions
 
-```go
-func ComputeChannelPermissions(basePerms Permission,
-    everyoneOverride *models.ChannelOverride,
-    roleOverrides []models.ChannelOverride) Permission {
+The public Go signature remains `ComputeChannelPermissions(Permission, *models.ChannelOverride, []models.ChannelOverride) Permission`.
+The bridge copies the optional everyone override and role override arrays, then
+Rust performs the bypass, everyone deny/allow, and complete role aggregation.
+An override that adds Administrator does not retroactively trigger a bypass.
+Nil/empty inputs, duplicates, order-independent role aggregation, negative masks,
+and unknown/future/sign bits retain the original signed `int64` bit patterns.
 
-    if basePerms.Has(PermAdministrator) {
-        return PermAll
-    }
-    perms := basePerms
+## Required Native Build and Failures
 
-    // @everyone override
-    if everyoneOverride != nil {
-        perms = perms.Remove(Permission(everyoneOverride.Deny))
-        perms = perms.Add(Permission(everyoneOverride.Allow))
-    }
+`make native` builds the dependency-free Rust crate with `--locked --offline`
+and places its archive in `native/permissions/lib/`. It then hashes that archive
+into generated `internal/permissions/native_fingerprint.go`. Go's build cache
+does not track linked C library contents; the generated source makes native
+content part of the package inputs. The digest is also used in native error
+diagnostics, so it survives into the compiled Go package and changes the content
+identity used by downstream linking after Rust-only edits.
+Unchanged archive bytes preserve the fingerprint file and its timestamp.
+`make build`, `make test`,
+`make permission-test`, and `make package-check` require that build automatically.
+Direct Go commands require `make native` first and `CGO_ENABLED=1`. Supported
+host builds are Linux and macOS with matching Go/Rust/C architectures. The Docker
+build uses Rust and Go in Alpine 3.21, then links a static executable for the same
+Alpine runtime. There is no Go implementation selected when Rust is unavailable.
 
-    // Role overrides (aggregated)
-    var roleAllow, roleDeny Permission
-    for _, o := range roleOverrides {
-        roleAllow = roleAllow.Add(Permission(o.Allow))
-        roleDeny = roleDeny.Add(Permission(o.Deny))
-    }
-    perms = perms.Remove(roleDeny)
-    perms = perms.Add(roleAllow)
+ABI version 1 borrows pointer-free arrays only for a synchronous call and returns
+an `int64` mask plus a status. Null arrays are accepted only with length zero.
+Rust rejects version, flag, alignment, null/length and size faults; caught unwinding
+panics return an error. Foreign callers must still supply live, valid allocations;
+arbitrary invalid addresses, aborting panics and hardware faults cannot be made
+recoverable by this ABI. Rust retains no pointers or mutable global resolver state.
 
-    return perms
-}
-```
+Request paths use the additive `ComputeBasePermissionsChecked` and
+`ComputeChannelPermissionsChecked` forms. A nonzero native status discards the
+mask and returns `*permissions.NativeError`; services retain that cause while
+returning the existing public `INTERNAL` response. Middleware logs the native
+error and returns `INTERNAL`. The original signatures panic on a native error
+because they cannot return one. A native fault never becomes an allowed check,
+even for an empty requested mask, and never selects a legacy fallback.
+
+The frozen pre-port Go resolver and service policy live exclusively in `_test.go`
+files. Exhaustive bounded masks, full-width seeded cases, synthetic repository
+fakes, and the package probe exercise the real Rust path. `make package-check`
+relocates a probe containing the Rust archive and tests absent archives, disabled cgo,
+and hostile ABI error results in isolated synthetic modules, without services.
+It also replaces the native archive twice at a stable path under warm Go caches
+and requires the second executable to observe the new native status, without
+changing host code, cleaning caches or forcing a full rebuild.
+The regression also checks that both archive fingerprints survive in the compiled
+Go packages and that their package content IDs differ. `make cache-check` runs
+only this focused synthetic-archive regression without rebuilding Rust or starting
+services. Public HTTP errors still return the existing generic `INTERNAL` response;
+the native build fingerprint is retained in internal error diagnostics.
+
+The raw `RequireGuildPermission(int64)` keeps its existing assigned-roles-only,
+any-bit policy and unconditional Administrator bypass. The typed guild/channel
+methods retain everyone-role lookup and all-bit checks. In particular, a typed
+request for the sign bit is not satisfied by `PermAll`; these entry-point policies
+are intentionally preserved.
 
 ## Override Precedence
 

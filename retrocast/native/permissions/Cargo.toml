@@ -1,0 +1,16 @@
+[package]
+name = "retrocast-permissions"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.93"
+publish = false
+
+[lib]
+name = "retrocast_permissions"
+crate-type = ["staticlib", "rlib"]
+
+[profile.release]
+panic = "unwind"
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"

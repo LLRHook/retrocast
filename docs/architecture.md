@@ -11,6 +11,12 @@ The platform consists of two main codebases:
 
 Supporting infrastructure runs via Docker Compose: PostgreSQL, Redis, MinIO, LiveKit, Caddy, and Prometheus.
 
+The server links the required Rust crate in `retrocast/native/permissions/` through
+a static C ABI/cgo bridge. The complete base/channel permission resolver executes
+in-process in Rust; repository/membership/owner policy, HTTP, gateway, authentication,
+persistence, voice, and permission name rendering remain Go. See
+[permissions.md](permissions.md) for the build and error boundary.
+
 ## Component Diagram
 
 ```

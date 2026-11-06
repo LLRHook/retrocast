@@ -30,3 +30,8 @@ Thumbs.db
 bin/
 /dist/
 retrocast/retrocast
+
+# Rust permission engine (source and lockfile remain tracked)
+retrocast/native/permissions/target/
+retrocast/native/permissions/lib/
+retrocast/internal/permissions/native_fingerprint.go

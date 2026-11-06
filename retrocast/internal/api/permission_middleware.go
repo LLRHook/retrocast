@@ -62,7 +62,11 @@ func RequireGuildPermission(
 				return errorJSON(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 			}
 
-			basePerms := permissions.ComputeBasePermissions(*everyoneRole, memberRoles)
+			basePerms, err := permissions.ComputeBasePermissionsChecked(*everyoneRole, memberRoles)
+			if err != nil {
+				c.Logger().Error(err)
+				return errorJSON(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
+			}
 
 			if !basePerms.Has(perm) {
 				return errorJSON(c, http.StatusForbidden, "FORBIDDEN", "you do not have permission to perform this action")
@@ -138,7 +142,11 @@ func RequireChannelPermission(
 				return errorJSON(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 			}
 
-			basePerms := permissions.ComputeBasePermissions(*everyoneRole, memberRoles)
+			basePerms, err := permissions.ComputeBasePermissionsChecked(*everyoneRole, memberRoles)
+			if err != nil {
+				c.Logger().Error(err)
+				return errorJSON(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
+			}
 
 			// Fetch channel overrides.
 			channelOverrides, err := overrides.GetByChannel(ctx, channelID)
@@ -164,7 +172,11 @@ func RequireChannelPermission(
 				}
 			}
 
-			channelPerms := permissions.ComputeChannelPermissions(basePerms, everyoneOverride, roleOverrides)
+			channelPerms, err := permissions.ComputeChannelPermissionsChecked(basePerms, everyoneOverride, roleOverrides)
+			if err != nil {
+				c.Logger().Error(err)
+				return errorJSON(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
+			}
 
 			if !channelPerms.Has(perm) {
 				return errorJSON(c, http.StatusForbidden, "FORBIDDEN", "you do not have permission to perform this action")

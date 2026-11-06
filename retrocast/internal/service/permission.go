@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/victorivanov/retrocast/internal/database"
 	"github.com/victorivanov/retrocast/internal/models"
@@ -58,12 +59,14 @@ func (p *PermissionChecker) RequireGuildPermission(ctx context.Context, guildID,
 		return Internal("INTERNAL", "internal server error")
 	}
 
-	var perms int64
-	for _, r := range roles {
-		perms |= r.Permissions
+	// This raw-int64 entry point historically uses only assigned roles, an
+	// any-bit check, and an unconditional Administrator bypass. Keep that policy.
+	computed, err := permissions.ComputeBasePermissionsChecked(models.Role{}, roles)
+	if err != nil {
+		return permissionResolutionError(err)
 	}
-
-	if perms&int64(permissions.PermAdministrator) != 0 {
+	perms := int64(computed)
+	if computed.Has(permissions.PermAdministrator) {
 		return nil
 	}
 
@@ -113,7 +116,10 @@ func (p *PermissionChecker) RequireChannelPermission(ctx context.Context, guildI
 		}
 	}
 
-	basePerms := permissions.ComputeBasePermissions(everyoneRole, memberRoles)
+	basePerms, err := permissions.ComputeBasePermissionsChecked(everyoneRole, memberRoles)
+	if err != nil {
+		return permissionResolutionError(err)
+	}
 
 	channelOverrides, err := p.overrides.GetByChannel(ctx, channelID)
 	if err != nil {
@@ -136,7 +142,10 @@ func (p *PermissionChecker) RequireChannelPermission(ctx context.Context, guildI
 		}
 	}
 
-	computed := permissions.ComputeChannelPermissions(basePerms, everyoneOverride, roleOverrides)
+	computed, err := permissions.ComputeChannelPermissionsChecked(basePerms, everyoneOverride, roleOverrides)
+	if err != nil {
+		return permissionResolutionError(err)
+	}
 	if !computed.Has(perm) {
 		return Forbidden("MISSING_PERMISSIONS", "you do not have the required permissions")
 	}
@@ -184,7 +193,10 @@ func (p *PermissionChecker) RequireGuildPermissionByPerm(ctx context.Context, gu
 		}
 	}
 
-	computed := permissions.ComputeBasePermissions(everyoneRole, memberRoles)
+	computed, err := permissions.ComputeBasePermissionsChecked(everyoneRole, memberRoles)
+	if err != nil {
+		return permissionResolutionError(err)
+	}
 	if !computed.Has(perm) {
 		return Forbidden("MISSING_PERMISSIONS", "you do not have the required permissions")
 	}
@@ -217,4 +229,10 @@ func (p *PermissionChecker) HighestRolePosition(ctx context.Context, guildID, us
 		}
 	}
 	return highest, nil
+}
+
+// Preserve the public INTERNAL response and retain the native status in the
+// error chain for diagnostics. A failed transport never reaches a bit check.
+func permissionResolutionError(err error) error {
+	return fmt.Errorf("%w: %w", Internal("INTERNAL", "internal server error"), err)
 }
