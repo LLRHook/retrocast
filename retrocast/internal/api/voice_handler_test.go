@@ -3,6 +3,8 @@ package api
 import (
 	"context"
 	"net/http"
+	"reflect"
+	"strconv"
 	"testing"
 	"time"
 
@@ -267,6 +269,15 @@ func TestLeaveVoice_Success(t *testing.T) {
 	if len(gw.events) == 0 {
 		t.Fatal("expected gateway event to be dispatched")
 	}
+	payload := assertGatewayPayload(t, gw, "VOICE_STATE_UPDATE", map[string]any{"guild_id": strconv.FormatInt(testGuildID, 10), "user_id": strconv.FormatInt(testUserID, 10), "channel_id": nil})
+	// Null is unchanged by a missing string tag. Exercise the captured nullable
+	// serializer with a populated copy too, without changing leave's null event.
+	populated := reflect.New(reflect.TypeOf(payload)).Elem()
+	populated.Set(reflect.ValueOf(payload))
+	id := int64(9007199254740993)
+	populated.FieldByName("ChannelID").Set(reflect.ValueOf(&id))
+	assertPayloadJSON(t, populated.Interface(), map[string]any{"channel_id": "9007199254740993"})
+
 }
 
 func TestLeaveVoice_NotInChannel(t *testing.T) {

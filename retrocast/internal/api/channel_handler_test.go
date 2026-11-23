@@ -20,8 +20,12 @@ func newTestChannelHandler(
 	guilds *mockGuildRepo,
 	roles *mockRoleRepo,
 	overrides *mockChannelOverrideRepo,
+	dispatchers ...*mockGateway,
 ) *ChannelHandler {
 	gw := &mockGateway{}
+	if len(dispatchers) > 0 {
+		gw = dispatchers[0]
+	}
 	sf := testSnowflake()
 	perms := service.NewPermissionChecker(guilds, members, roles, overrides)
 	svc := service.NewChannelService(channels, members, sf, gw, perms)
@@ -29,7 +33,7 @@ func newTestChannelHandler(
 }
 
 // allowAllChannelHandler builds a handler where the caller is always the guild owner.
-func allowAllChannelHandler(channels *mockChannelRepo, members *mockMemberRepo) *ChannelHandler {
+func allowAllChannelHandler(channels *mockChannelRepo, members *mockMemberRepo, dispatchers ...*mockGateway) *ChannelHandler {
 	guilds := &mockGuildRepo{
 		GetByIDFn: func(_ context.Context, id int64) (*models.Guild, error) {
 			// Caller 1000 is always the owner.
@@ -44,7 +48,7 @@ func allowAllChannelHandler(channels *mockChannelRepo, members *mockMemberRepo) 
 			return []models.Role{{ID: 1, IsDefault: true, Permissions: int64(permissions.PermAdministrator)}}, nil
 		},
 	}
-	return newTestChannelHandler(channels, members, guilds, roles, &mockChannelOverrideRepo{})
+	return newTestChannelHandler(channels, members, guilds, roles, &mockChannelOverrideRepo{}, dispatchers...)
 }
 
 func TestCreateChannel_Success(t *testing.T) {
@@ -277,7 +281,8 @@ func TestDeleteChannel_WithPermission(t *testing.T) {
 		},
 	}
 
-	h := allowAllChannelHandler(channels, &mockMemberRepo{})
+	gw := &mockGateway{}
+	h := allowAllChannelHandler(channels, &mockMemberRepo{}, gw)
 
 	c, rec := newTestContext(http.MethodDelete, "/api/v1/channels/100", nil)
 	c.SetParamNames("id")
@@ -294,4 +299,5 @@ func TestDeleteChannel_WithPermission(t *testing.T) {
 	if !deleted {
 		t.Error("expected channel delete to be called")
 	}
+	assertGatewayPayload(t, gw, "CHANNEL_DELETE", map[string]any{"id": "100", "guild_id": "500"})
 }

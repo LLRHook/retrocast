@@ -79,6 +79,9 @@ func HTTPErrorHandler(err error, c echo.Context) {
 		}
 	}
 	code := "INTERNAL"
+	if status >= 400 && status < 500 {
+		code = "BAD_REQUEST"
+	}
 	switch status {
 	case 400:
 		code = "BAD_REQUEST"

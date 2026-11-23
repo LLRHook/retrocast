@@ -9,7 +9,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node --test contract.test.mjs"
+    "test": "node --test --test-timeout=10000 contract.test.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.5",

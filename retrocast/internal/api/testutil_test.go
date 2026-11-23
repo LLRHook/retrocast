@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io"
 	"net/http/httptest"
+	"reflect"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -694,4 +696,33 @@ func decodeResponse(rec *httptest.ResponseRecorder, value any) error {
 		return fmt.Errorf("success must contain only data")
 	}
 	return json.Unmarshal(data, value)
+}
+
+func assertGatewayPayload(t *testing.T, gw *mockGateway, event string, expected map[string]any) any {
+	t.Helper()
+	for _, captured := range gw.events {
+		if captured.Event == event {
+			assertPayloadJSON(t, captured.Data, expected)
+			return captured.Data
+		}
+	}
+	t.Fatalf("gateway event %s missing", event)
+	return nil
+}
+func assertPayloadJSON(t *testing.T, payload any, expected map[string]any) {
+	t.Helper()
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatal(err)
+	}
+	for field, want := range expected {
+		value, ok := got[field]
+		if !ok || !reflect.DeepEqual(value, want) {
+			t.Errorf("%s JSON = %v (%T), want %v (%T)", field, value, value, want, want)
+		}
+	}
 }

@@ -67,24 +67,29 @@ export const useAuthStore = create<AuthState>()((set, get) => {
     },
 
     logout: async () => {
-      const { refreshToken } = get();
-      if (refreshToken) {
-        try {
-          await api.post("/api/v1/auth/logout", { refresh_token: refreshToken });
-        } catch (err) {
-          if (!(err instanceof ApiClientError) || err.status !== 401) throw err;
-          // Refresh can rotate the token; revoke the current pair on retry.
-          await get().refreshAccessToken();
-          await api.post("/api/v1/auth/logout", { refresh_token: get().refreshToken });
+      try {
+        const { refreshToken } = get();
+        if (refreshToken) {
+          try {
+            await api.post("/api/v1/auth/logout", { refresh_token: refreshToken });
+          } catch (err) {
+            if (!(err instanceof ApiClientError) || err.status !== 401) throw err;
+            // Refresh can rotate the token; revoke the current pair on retry.
+            await get().refreshAccessToken();
+            await api.post("/api/v1/auth/logout", { refresh_token: get().refreshToken });
+          }
         }
+      } catch {
+        console.warn("Could not revoke the server session while signing out");
+      } finally {
+        localStorage.removeItem("refreshToken");
+        set({
+          user: null,
+          accessToken: null,
+          refreshToken: null,
+          isAuthenticated: false,
+        });
       }
-      localStorage.removeItem("refreshToken");
-      set({
-        user: null,
-        accessToken: null,
-        refreshToken: null,
-        isAuthenticated: false,
-      });
     },
 
     setServerUrl: (url) => {
