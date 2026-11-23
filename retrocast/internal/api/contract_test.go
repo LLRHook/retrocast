@@ -37,8 +37,8 @@ func TestContractAllHandlers(t *testing.T) {
 }
 func TestContractErrors(t *testing.T) {
 	e := echo.New()
-	e.HTTPErrorHandler = HTTPErrorHandler
 	tokens := auth.NewTokenService("test-secret")
+	SetupRouter(e, &Dependencies{TokenService: tokens})
 	e.GET("/protected", func(c echo.Context) error { return c.NoContent(204) }, tokens.Middleware())
 	e.POST("/large", func(c echo.Context) error { var v any; return c.Bind(&v) }, middleware.BodyLimit("1B"))
 	e.GET("/internal", func(c echo.Context) error { return echo.NewHTTPError(500, "private database detail") })

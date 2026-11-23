@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { api } from "@/lib/api";
+import { api, ApiClientError } from "@/lib/api";
 import type { User } from "@/types";
 
 interface AuthResponse {
@@ -69,7 +69,14 @@ export const useAuthStore = create<AuthState>()((set, get) => {
     logout: async () => {
       const { refreshToken } = get();
       if (refreshToken) {
-        await api.post("/api/v1/auth/logout", { refresh_token: refreshToken });
+        try {
+          await api.post("/api/v1/auth/logout", { refresh_token: refreshToken });
+        } catch (err) {
+          if (!(err instanceof ApiClientError) || err.status !== 401) throw err;
+          // Refresh can rotate the token; revoke the current pair on retry.
+          await get().refreshAccessToken();
+          await api.post("/api/v1/auth/logout", { refresh_token: get().refreshToken });
+        }
       }
       localStorage.removeItem("refreshToken");
       set({

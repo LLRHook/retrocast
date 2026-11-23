@@ -55,3 +55,14 @@ test('REST and gateway channel create converge without duplicate rows',async()=>
  useChannelsStore.getState().addChannel(channel);useChannelsStore.getState().addChannel(channel);
  assert.equal(useChannelsStore.getState().channelsByGuild.get('guild').length,1);
 });
+
+test('logout with expired access revokes the rotated refresh token',async()=>{
+ useAuthStore.setState({refreshToken:'expired-access-refresh',accessToken:'expired',isAuthenticated:true});let calls=0;
+ globalThis.fetch=async(url,options)=>{
+  calls++;
+  if(calls===1) return Response.json({error:{code:'UNAUTHORIZED',message:'expired'}},{status:401});
+  if(calls===2) {assert.ok(url.endsWith('/auth/refresh'));return Response.json({data:{access_token:'new-access',refresh_token:'current-refresh'}})}
+  assert.ok(url.endsWith('/auth/logout'));assert.equal(JSON.parse(options.body).refresh_token,'current-refresh');return new Response(null,{status:204});
+ };
+ await useAuthStore.getState().logout();assert.equal(calls,3);assert.equal(useAuthStore.getState().isAuthenticated,false);
+});
