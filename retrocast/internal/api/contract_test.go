@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/victorivanov/retrocast/internal/auth"
 	"github.com/victorivanov/retrocast/internal/gateway"
 	"github.com/victorivanov/retrocast/internal/models"
@@ -36,6 +37,9 @@ func TestContractAllHandlers(t *testing.T) {
 	}
 }
 func TestContractErrors(t *testing.T) {
+	oldRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+	t.Cleanup(func() { prometheus.DefaultRegisterer = oldRegistry })
 	e := echo.New()
 	tokens := auth.NewTokenService("test-secret")
 	SetupRouter(e, &Dependencies{TokenService: tokens})
