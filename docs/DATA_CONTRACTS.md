@@ -1,6 +1,6 @@
 # Retrocast — Data Contracts
 
-Status: Baselined (rev 4)
+Status: Baselined (rev 5)
 Related: [SRS](SRS.md) · [Architecture](ARCHITECTURE.md) · [Product Brief](PRODUCT_BRIEF.md)
 
 This document records the data and interface contracts as they exist at commit `6bc385e`
@@ -350,3 +350,4 @@ together with the iOS client (Q-025); APNs is the one optional outside service G
 | 1 | 2026-11-23T12:58:05-05:00 | 918f0a8471d3 | INIT | Initial contracts ENT-001–ENT-022, API-001–API-058, EVT-001–EVT-030 |
 | 2 | 2026-11-23T15:17:07-05:00 | 701009f47d68 | REVISION | Status Baselined; REST contract v2.0.0 (all success bodies in data, ADR-013); API-059; §3.2 permission resolution, §3.3 snowflake ids; new config keys and error codes; §9 migrations |
 | 4 | 2026-11-23T15:52:00-05:00 | c350426f94c5 | REVISION | PR #44: permission management, default roles, channel search filtering, checked typing and kick hierarchy; residual B3 delivery gaps recorded |
+| 5 | 2026-11-23T16:25:23-05:00 | 7af05226f577 | REVISION | PR #44 round 2: SV-FR-078 grant limits, fixed default-role position, API notes and restored evidence |

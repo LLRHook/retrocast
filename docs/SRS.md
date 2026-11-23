@@ -2,7 +2,7 @@
 
 Conforms to the SRS content outline of ISO/IEC/IEEE 29148:2018 §9.6.
 Related: [Product Brief](PRODUCT_BRIEF.md) · [Data Contracts](DATA_CONTRACTS.md) · [Architecture](ARCHITECTURE.md)
-Status: Baselined (rev 2)
+Status: Baselined (rev 5)
 
 > **Rev 2 (2026-11-23).** Rev 1 was written unattended from repository evidence. On
 > 2026-11-23 Victor Ivanov accepted every recommendation of the product brief (Q-001–Q-034,
@@ -262,3 +262,4 @@ ARCHITECTURE §8.
 | 1 | 2026-11-23T12:58:05-05:00 | 918f0a8471d3 | INIT | Initial SRS index from repository evidence (unattended INIT); TBD-001–TBD-040 |
 | 2 | 2026-11-23T15:17:07-05:00 | 701009f47d68 | REVISION | Owner decisions Q-001–Q-034 recorded (accepted all recommendations, PR #25); status Baselined; TBD-001–TBD-040 resolved; Pilot scope and exit criteria; legacy docs moved |
 | 3 | 2026-11-23T15:35:12-05:00 | 8cbf60de297e | REVISION | Review fixes (PR #25): Pilot exit includes D-08 and D-09 (RISK-002, Q-003) |
+| 5 | 2026-11-23T16:25:23-05:00 | 7af05226f577 | REVISION | PR #44 round 2: SV-FR-078 grant limits, fixed default-role position, API notes and restored evidence |
