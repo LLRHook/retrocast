@@ -1,6 +1,6 @@
 # Retrocast — Data Contracts
 
-Status: Baselined (rev 3)
+Status: Baselined (rev 4)
 Related: [SRS](SRS.md) · [Architecture](ARCHITECTURE.md) · [Product Brief](PRODUCT_BRIEF.md)
 
 This document records the data and interface contracts as they exist at commit `6bc385e`
@@ -119,8 +119,7 @@ Source: `retrocast/internal/permissions/bitfield.go`.
 `DefaultEveryonePerms` (bitfield.go:46) is VIEW_CHANNEL, SEND_MESSAGES, READ_MESSAGE_HISTORY,
 CONNECT, SPEAK, CREATE_INVITE and CHANGE_NICKNAME: bits 0, 1, 8, 9, 15, 16 and 17, value
 230147 (`0x38303`). Rev 2 makes it the `@everyone` default for new guilds (SV-FR-008, Q-014).
-Guild creation gives `@everyone` only the first three today, value 32771
-(`internal/service/guild.go:64–72`, D-27). `PermAll` is `0x7FFFFFFFFFFFFFFF`. The legacy
+Guild creation uses that default (PR #44, D-27 fixed); existing guilds keep their stored permissions. `PermAll` is `0x7FFFFFFFFFFFFFFF`. The legacy
 docs/legacy/permissions.md gives the default as `0x10307`, which does not match these bits.
 
 ### 3.2 Permission resolution
@@ -225,7 +224,7 @@ Handler errors use `{"error": {"code": "<CODE>", "message": "<text>"}}`
 (`retrocast/internal/api/response.go`). Service error kinds map to statuses: not found 404,
 forbidden 403, role hierarchy 403, bad request 400, conflict 409, unauthorized 401, gone 410,
 anything else 500 `INTERNAL`. Rate limiting returns 429 `RATE_LIMITED` with `Retry-After`.
-The JWT middleware and the typing handler return Echo's `{"message": …}` body instead
+The JWT middleware returns Echo's message body instead
 (SV-IR-003). REST contract v2.0.0 keeps this error shape; only success bodies change.
 
 Codes in use: `INVALID_USERNAME`, `INVALID_PASSWORD`, `USERNAME_TAKEN`,
@@ -346,4 +345,4 @@ together with the iOS client (Q-025); APNs is the one optional outside service G
 |---|---|---|---|---|
 | 1 | 2026-11-23T12:58:05-05:00 | 918f0a8471d3 | INIT | Initial contracts ENT-001–ENT-022, API-001–API-058, EVT-001–EVT-030 |
 | 2 | 2026-11-23T15:17:07-05:00 | 701009f47d68 | REVISION | Status Baselined; REST contract v2.0.0 (all success bodies in data, ADR-013); API-059; §3.2 permission resolution, §3.3 snowflake ids; new config keys and error codes; §9 migrations |
-| 3 | 2026-11-23T15:50:03-05:00 | 46b82d13b6f5 | REVISION | PR #44: permission management, default roles, channel search filtering, checked typing and kick hierarchy; residual B3 delivery gaps recorded |
+| 4 | 2026-11-23T15:50:03-05:00 | 46b82d13b6f5 | REVISION | PR #44: permission management, default roles, channel search filtering, checked typing and kick hierarchy; residual B3 delivery gaps recorded |

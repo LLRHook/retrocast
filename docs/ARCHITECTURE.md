@@ -1,6 +1,6 @@
 # Retrocast — Architecture
 
-Status: Baselined (rev 3)
+Status: Baselined (rev 4)
 Related: [SRS](SRS.md) · [Data Contracts](DATA_CONTRACTS.md) · [Product Brief](PRODUCT_BRIEF.md)
 
 It describes the system as built at commit `6bc385e`, re-read at `origin/main` 55e50eb
@@ -259,7 +259,7 @@ access token in IDENTIFY and RESUME.
 ### 7.2 Authorisation
 Permission bitfields on roles and per-channel allow and deny overrides
 (DATA_CONTRACTS §3.1). Owner and Administrator bypass every check (SV-FR-046). Channel checks
-follow DATA_CONTRACTS §3.2; guild-level checks and role management have the gaps D-01–D-04.
+follow DATA_CONTRACTS section 3.2; guild checks include the default role and role management requires MANAGE_ROLES (PR #44).
 Kick and ban act only on members ranked below the caller (SV-FR-070; kick fixed in PR #44).
 Resolution is in Go (ADR-009).
 
@@ -282,8 +282,7 @@ provisioned Grafana dashboard (SYS-FR-001); `/metrics` stays inside the compose 
 (SV-NFR-012).
 
 ### 7.6 Error handling
-One JSON error envelope with stable codes (DATA_CONTRACTS §5), except for the JWT middleware
-and the typing handler (SV-IR-003). Every success body is `{"data": …}` from REST contract
+One JSON error envelope with stable codes (DATA_CONTRACTS §5), except for the JWT middleware (SV-IR-003). Every success body is `{"data": …}` from REST contract
 v2.0.0 (SV-IR-007, ADR-013).
 
 ### 7.7 Identifiers
@@ -394,4 +393,4 @@ See [SRS §1.3](SRS.md) and §5.3.
 | 1 | 2026-11-23T12:58:05-05:00 | 918f0a8471d3 | INIT | Initial architecture CMP-001–CMP-011, ADR-001–ADR-012, defects D-01–D-24 |
 | 2 | 2026-11-23T15:17:07-05:00 | 701009f47d68 | REVISION | Renamed from ARCHITECTURE_SPEC.md; status Baselined; Go 1.26.11; CMP-012; ADR-013–ADR-020 and assumptions; defects linked to issues; D-13 partly fixed by PR #23; D-25–D-30 |
 | 3 | 2026-11-23T15:35:12-05:00 | 8cbf60de297e | REVISION | Review fixes: D-08 and D-09 block the Pilot (RISK-002); D-21 Pilot with #43; issues #38–#42 linked for D-26–D-30 |
-| 3 | 2026-11-23T15:50:03-05:00 | 46b82d13b6f5 | REVISION | PR #44: permission management, default roles, channel search filtering, checked typing and kick hierarchy; residual B3 delivery gaps recorded |
+| 4 | 2026-11-23T15:50:03-05:00 | 46b82d13b6f5 | REVISION | PR #44: permission management, default roles, channel search filtering, checked typing and kick hierarchy; residual B3 delivery gaps recorded |
