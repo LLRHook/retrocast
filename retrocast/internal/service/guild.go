@@ -65,7 +65,7 @@ func (s *GuildService) CreateGuild(ctx context.Context, userID int64, name strin
 		ID:          s.snowflake.Generate().Int64(),
 		GuildID:     guild.ID,
 		Name:        "@everyone",
-		Permissions: int64(permissions.PermViewChannel | permissions.PermSendMessages | permissions.PermReadMessageHistory),
+		Permissions: int64(permissions.DefaultEveryonePerms),
 		Position:    0,
 		IsDefault:   true,
 	}

@@ -153,3 +153,15 @@ func (h *MessageHandler) DeleteMessage(c echo.Context) error {
 
 	return c.NoContent(http.StatusNoContent)
 }
+
+// Typing handles POST /api/v1/channels/:id/typing.
+func (h *MessageHandler) Typing(c echo.Context) error {
+	channelID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return errorJSON(c, http.StatusBadRequest, "INVALID_ID", "invalid channel id")
+	}
+	if err := h.service.Typing(c.Request().Context(), channelID, auth.GetUserID(c)); err != nil {
+		return mapServiceError(c, err)
+	}
+	return c.NoContent(http.StatusNoContent)
+}

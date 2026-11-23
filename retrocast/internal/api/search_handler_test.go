@@ -151,7 +151,7 @@ func TestSearchMessages_InvalidLimit(t *testing.T) {
 	}
 }
 
-func TestSearchMessages_NoPermission(t *testing.T) {
+func TestSearchMessages_NoResultsWithoutPermission(t *testing.T) {
 	// Has ViewChannel but NOT ReadMessageHistory.
 	guilds, members, roles, overrides := permMocks(permissions.PermViewChannel)
 	msgs := &mockMessageRepo{}
@@ -165,8 +165,8 @@ func TestSearchMessages_NoPermission(t *testing.T) {
 	setAuthUser(c, testUserID)
 
 	_ = h.SearchMessages(c)
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

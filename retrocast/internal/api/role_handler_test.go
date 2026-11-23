@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/victorivanov/retrocast/internal/models"
+	"github.com/victorivanov/retrocast/internal/permissions"
 	"github.com/victorivanov/retrocast/internal/service"
 )
 
@@ -70,10 +71,12 @@ func TestCreateRole_HierarchyViolation(t *testing.T) {
 	roles := &mockRoleRepo{
 		GetByMemberFn: func(ctx context.Context, guildID, userID int64) ([]models.Role, error) {
 			// Actor's highest role is position 5
-			return []models.Role{{ID: 10, Position: 5}}, nil
+			return []models.Role{{ID: 10, Position: 5, Permissions: int64(permissions.PermManageRoles)}}, nil
 		},
 	}
-	h := newRoleHandler(guilds, roles, &mockMemberRepo{}, &mockChannelRepo{}, &mockChannelOverrideRepo{}, gw)
+	h := newRoleHandler(guilds, roles, &mockMemberRepo{GetByGuildAndUserFn: func(_ context.Context, g, u int64) (*models.Member, error) {
+		return &models.Member{GuildID: g, UserID: u}, nil
+	}}, &mockChannelRepo{}, &mockChannelOverrideRepo{}, gw)
 
 	// Try to create role at position 5 (equal to highest) -> should fail
 	body := `{"name":"HighRole","color":0,"permissions":"0","position":5}`
@@ -321,7 +324,7 @@ func TestRemoveRole_Success(t *testing.T) {
 			return nil
 		},
 	}
-	h := newRoleHandler(guilds, &mockRoleRepo{}, members, &mockChannelRepo{}, &mockChannelOverrideRepo{}, gw)
+	h := newRoleHandler(guilds, &mockRoleRepo{GetByIDFn: func(context.Context, int64) (*models.Role, error) { return &models.Role{GuildID: 1}, nil }}, members, &mockChannelRepo{}, &mockChannelOverrideRepo{}, gw)
 
 	c, rec := newTestContext(http.MethodDelete, "/api/v1/guilds/1/members/200/roles/20", nil)
 	c.SetParamNames("id", "user_id", "role_id")

@@ -160,6 +160,31 @@ func (s *MemberService) UpdateMember(ctx context.Context, guildID, callerID, tar
 			}
 		}
 
+		isOwner, err := s.perms.IsGuildOwner(ctx, guildID, callerID)
+		if err != nil {
+			return nil, err
+		}
+		highest, err := s.perms.HighestRolePosition(ctx, guildID, callerID)
+		if err != nil {
+			return nil, err
+		}
+		requested := make(map[int64]bool)
+		for _, id := range *roleIDs {
+			if !validRoles[id] {
+				return nil, BadRequest("INVALID_ROLE", "invalid role ID")
+			}
+			requested[id] = true
+		}
+		current := make(map[int64]bool)
+		for _, id := range member.Roles {
+			current[id] = true
+		}
+		for _, role := range guildRoles {
+			if !isOwner && current[role.ID] != requested[role.ID] && role.Position >= highest {
+				return nil, RoleHierarchyError("cannot change a role at or above your highest role")
+			}
+		}
+
 		for _, roleID := range member.Roles {
 			if validRoles[roleID] {
 				if err := s.members.RemoveRole(ctx, guildID, targetUserID, roleID); err != nil {
@@ -193,6 +218,10 @@ func (s *MemberService) KickMember(ctx context.Context, guildID, callerID, targe
 		return err
 	}
 
+	if callerID == targetUserID {
+		return BadRequest("CANNOT_KICK_SELF", "cannot kick yourself")
+	}
+
 	guild, err := s.guilds.GetByID(ctx, guildID)
 	if err != nil {
 		return Internal("INTERNAL", "internal server error")
@@ -207,6 +236,20 @@ func (s *MemberService) KickMember(ctx context.Context, guildID, callerID, targe
 	}
 	if member == nil {
 		return NotFound("NOT_FOUND", "member not found")
+	}
+
+	if guild.OwnerID != callerID {
+		callerPos, err := s.perms.HighestRolePosition(ctx, guildID, callerID)
+		if err != nil {
+			return err
+		}
+		targetPos, err := s.perms.HighestRolePosition(ctx, guildID, targetUserID)
+		if err != nil {
+			return err
+		}
+		if callerPos <= targetPos {
+			return RoleHierarchyError("cannot kick a member at or above your highest role")
+		}
 	}
 
 	if err := s.members.Delete(ctx, guildID, targetUserID); err != nil {

@@ -34,43 +34,7 @@ func NewPermissionChecker(
 // RequireGuildPermission checks that the user has the given permission in a guild.
 // Guild owners and administrators bypass all checks.
 func (p *PermissionChecker) RequireGuildPermission(ctx context.Context, guildID, userID, perm int64) error {
-	guild, err := p.guilds.GetByID(ctx, guildID)
-	if err != nil {
-		return Internal("INTERNAL", "internal server error")
-	}
-	if guild == nil {
-		return NotFound("NOT_FOUND", "guild not found")
-	}
-	if guild.OwnerID == userID {
-		return nil
-	}
-
-	member, err := p.members.GetByGuildAndUser(ctx, guildID, userID)
-	if err != nil {
-		return Internal("INTERNAL", "internal server error")
-	}
-	if member == nil {
-		return NotFound("NOT_FOUND", "guild not found")
-	}
-
-	roles, err := p.roles.GetByMember(ctx, guildID, userID)
-	if err != nil {
-		return Internal("INTERNAL", "internal server error")
-	}
-
-	var perms int64
-	for _, r := range roles {
-		perms |= r.Permissions
-	}
-
-	if perms&int64(permissions.PermAdministrator) != 0 {
-		return nil
-	}
-
-	if perms&perm == 0 {
-		return Forbidden("MISSING_PERMISSIONS", "you do not have permission to perform this action")
-	}
-	return nil
+	return p.RequireGuildPermissionByPerm(ctx, guildID, userID, permissions.Permission(perm))
 }
 
 // RequireChannelPermission checks that the user has the given permission in a channel,

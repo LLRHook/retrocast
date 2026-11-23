@@ -12,13 +12,18 @@ import (
 )
 
 // MessageService handles message business logic for both guild and DM channels.
+type TypingStore interface {
+	SetTyping(context.Context, int64, int64) error
+}
+
 type MessageService struct {
-	messages   database.MessageRepository
-	channels   database.ChannelRepository
-	dmChannels database.DMChannelRepository
-	snowflake  *snowflake.Generator
-	gateway    gateway.Dispatcher
-	perms      *PermissionChecker
+	typingStore TypingStore
+	messages    database.MessageRepository
+	channels    database.ChannelRepository
+	dmChannels  database.DMChannelRepository
+	snowflake   *snowflake.Generator
+	gateway     gateway.Dispatcher
+	perms       *PermissionChecker
 }
 
 // NewMessageService creates a MessageService.
@@ -39,6 +44,9 @@ func NewMessageService(
 		perms:      perms,
 	}
 }
+
+// SetTypingStore configures the ephemeral typing marker store.
+func (s *MessageService) SetTypingStore(store TypingStore) { s.typingStore = store }
 
 // SendMessage creates a message in a guild or DM channel.
 func (s *MessageService) SendMessage(ctx context.Context, channelID, userID int64, content string) (*models.MessageWithAuthor, error) {
@@ -231,6 +239,12 @@ func (s *MessageService) Typing(ctx context.Context, channelID, userID int64) er
 	if !isDM {
 		if err := s.perms.RequireChannelPermission(ctx, channel.GuildID, channelID, userID, permissions.PermSendMessages); err != nil {
 			return err
+		}
+	}
+
+	if s.typingStore != nil {
+		if err := s.typingStore.SetTyping(ctx, channelID, userID); err != nil {
+			return Internal("INTERNAL", "internal server error")
 		}
 	}
 

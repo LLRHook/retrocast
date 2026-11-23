@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/victorivanov/retrocast/internal/database"
@@ -44,17 +45,25 @@ func (s *SearchService) SearchMessages(ctx context.Context, guildID, userID int6
 		return nil, Forbidden("FORBIDDEN", "you are not a member of this guild")
 	}
 
-	// Check that the user has ReadMessageHistory permission at the guild level.
-	if err := s.perms.RequireGuildPermissionByPerm(ctx, guildID, userID, permissions.PermReadMessageHistory); err != nil {
-		return nil, err
-	}
-
 	messages, err := s.messages.SearchMessages(ctx, guildID, query, authorID, before, after, limit)
 	if err != nil {
 		return nil, Internal("INTERNAL", "internal server error")
 	}
-	if messages == nil {
-		messages = []models.MessageWithAuthor{}
+	visible := make([]models.MessageWithAuthor, 0, len(messages))
+	access := make(map[int64]bool)
+	for _, message := range messages {
+		allowed, checked := access[message.ChannelID]
+		if !checked {
+			err := s.perms.RequireChannelPermission(ctx, guildID, message.ChannelID, userID, permissions.PermViewChannel|permissions.PermReadMessageHistory)
+			if err != nil && !errors.Is(err, ErrForbidden) {
+				return nil, err
+			}
+			allowed = err == nil
+			access[message.ChannelID] = allowed
+		}
+		if allowed {
+			visible = append(visible, message)
+		}
 	}
-	return messages, nil
+	return visible, nil
 }
