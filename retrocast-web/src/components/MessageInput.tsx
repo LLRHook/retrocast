@@ -40,7 +40,7 @@ export default function MessageInput({
       addFiles(droppedFiles);
       onDropConsumed?.();
     }
-  }, [droppedFiles]);
+  }, [droppedFiles, onDropConsumed]);
 
   function handleInput(value: string) {
     setContent(value);
