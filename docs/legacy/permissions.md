@@ -1,3 +1,5 @@
+> **Legacy, superseded by [DATA_CONTRACTS.md](../DATA_CONTRACTS.md) §3.1–§3.2** (permission bits and resolution). Kept for history; its default `@everyone` value is wrong.
+
 # Permissions
 
 Retrocast uses a two-level bitfield RBAC system modeled after Discord's permission system. Permissions are stored as `int64` bitmasks on roles, with per-channel overrides for fine-grained control.

@@ -1,3 +1,5 @@
+> **Legacy, superseded by [ARCHITECTURE.md](../ARCHITECTURE.md).** Kept for history; it does not describe the current code (for example, it predates the service layer).
+
 # Architecture
 
 Retrocast is a self-hosted Discord-like chat platform. This document describes the system architecture, component boundaries, and how the layers fit together.

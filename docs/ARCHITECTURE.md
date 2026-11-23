@@ -1,0 +1,396 @@
+# Retrocast — Architecture
+
+Status: Baselined (rev 2)
+Related: [SRS](SRS.md) · [Data Contracts](DATA_CONTRACTS.md) · [Product Brief](PRODUCT_BRIEF.md)
+
+It describes the system as built at commit `6bc385e`, re-read at `origin/main` 55e50eb
+(PR #23 merged) in rev 2, and the target design that rev 2 decides (ADR-013–ADR-020). Design
+intent comes from `SYSTEM_DESIGN.md`; where the code differs, the code is described and the
+difference noted. The older prose architecture is `docs/legacy/architecture.md` (Q-034).
+
+## 1. Introduction and goals
+- Goals: GOAL-001 (5–20 people chatting in real time on one self-hosted machine), GOAL-002
+  (persistent voice rooms), GOAL-003 (early-Discord scope), GOAL-004 (data stays local).
+- Quality priorities, in the order the seed implies: data stays local (SYS-NFR-003), correct
+  authorisation (SV-FR-045), real-time delivery (SV-FR-026, SYS-NFR-002), simple operation on
+  one host (SYS-CON-001). Numeric targets: SYS-NFR-001, SYS-NFR-002 and SYS-NFR-007 (Q-031).
+- Stakeholders: STK-001 owner, STK-002 member, STK-003 server owner or admin, STK-004
+  operator, STK-005 App Store review (PRODUCT_BRIEF §3).
+
+## 2. Constraints
+SYS-CON-001 (one host, Docker Compose), SYS-CON-002 (no third-party account or email),
+SYS-CON-003 (existing stack, permission resolution in Go), SYS-CON-004 (all rights
+reserved, Q-007). The Go module path stays `github.com/victorivanov/retrocast` (ADR-020).
+
+## 3. System context (C4 level 1)
+
+```mermaid
+flowchart LR
+  member["Member (STK-002)\nweb browser or iPhone"]
+  operator["Operator (STK-004)\nshell on the host"]
+  subgraph host["Operator's machine (Docker Compose)"]
+    rc["Retrocast system"]
+  end
+  apns["Apple Push Notification service\n(Later, with the iOS client)"]
+  unpkg["unpkg.com\n(Swagger UI assets for /docs only)"]
+  member -- "HTTPS, WSS, WebRTC" --> rc
+  operator -- "docker compose, scripts, retrocast-cli, Grafana on 127.0.0.1" --> rc
+  rc -. "planned" .-> apns
+  member -. "/docs page only" .-> unpkg
+```
+
+No core flow leaves the host (SYS-NFR-003). The `/docs` page is the one place a browser loads
+an outside asset.
+
+## 4. Solution strategy
+- One Go process serves REST and the WebSocket gateway, so a request can dispatch an event
+  in memory with no broker (ADR-001).
+- PostgreSQL holds durable data; Redis holds short-lived state; MinIO holds files (ADR-002–
+  ADR-004).
+- LiveKit carries voice; the Go server only issues room tokens (ADR-005).
+- Clients are thin: React in the browser and SwiftUI on iOS, both on the same REST and
+  gateway contracts (PRN-003, ADR-008).
+- Caddy terminates TLS in front of everything (ADR-010).
+
+### 4.1 Stack decision
+Recorded at major-version level from the Stack Profile (generated locally, not committed).
+PR #23 (merged, 55e50eb) moved the Go toolchain to 1.26.11 in go.mod, CI and the Dockerfile
+and refreshed dependencies within the same major versions.
+
+| Tier | Choice | Version | Evidence |
+|---|---|---|---|
+| Server language | Go | 1.26 (go.mod `go 1.26.11`; CI and the `golang:1.26.11-alpine` builder) | retrocast/go.mod; .github/workflows/ci.yml; retrocast/Dockerfile |
+| Server runtime image | Alpine Linux | 3.24 (non-root `appuser`, UID 1001; `HEALTHCHECK` on `/health`) | retrocast/Dockerfile |
+| HTTP framework | Echo | v4 | retrocast/go.mod |
+| PostgreSQL driver | pgx | v5 | retrocast/go.mod |
+| Redis client | go-redis | v9 | retrocast/go.mod |
+| WebSocket | gorilla/websocket | v1 | retrocast/go.mod |
+| Tokens | golang-jwt | v5 | retrocast/go.mod |
+| Password hashing | golang.org/x/crypto argon2 | v0 | retrocast/go.mod |
+| Migrations | golang-migrate | v4 | retrocast/go.mod |
+| Object store client | minio-go | v7 | retrocast/go.mod |
+| Database | PostgreSQL | 17 | retrocast/docker-compose.yml; CI service |
+| Cache and ephemeral state | Redis | 7 | retrocast/docker-compose.yml; CI service |
+| Object store | MinIO | unpinned (`latest`) | retrocast/docker-compose.yml |
+| Voice | LiveKit server | unpinned (`latest`) | retrocast/docker-compose.yml |
+| Edge | Caddy | 2 | retrocast/docker-compose.yml; retrocast/Caddyfile |
+| Web client | React, React Router, Zustand, Tailwind CSS, react-markdown | 19, 7, 5, 4, 10 | retrocast-web/package.json |
+| Web build | Vite, TypeScript, ESLint, pnpm, Node | 7, 5, 9, 10, 22 | retrocast-web/package.json; retrocast-web/Dockerfile |
+| Web serving | nginx | unpinned (`alpine`) | retrocast-web/Dockerfile |
+| iOS client | Swift, SwiftUI, XcodeGen | Swift 6; iOS 17 target | retrocast-client/Retrocast/project.yml |
+| Monitoring | Prometheus, Grafana | unpinned (`latest`) | retrocast/docker-compose.yml |
+| CI | GitHub Actions; golangci-lint | v2 | .github/workflows/ci.yml |
+
+PR #22 (open) proposes a Rust core for permission resolution; it is not part of this stack.
+The owner keeps resolution in Go and decides PR #22 after the authorisation defects are fixed
+(ADR-009, Q-008).
+
+## 5. Components (C4 level 2)
+
+| ID | Component | Technology | Responsibility | Code | Requirements |
+|---|---|---|---|---|---|
+| CMP-001 | API server | Go, Echo | REST `/api/v1`: handlers, services (business rules, permissions), repositories; `/health`, `/metrics`, `/docs` | retrocast/cmd/retrocast; internal/api, internal/service, internal/database, internal/auth, internal/permissions | SV-FR-001–SV-FR-070, SV-FR-074–SV-FR-077, SV-IR-001, SV-IR-003–SV-IR-008, SV-NFR-001–SV-NFR-011, SV-NFR-013 |
+| CMP-002 | Gateway | Go, gorilla/websocket (same binary as CMP-001) | Sessions, heartbeats, presence, event fan-out, replay buffer | retrocast/internal/gateway | SV-FR-026, SV-FR-031–SV-FR-039, SV-FR-071, SV-FR-072, SV-IR-002, SV-NFR-011 |
+| CMP-003 | Admin CLI | Go | `migrate`, `seed`, `health`, `version` (run on the host; not in the server image) | retrocast/cmd/retrocast-cli | SV-FR-073 |
+| CMP-004 | PostgreSQL | PostgreSQL 17 | Durable entities ENT-001–ENT-018; full-text search | retrocast/migrations | SV-NFR-007, SV-FR-059 |
+| CMP-005 | Redis | Redis 7 (append-only file on) | ENT-019–ENT-021 | retrocast/internal/redis | SV-FR-005, SV-FR-032–SV-FR-034, SV-FR-061, SV-NFR-003, SV-NFR-010 |
+| CMP-006 | MinIO | MinIO | ENT-022 attachments | retrocast/internal/storage | SV-FR-051, SV-FR-052 |
+| CMP-007 | LiveKit | LiveKit server | Voice rooms (WebRTC SFU) | retrocast/internal/service/voice.go (token minting only) | SV-FR-048, SV-IR-006 |
+| CMP-008 | Web client | React SPA on nginx | Browser UI; nginx proxies `/api` and `/gateway` | retrocast-web | WEB-FR-001–WEB-FR-024, WEB-NFR-001, WEB-NFR-002 |
+| CMP-009 | iOS client | SwiftUI | iPhone UI (follows the web client, Q-004) | retrocast-client | IOS-FR-001–IOS-FR-012, IOS-NFR-001 |
+| CMP-010 | Edge proxy | Caddy 2 | TLS; routes `/api/*`, `/gateway`, `/health` to CMP-001 and the rest to CMP-008; the only client entry point (ADR-016) | retrocast/Caddyfile | SV-NFR-008, SV-NFR-009, SV-NFR-011, SV-NFR-012 |
+| CMP-011 | Monitoring | Prometheus, Grafana | Scrapes `api:8080/metrics` every 15 s; provisioned "Retrocast API" dashboard; Grafana for the operator on 127.0.0.1 (ADR-016) | retrocast/prometheus.yml; retrocast/grafana | SV-NFR-012, SV-NFR-013, SYS-FR-001 |
+| CMP-012 | Backup and restore | Bash scripts run by a host scheduler (cron or launchd) | Daily PostgreSQL dump and MinIO archive, 30-day retention, restore into a fresh stack (ADR-018) | retrocast/scripts/backup.sh, restore.sh | SYS-FR-002–SYS-FR-004, SYS-NFR-005, SYS-NFR-006 |
+
+```mermaid
+flowchart LR
+  web["CMP-008 Web client"] --> caddy["CMP-010 Caddy"]
+  ios["CMP-009 iOS client"] --> caddy
+  caddy --> api["CMP-001 API server + CMP-002 Gateway"]
+  caddy --> web
+  api --> pg[("CMP-004 PostgreSQL")]
+  api --> redis[("CMP-005 Redis")]
+  api --> minio[("CMP-006 MinIO")]
+  ios -. "WebRTC (token from API-056)" .-> lk["CMP-007 LiveKit"]
+  prom["CMP-011 Prometheus + Grafana"] --> api
+  cli["CMP-003 Admin CLI"] --> pg
+  bk["CMP-012 Backup scripts (host scheduler)"] --> pg
+  bk --> minio
+```
+
+Inside CMP-001, requests pass handler → service → repository. Services own validation and
+permission checks (`internal/service/permission.go`) and call the gateway manager to dispatch
+events. `internal/api/permission_middleware.go` exists but no route uses it.
+`docs/legacy/architecture.md` predates the service layer.
+
+### 5.1 Runtime views
+
+Sending a message (SV-FR-025, SV-FR-026):
+
+```mermaid
+sequenceDiagram
+  participant C as Client
+  participant A as API (handler, MessageService)
+  participant P as PostgreSQL
+  participant G as Gateway manager
+  participant O as Other members' connections
+  C->>A: POST /api/v1/channels/{id}/messages
+  A->>P: resolve channel, member, roles, overrides
+  A->>P: INSERT message
+  A->>G: DispatchToGuild(guild, MESSAGE_CREATE)
+  G->>O: op 0 MESSAGE_CREATE to every connection of each subscribed member (today subscribed at IDENTIFY only, D-05)
+  A-->>C: 201 message
+```
+
+Connecting (SV-FR-035–SV-FR-038, SV-FR-072):
+
+```mermaid
+sequenceDiagram
+  participant C as Client
+  participant G as Gateway
+  participant R as Redis
+  C->>G: WebSocket /gateway
+  G-->>C: op 10 HELLO (41 250 ms)
+  C->>G: op 2 IDENTIFY (access token)
+  G->>G: add the connection to the user's set (SV-FR-072, today op 7 closes the older one)
+  G->>R: SET presence:{user} online (TTL 5 min)
+  G-->>C: op 0 READY (session, guild ids, read states)
+  G-->>Others: PRESENCE_UPDATE online
+  loop every interval
+    C->>G: op 1 HEARTBEAT
+    G-->>C: op 11 HEARTBEAT_ACK
+  end
+```
+
+Joining voice (SV-FR-048): the client calls API-056; the server checks `CONNECT`, writes a
+voice state, mints a LiveKit token for room `voice-{channel id}` and dispatches
+VOICE_STATE_UPDATE. The client must already know the LiveKit URL. The iOS client requests the
+token but has no LiveKit SDK (IOS-FR-011).
+
+Refreshing a session (SV-FR-005): the client posts the refresh token; the server reads
+`refresh:{token}` from Redis, deletes it, and issues a new pair.
+
+Registering (SV-FR-062–SV-FR-065, ADR-014):
+
+```mermaid
+sequenceDiagram
+  participant C as Web client
+  participant A as API (AuthService)
+  participant P as PostgreSQL
+  participant G as Gateway manager
+  C->>A: POST /api/v1/auth/register (username, password, invite_code)
+  A->>A: read REGISTRATION_MODE
+  alt closed
+    A-->>C: 403 REGISTRATION_CLOSED
+  else invite, instance has no users
+    A->>P: BEGIN, lock, count users = 0, INSERT user, COMMIT
+    A-->>C: 200 data (tokens, user)
+  else invite with a code
+    A->>P: BEGIN, lock invite row, check expiry and uses
+    A->>P: INSERT user, member, @everyone row, uses + 1, COMMIT
+    A->>G: DispatchToGuild(GUILD_MEMBER_ADD)
+    A-->>C: 200 data (tokens, user)
+  else open
+    A->>P: INSERT user
+    A-->>C: 200 data (tokens, user)
+  end
+```
+
+Kicking or banning (SV-FR-066–SV-FR-071):
+
+```mermaid
+sequenceDiagram
+  participant M as Moderator's client
+  participant A as API (MemberService, BanService)
+  participant P as PostgreSQL
+  participant G as Gateway manager
+  participant T as Target's connections
+  M->>A: DELETE members/{user} or PUT bans/{user} (reason)
+  A->>P: caller holds KICK_MEMBERS or BAN_MEMBERS
+  A->>P: target is not the owner or the caller, ranks below the caller (SV-FR-070)
+  A->>P: DELETE member, INSERT ban when banning
+  A->>G: DispatchToGuild(GUILD_BAN_ADD when banning, GUILD_MEMBER_REMOVE)
+  G->>T: GUILD_MEMBER_REMOVE
+  A->>G: UnsubscribeFromGuild(target, guild) on every connection (SV-FR-071)
+  A-->>M: 204
+```
+
+Changing a password (SV-FR-060, SV-FR-061): the client sends API-059 with the current and the
+new password; the server checks the current Argon2id hash, stores the new hash, deletes every
+refresh token of the user and returns a new pair. Deleting them all needs a per-user index of
+refresh tokens in Redis (for example a set per user), which ENT-019 lacks today. Access tokens
+already issued expire within 15 minutes.
+
+Backing up and restoring (SYS-FR-002–SYS-FR-004, ADR-018): a cron or launchd job on the host
+runs `scripts/backup.sh` daily from `retrocast/`; it writes `backup_<time>.sql.gz` (pg_dump)
+and `minio_<time>.tar.gz` (the MinIO data directory) to `BACKUP_DIR` and deletes archives
+older than 30 days. `scripts/restore.sh` feeds one dump to `psql` in the db container and can
+unpack the MinIO archive. Before each release the operator restores the latest backup into a
+fresh stack and records the file, the date and the row counts before and after
+(SYS-NFR-006).
+
+## 6. Deployment view
+- One host runs `retrocast/docker-compose.yml`: api, db, redis, minio, livekit, web, caddy,
+  prometheus, grafana. Volumes: pgdata, minio-data, redis-data, caddy_data, prometheus-data,
+  grafana-data.
+- Published ports today: Caddy 80 and 443 (clients); api 8080 (plain HTTP, includes
+  `/metrics`); MinIO 9000 and its console 9001; LiveKit 7880, 7881 and UDP 50000–50100;
+  Prometheus 9090; Grafana 3000. PostgreSQL and Redis are not published.
+- Target (ADR-016, SV-NFR-008): only Caddy 80 and 443 and LiveKit 7880, 7881 and UDP
+  50000–50100 are published; Grafana binds to 127.0.0.1:3000 for the operator; 8080, 9000,
+  9001 and 9090 stay on the compose network (D-26).
+- The api container runs as the non-root `appuser` (UID 1001) with migrations in
+  `/migrations` and a `HEALTHCHECK` on `/health` every 30 s. Redis runs with the append-only
+  file on. At start the server loads configuration, connects to PostgreSQL, applies pending
+  migrations, connects to Redis and MinIO, then serves HTTP.
+- LiveKit restarts in a loop with the default compose key setting (D-25, issue #35).
+- CI (`.github/workflows/ci.yml`) builds and pushes the api and web images to GHCR on `main`.
+  No deploy job exists. The product is self-hosted only (Q-002); there is no public demo
+  (Q-005).
+- Backups: CMP-012, scheduled on the host (ADR-018).
+
+## 7. Cross-cutting concepts
+
+### 7.1 Authentication
+Username and password; Argon2id hashes (SV-NFR-001); HS256 access token for 15 minutes and
+an opaque refresh token in Redis for 7 days with rotation (SV-NFR-002). The gateway accepts the
+access token in IDENTIFY and RESUME.
+
+### 7.2 Authorisation
+Permission bitfields on roles and per-channel allow and deny overrides
+(DATA_CONTRACTS §3.1). Owner and Administrator bypass every check (SV-FR-046). Channel checks
+follow DATA_CONTRACTS §3.2; guild-level checks and role management have the gaps D-01–D-04.
+Kick and ban act only on members ranked below the caller (SV-FR-070; kick lacks it, D-28).
+Resolution is in Go (ADR-009).
+
+### 7.3 Real-time delivery
+In-process fan-out from services to gateway connections, keyed by the guilds a connection
+subscribed to at IDENTIFY. Per-connection send buffer of 256 frames. A 100-event replay
+buffer per guild backs RESUME (D-07). Target (rev 2): a user may hold several connections
+(ADR-017) and subscriptions follow membership changes (SV-FR-071).
+
+### 7.4 Configuration and secrets
+Environment variables override the optional `KEY = VALUE` file, which overrides the defaults
+(DATA_CONTRACTS §1). Rev 2 adds `REGISTRATION_MODE` and `ALLOWED_ORIGINS`. Secrets live in
+`retrocast/.env`, which is not committed; `.env.example` and `retrocast.toml.example` hold
+development defaults. `JWT_SECRET` has no minimum length check.
+
+### 7.5 Observability
+JSON request logs through slog (SV-NFR-006); `/health` checks PostgreSQL and Redis
+(SV-NFR-005); Prometheus metrics at `/metrics` (SV-NFR-013), scraped every 15 s, with a
+provisioned Grafana dashboard (SYS-FR-001); `/metrics` stays inside the compose network
+(SV-NFR-012).
+
+### 7.6 Error handling
+One JSON error envelope with stable codes (DATA_CONTRACTS §5), except for the JWT middleware
+and the typing handler (SV-IR-003). Every success body is `{"data": …}` from REST contract
+v2.0.0 (SV-IR-007, ADR-013).
+
+### 7.7 Identifiers
+Snowflake ids generated in-process (`internal/snowflake`), serialised as strings
+(SV-IR-004), with two exceptions (D-11).
+
+## 8. Architecture decisions
+
+ADR-001–ADR-012 record decisions already present in the code; status `Accepted` means "in
+the code". ADR-013–ADR-020 record rev 2 decisions; `Accepted (rev 2, not built)` means decided
+but not yet in the code. The Source column says who decided: Q- ids are the owner's answers
+(PRODUCT_BRIEF §14); a design choice made within an answer is marked as the driver's or the
+spec lead's.
+
+| ID | Decision | Context and alternatives | Status | Consequences | Source |
+|---|---|---|---|---|---|
+| ADR-001 | One Go binary serves REST and the WebSocket gateway | Separate gateway service or a broker; at 5–20 users one process suffices | Accepted | No horizontal scaling; events dispatch in memory | SYSTEM_DESIGN.md:121–150; retrocast/cmd/retrocast |
+| ADR-002 | PostgreSQL is the only durable store, including full-text search | Separate search engine | Accepted | Search uses English stemming (kept by Q-023) | SYSTEM_DESIGN.md:132–140; migrations/000015 |
+| ADR-003 | Redis holds refresh tokens, presence, typing and rate-limit counters | Keep them in PostgreSQL or memory | Accepted | Losing Redis signs everyone out; unused `refresh_tokens` table remains | internal/redis/client.go |
+| ADR-004 | MinIO stores attachments | Local disk | Accepted | URLs need a public path (D-10) | SYSTEM_DESIGN.md:192; internal/storage |
+| ADR-005 | LiveKit carries voice; the server only mints tokens without an SDK | Pion directly | Accepted | No webhooks, so voice state can go stale | SYSTEM_DESIGN.md:152–161; internal/service/voice.go |
+| ADR-006 | Snowflake ids, JSON strings | UUIDs; database sequences | Accepted | Time-ordered ids give cursor paging | SYSTEM_DESIGN.md:543; internal/snowflake |
+| ADR-007 | Short JWT access token plus rotating opaque refresh token; Argon2id | Sessions in cookies | Accepted | Clients must store the rotated token (D-15) | SYSTEM_DESIGN.md:230; internal/auth |
+| ADR-008 | The web client is React with Vite, not the SvelteKit app SYSTEM_DESIGN recommends | SvelteKit (SYSTEM_DESIGN.md:173–181); Tauri desktop wrapping it (CAP-029) | Accepted | The Tauri plan assumed SvelteKit; the desktop app is Won't (Q-028) | retrocast-web/package.json |
+| ADR-009 | Permission resolution stays in Go (`internal/permissions`, `internal/service/permission.go`) | PR #22 proposes a required Rust core | Accepted (confirmed by the owner, Q-008; PR #22 is decided after the authorisation defects are fixed) | Adopting PR #22 would change the build, CI and contributor toolchain | internal/permissions; PR #22; Q-008 |
+| ADR-010 | Caddy terminates TLS; nginx serves the web build | Expose the API directly | Accepted | Compose also publishes 8080 and 9000 in plain HTTP today; ADR-016 unpublishes them | retrocast/Caddyfile; retrocast-web/nginx.conf |
+| ADR-011 | Single-host Docker Compose deployment | Kubernetes; managed cloud | Accepted | No high availability (SYS-CON-001) | SYSTEM_DESIGN.md:196; retrocast/docker-compose.yml |
+| ADR-012 | Handlers call services, services call repositories behind interfaces | Handlers calling the database | Accepted | Handler tests run on mock repositories; `internal/service` has no tests of its own | retrocast/internal |
+| ADR-013 | Every REST success body is `{"data": …}` and errors stay `{"error": {code, message}}`; the path stays `/api/v1`; OpenAPI `info.version` becomes 2.0.0; no parallel old-shape API is served | The owner chose one wrapped shape as a new major version (Q-010). For the version itself the alternatives were a `/api/v2` path served beside v1, or a negotiated version header. Both keep a second shape alive for clients that do not exist: nothing is released, the web client already reads `data`, and the iOS client follows the web client (Q-004), so it is updated when it is scheduled. A major version number in OpenAPI marks the break without a second route tree | Accepted (rev 2, not built; driver's decision within Q-010) | Breaking for any client reading bare bodies (DATA_CONTRACTS §9); the web client must stop parsing 204 bodies (D-29); the iOS update to v2.0.0 waits for its schedule | Q-010; driver; SV-IR-007, SV-IR-008 |
+| ADR-014 | Registration modes `open`, `invite` and `closed` from `REGISTRATION_MODE`, default `invite`; registering with an invite also joins its guild in the same transaction; the first account on an empty instance may register without an invite | The owner chose operator-set modes with invite-only as the default (Q-012). Without a bootstrap rule an invite-only instance with no users could never get its first user; the alternatives (a first user created with the CLI, or a one-time setup token) add an operator step. Joining on registration saves a friend holding a link a second step | Accepted (rev 2, not built; spec lead's design within Q-012) | The first registration must be serialised (SV-FR-065); an operator who wants nobody to register uses `closed` and seeds users with the CLI | Q-012; SV-FR-062–SV-FR-065 |
+| ADR-015 | Client IP comes from `X-Forwarded-For` only as written by the Caddy hop; unauthenticated routes (including the invite lookup) are limited per client IP and authenticated routes per user; when Redis is unreachable, unauthenticated routes fail closed with 503 and authenticated routes fail open | The owner chose the proxy trust and the limit keys (Q-015). The failure policy is the spec lead's: guessing and enumeration happen on sign-in, registration and the invite lookup; sign-in already needs Redis for refresh tokens, so failing closed there costs no extra availability; access tokens are checked without Redis, so members already signed in keep chatting; the 15-minute token lifetime and a small trusted group bound the abuse. Failing open everywhere (today) lets guessing run unthrottled during an outage; failing closed everywhere stops all chat when an ephemeral store fails | Accepted (rev 2; the trusted-hop part is built by PR #23, the rest is not built) | Port 8080 must not be published, or a LAN client can still send a forged header (D-13, D-26) | Q-015; SV-NFR-003, SV-NFR-009, SV-NFR-010 |
+| ADR-016 | Browsers are served only for the same origin and `ALLOWED_ORIGINS`, for CORS and gateway upgrades; requests without an Origin header (native clients) are served. Compose publishes only Caddy 80 and 443 and LiveKit 7880, 7881 and UDP 50000–50100; Grafana binds to 127.0.0.1:3000; 8080, 9000, 9001 and 9090 are not published | The owner chose the same origin plus an operator list, and only Caddy's ports (Q-016). LiveKit's ports stay because WebRTC media does not pass through Caddy; Grafana on loopback keeps the operator's dashboard (CAP-035) without exposing it (spec lead's details) | Accepted (rev 2, not built) | `retrocast-cli health` needs `SERVER_URL` set to the public address; MinIO is reachable only inside the network until pre-signed URLs go through Caddy (ADR-019) | Q-016; SV-NFR-008, SV-NFR-011, SV-NFR-012 |
+| ADR-017 | A user may hold several gateway connections; each receives every event for the user; presence turns offline 10 s after the last one closes; there is no per-user cap | The owner chose several devices at once (Q-009). No cap is set because the group is 5–20 trusted people (spec lead's assumption) | Accepted (rev 2, not built) | The manager's per-user entry becomes a set of connections; READY and RESUME stay per connection; EVT-007 is not sent for a second IDENTIFY | Q-009; SV-FR-071, SV-FR-072 |
+| ADR-018 | A host scheduler (cron on Linux, launchd on macOS) runs `scripts/backup.sh` daily from `retrocast/`; archives older than 30 days are deleted; Redis is not backed up | The owner chose daily backups kept 30 days and a restore drill before each release (Q-030). A scheduler container was not chosen because `backup.sh` drives `docker compose exec`, which runs on the host. Redis holds only refresh tokens, presence, typing and counters, so losing it signs users out and loses nothing else (spec lead's design) | Accepted (rev 2, not built) | A restore signs everyone out; backups hold secrets and personal data, so `BACKUP_DIR` should be readable by the operator only | Q-030; SYS-FR-002–SYS-FR-004, SYS-NFR-006 |
+| ADR-019 | Clients upload and download attachments through pre-signed MinIO URLs valid 15 minutes and served through the public entry point (Caddy) | The owner chose pre-signed URLs (Q-011); the 15-minute lifetime is the spec lead's and matches the access-token lifetime | Accepted (rev 2, Later, not built) | Caddy needs a route to MinIO; each history fetch mints fresh download URLs | Q-011; SV-FR-051, SV-FR-052 |
+| ADR-020 | Keep the Go module path `github.com/victorivanov/retrocast` | The repository lives at LLRHook/retrocast; renaming the module changes every import (Q-033) | Accepted (the owner's answer, Q-033) | `go install` by repository URL does not resolve the module | Q-033; LIM-005 |
+
+Assumptions made by the spec lead in rev 2 (not the owner's answers; each can be changed by a
+later revision without breaking an accepted decision):
+- Load profile for the performance targets: 20 connected clients, each sending one message
+  every 10 s (SYS-NFR-001).
+- Existing guilds keep the `@everyone` permissions they have stored; only new guilds get
+  `DefaultEveryonePerms` (SV-FR-008, D-27).
+- The web client keeps the refresh token in `localStorage` for the Pilot (WEB-FR-003).
+- A wrong current password on API-059 returns 403, not 401, so the client does not treat it as
+  an expired session (SV-FR-060).
+- WCAG 2.2 AA and the browser list are `Should`, not `Must` (WEB-NFR-001, WEB-NFR-002).
+
+## 9. Risks and technical debt
+
+Brief risks RISK-001–RISK-012 are in PRODUCT_BRIEF §11. The defects below were found by
+reading the code; D-08 and D-09 were also reproduced on PostgreSQL 17 with all migrations
+applied. Rev 2 adds the compose smoke run of 2026-11-23 on 55e50eb's tree, which confirmed
+D-01–D-06, D-14, D-17, D-18 and D-25 and the reaction part of D-11; D-15 and D-16 were not
+reached. "Pilot" in Blocks marks a defect that blocks a Pilot requirement (SRS §1.8). Issue
+links the GitHub issue that tracks it, where one exists. D-08 and D-09 block the Pilot
+through RISK-002, which Q-003 requires fixed, although the DM and upload capabilities
+they affect stay Later.
+
+| ID | Defect | Evidence (file:line) | Affects | Blocks | Issue |
+|---|---|---|---|---|---|
+| D-01 | Role and override management checks no `MANAGE_ROLES`; the hierarchy check allows negative positions, so a member with no roles can create an Administrator role at position -1 and assign it to themself | retrocast/internal/service/role.go:48–82, :180–245, :248–277; permission.go:208–219 | SV-FR-040–SV-FR-043, SV-FR-047 | Pilot | [#26](https://github.com/LLRHook/retrocast/issues/26) |
+| D-02 | Update and delete do not check that the role belongs to the guild in the path; a new position is not checked against the caller's highest role | retrocast/internal/service/role.go:97–142, :145–177 | SV-FR-041, SV-FR-042 | Pilot | [#27](https://github.com/LLRHook/retrocast/issues/27) |
+| D-03 | Listing roles checks no membership | retrocast/internal/service/role.go:85–94 | SV-FR-044 | Pilot | [#28](https://github.com/LLRHook/retrocast/issues/28) |
+| D-04 | Guild-level checks combine only assigned roles, and invite joiners get no `@everyone` row, so `@everyone` guild permissions do not apply to them | retrocast/internal/service/permission.go:36–76; invite.go:173–181 | SV-FR-045, SV-FR-020 | Pilot | [#29](https://github.com/LLRHook/retrocast/issues/29) |
+| D-05 | `SubscribeToGuild` and `UnsubscribeFromGuild` have no callers: members who create or join a guild after connecting get no events, and removed members keep receiving them | retrocast/internal/gateway/manager.go:130–140 | SV-FR-026, SV-FR-020, SV-FR-066, SV-FR-071 | Pilot | [#30](https://github.com/LLRHook/retrocast/issues/30) |
+| D-06 | Event fan-out and search ignore channel `VIEW_CHANNEL` overrides | retrocast/internal/gateway/manager.go:159; internal/service/search.go:33 | SV-FR-026, SV-FR-059, SV-FR-016 | Pilot | [#31](https://github.com/LLRHook/retrocast/issues/31) |
+| D-07 | RESUME replays a per-guild buffer using the client's per-connection sequence, does not check the session id, and sends no RECONNECT when events were lost | retrocast/internal/gateway/manager.go:287–336, :395–458 | SV-FR-038 | Pilot | — |
+| D-08 | DM messages violate `messages_channel_id_fkey` (DM channels are not in `channels`) | retrocast/migrations/000007_create_messages.up.sql; 000014_create_dm_channels.up.sql | SV-FR-055, WEB-FR-016, IOS-FR-009; RISK-002 | Pilot (RISK-002, Q-003) | [#37](https://github.com/LLRHook/retrocast/issues/37) |
+| D-09 | Upload inserts the attachment with `message_id` 0, violating `attachments_message_id_fkey`; no API links an attachment to a message | retrocast/internal/service/upload.go:92 | SV-FR-051, WEB-FR-017; RISK-002 | Pilot (RISK-002, Q-003) | [#24](https://github.com/LLRHook/retrocast/issues/24) |
+| D-10 | Attachment URLs use the compose-internal MinIO address over `http://` | retrocast/internal/storage/minio.go:56–58 | SV-FR-052, SV-NFR-008 | Later | — |
+| D-11 | `Member.roles`, READY `guilds` and reaction user lists (API-032) serialise ids as JSON numbers; JavaScript loses precision above 2^53 | retrocast/internal/models/member.go:10; internal/gateway/events.go:78; internal/service/reaction.go | SV-IR-004, SV-FR-075 | Pilot | [#36](https://github.com/LLRHook/retrocast/issues/36) |
+| D-12 | Guild creation runs eight writes without a transaction | retrocast/internal/service/guild.go:47–128 | SV-FR-007 | — | — |
+| D-13 | Partly fixed by PR #23: forwarded headers are now trusted only from loopback, link-local and private-range peers (`ClientIPExtractor`). Remaining: Redis errors let requests through; the invite lookup has no limit; with 8080 published a LAN client, itself on a private address, can still send a forged header | retrocast/internal/api/ratelimit.go:13–22, :38–40; router.go:67–68, :116 | SV-NFR-003, SV-NFR-009, SV-NFR-010 | Pilot | partly fixed by [PR #23](https://github.com/LLRHook/retrocast/pull/23) |
+| D-14 | Clients and server disagree on the response envelope: the web client always reads `json.data`; the iOS refresh path accepts only the wrapped form. The smoke run saw web sign-in fail after a 200. Fixed on the server side by SV-IR-007 (ADR-013) | retrocast-web/src/lib/api.ts:113; retrocast-client/Retrocast/Sources/Networking/APIClient.swift:211 | SV-IR-007, WEB-FR-002, WEB-FR-003, WEB-FR-005, WEB-FR-007, WEB-FR-012, WEB-FR-013, IOS-FR-002 | Pilot | [#32](https://github.com/LLRHook/retrocast/issues/32) |
+| D-15 | The web client keeps the old refresh token after rotation | retrocast-web/src/stores/auth.ts:83–93 | WEB-FR-003 | Pilot | — |
+| D-16 | The web client revokes invites at `/invites/{code}` without `/api/v1` | retrocast-web/src/components/InviteModal.tsx:42 | WEB-FR-012 | Pilot | — |
+| D-17 | CORS allows every origin and the gateway accepts every origin | retrocast/cmd/retrocast/main.go:182–183; internal/gateway/server.go:14 | SV-NFR-011 | Pilot | [#33](https://github.com/LLRHook/retrocast/issues/33) |
+| D-18 | The typing route checks no membership or permission and returns 404 for DM channels; `MessageService.Typing` has no route | retrocast/internal/gateway/typing.go:30–59; internal/api/router.go:194; internal/service/message.go:225 | SV-FR-031 | Pilot | [#34](https://github.com/LLRHook/retrocast/issues/34) |
+| D-19 | READY has no presence snapshot, and heartbeats do not extend the 5-minute presence TTL | retrocast/internal/gateway/events.go:75–80; internal/redis/client.go:48 | SV-FR-032 | Pilot | — |
+| D-20 | Invite `uses` is checked and incremented without a lock, so concurrent accepts can pass `max_uses` | retrocast/internal/service/invite.go:153, :183 | SV-FR-020 | — | — |
+| D-21 | Refresh rotation reads then deletes the token in two commands, so two concurrent refreshes can both succeed | retrocast/internal/redis/client.go:58, :75 | SV-FR-005, SV-NFR-002 | Pilot | [#43](https://github.com/LLRHook/retrocast/issues/43) |
+| D-22 | Any `image/*` type is accepted, including SVG, which can carry script when opened directly; Q-017 excludes SVG | retrocast/internal/service/upload.go:107–115 | SV-FR-051 | Later | — |
+| D-23 | LiveKit tokens last 24 hours and do not reflect `SPEAK`; no webhook clears stale voice states | retrocast/internal/service/voice.go:178–197 | SV-FR-048, SV-FR-049 | — | — |
+| D-24 | Users cannot be deleted while they own a guild or have messages (foreign keys without ON DELETE) | retrocast/migrations/000002_create_guilds.up.sql; 000007_create_messages.up.sql | CAP-038 (account deletion, Later) | Later | — |
+| D-25 | With the `.env.example` values, LiveKit rejects the `LIVEKIT_KEYS` value that compose builds (`${LIVEKIT_API_KEY}:${LIVEKIT_API_SECRET}`) as not in its key/secret format and restarts in a loop (11 restarts in the compose smoke run of 2026-11-23 on 55e50eb's tree) | retrocast/docker-compose.yml:68 | SYS-CON-001; voice (Later) | Pilot | [#35](https://github.com/LLRHook/retrocast/issues/35) |
+| D-26 | Compose publishes internal ports on every interface: the API on 8080 (including `/metrics`), MinIO on 9000 and 9001, Prometheus on 9090 and Grafana on 3000 | retrocast/docker-compose.yml:5, :51–52, :96, :104 | SV-NFR-008, SV-NFR-009, SV-NFR-012, SYS-FR-001 | Pilot | [#38](https://github.com/LLRHook/retrocast/issues/38) |
+| D-27 | New guilds give `@everyone` 32771 (View, Send, Read history) instead of `DefaultEveryonePerms` (230147) | retrocast/internal/service/guild.go:68 | SV-FR-008 | Pilot | [#39](https://github.com/LLRHook/retrocast/issues/39) |
+| D-28 | Kick checks `KICK_MEMBERS` and the owner only: no role-hierarchy check and no self check (ban has both) | retrocast/internal/service/member.go:191–217 | SV-FR-066, SV-FR-070 | Pilot | [#40](https://github.com/LLRHook/retrocast/issues/40) |
+| D-29 | The web client parses every successful response as JSON, so an empty 204 body rejects: deleting a server or channel, leaving a server and other 204 calls report failure although the server succeeded | retrocast-web/src/lib/api.ts:97–114; components/GuildSettingsModal.tsx:56–74; components/ChannelModal.tsx:56–65 | WEB-FR-006, WEB-FR-014, WEB-FR-021, WEB-FR-022, WEB-FR-024 | Pilot | [#41](https://github.com/LLRHook/retrocast/issues/41) |
+| D-30 | Web sign-out clears the local tokens without calling API-004, so the refresh token stays valid for up to 7 days | retrocast-web/src/stores/auth.ts:68–75 | WEB-FR-024 | Pilot | [#42](https://github.com/LLRHook/retrocast/issues/42) |
+
+Other debt: the `refresh_tokens` and `device_tokens` tables have no code; op 4 is defined
+but unhandled; username uniqueness is case-sensitive; invite codes carry 32 random bits;
+compose images for MinIO, LiveKit, Prometheus and Grafana are unpinned; CI installs
+`migrate@latest`; no formatter gate; no web test runner; no iOS build in CI. PR #23 aligned
+the Go version in go.mod, CI and the Dockerfile; rev 2 updates README.md to match. The older
+prose docs moved to `docs/legacy/` with a pointer to their successor (Q-034). Documentation
+drift outside `docs/`: `retrocast-web/README.md` (Vite template), TODO.md ("Vite 6"; marks
+features done that fail at runtime, RISK-002), SYSTEM_DESIGN.md (SvelteKit web client).
+
+## 10. Glossary
+See [SRS §1.3](SRS.md) and §5.3.
+
+## Revision history
+| Rev | Date | Commit | Mode | Summary |
+|---|---|---|---|---|
+| 1 | 2026-11-23T12:58:05-05:00 | 918f0a8471d3 | INIT | Initial architecture CMP-001–CMP-011, ADR-001–ADR-012, defects D-01–D-24 |
+| 2 | 2026-11-23T15:17:07-05:00 | 701009f47d68 | REVISION | Renamed from ARCHITECTURE_SPEC.md; status Baselined; Go 1.26.11; CMP-012; ADR-013–ADR-020 and assumptions; defects linked to issues; D-13 partly fixed by PR #23; D-25–D-30 |
+| 3 | 2026-11-23T15:35:12-05:00 | 8cbf60de297e | REVISION | Review fixes: D-08 and D-09 block the Pilot (RISK-002); D-21 Pilot with #43; issues #38–#42 linked for D-26–D-30 |

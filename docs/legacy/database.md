@@ -1,3 +1,5 @@
+> **Legacy, superseded by [DATA_CONTRACTS.md](../DATA_CONTRACTS.md) §3** (entities). Kept for history; it describes 14 of the 19 migrations.
+
 # Database
 
 PostgreSQL 17 is the sole persistent data store. All schema changes are managed by 14 migration pairs in `retrocast/migrations/`, auto-applied on startup via `golang-migrate`.
