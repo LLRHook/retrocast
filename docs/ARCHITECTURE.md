@@ -120,7 +120,7 @@ flowchart LR
 
 Inside CMP-001, requests pass handler → service → repository. Services own validation and
 permission checks (`internal/service/permission.go`) and call the gateway manager to dispatch
-events. `internal/api/permission_middleware.go` exists but no route uses it.
+events.
 `docs/legacy/architecture.md` predates the service layer.
 
 ### 5.1 Runtime views
@@ -344,7 +344,7 @@ they affect stay Later.
 
 | ID | Defect | Evidence (file:line) | Affects | Blocks | Issue |
 |---|---|---|---|---|---|
-| D-01 | Fixed in [PR #44](https://github.com/LLRHook/retrocast/pull/44). Previous defect: Role and override management checks no `MANAGE_ROLES`; the hierarchy check allows negative positions, so a member with no roles can create an Administrator role at position -1 and assign it to themself | retrocast/internal/service/role.go:49; retrocast/internal/service/role.go:219; retrocast/internal/service/role.go:309; retrocast/internal/service/permission.go:168 | SV-FR-040–SV-FR-043, SV-FR-047 | Pilot | [#26](https://github.com/LLRHook/retrocast/issues/26) |
+| D-01 | Fixed in [PR #44](https://github.com/LLRHook/retrocast/pull/44). Previous defect: Role and override management checks no `MANAGE_ROLES`; the hierarchy check allows negative positions, so a member with no roles can create an Administrator role at position -1 and assign it to themself | retrocast/internal/service/role.go:49; retrocast/internal/service/role.go:223; retrocast/internal/service/role.go:313; retrocast/internal/service/permission.go:168 | SV-FR-040–SV-FR-043, SV-FR-047 | Pilot | [#26](https://github.com/LLRHook/retrocast/issues/26) |
 | D-02 | Fixed in [PR #44](https://github.com/LLRHook/retrocast/pull/44). Previous defect: Update and delete do not check that the role belongs to the guild in the path; a new position is not checked against the caller's highest role | retrocast/internal/service/role.go:116; retrocast/internal/service/role.go:181 | SV-FR-041, SV-FR-042 | Pilot | [#27](https://github.com/LLRHook/retrocast/issues/27) |
 | D-03 | Fixed in [PR #44](https://github.com/LLRHook/retrocast/pull/44). Previous defect: Listing roles checks no membership | retrocast/internal/service/role.go:96 | SV-FR-044 | Pilot | [#28](https://github.com/LLRHook/retrocast/issues/28) |
 | D-04 | Fixed in [PR #44](https://github.com/LLRHook/retrocast/pull/44). Previous defect: Guild-level checks combine only assigned roles, and invite joiners get no `@everyone` row, so `@everyone` guild permissions do not apply to them | retrocast/internal/service/permission.go:125; retrocast/internal/service/invite.go:173-181 | SV-FR-045, SV-FR-020 | Pilot | [#29](https://github.com/LLRHook/retrocast/issues/29) |
@@ -371,7 +371,7 @@ they affect stay Later.
 | D-25 | With the `.env.example` values, LiveKit rejects the `LIVEKIT_KEYS` value that compose builds (`${LIVEKIT_API_KEY}:${LIVEKIT_API_SECRET}`) as not in its key/secret format and restarts in a loop (11 restarts in the compose smoke run of 2026-11-23 on 55e50eb's tree) | retrocast/docker-compose.yml:68 | SYS-CON-001; voice (Later) | Pilot | [#35](https://github.com/LLRHook/retrocast/issues/35) |
 | D-26 | Compose publishes internal ports on every interface: the API on 8080 (including `/metrics`), MinIO on 9000 and 9001, Prometheus on 9090 and Grafana on 3000 | retrocast/docker-compose.yml:5, :51–52, :96, :104 | SV-NFR-008, SV-NFR-009, SV-NFR-012, SYS-FR-001 | Pilot | [#38](https://github.com/LLRHook/retrocast/issues/38) |
 | D-27 | Fixed in [PR #44](https://github.com/LLRHook/retrocast/pull/44). Previous defect: New guilds give `@everyone` 32771 (View, Send, Read history) instead of `DefaultEveryonePerms` (230147) | retrocast/internal/service/guild.go:68 | SV-FR-008 | Pilot | [#39](https://github.com/LLRHook/retrocast/issues/39) |
-| D-28 | Fixed in [PR #44](https://github.com/LLRHook/retrocast/pull/44). Previous defect: Kick checks `KICK_MEMBERS` and the owner only: no role-hierarchy check and no self check (ban has both) | retrocast/internal/service/member.go:222 | SV-FR-066, SV-FR-070 | Pilot | [#40](https://github.com/LLRHook/retrocast/issues/40) |
+| D-28 | Fixed in [PR #44](https://github.com/LLRHook/retrocast/pull/44). Previous defect: Kick checks `KICK_MEMBERS` and the owner only: no role-hierarchy check and no self check (ban has both) | retrocast/internal/service/member.go:226 | SV-FR-066, SV-FR-070 | Pilot | [#40](https://github.com/LLRHook/retrocast/issues/40) |
 | D-29 | The web client parses every successful response as JSON, so an empty 204 body rejects: deleting a server or channel, leaving a server and other 204 calls report failure although the server succeeded | retrocast-web/src/lib/api.ts:97–114; components/GuildSettingsModal.tsx:56–74; components/ChannelModal.tsx:56–65 | WEB-FR-006, WEB-FR-014, WEB-FR-021, WEB-FR-022, WEB-FR-024 | Pilot | [#41](https://github.com/LLRHook/retrocast/issues/41) |
 | D-30 | Web sign-out clears the local tokens without calling API-004, so the refresh token stays valid for up to 7 days | retrocast-web/src/stores/auth.ts:68–75 | WEB-FR-024 | Pilot | [#42](https://github.com/LLRHook/retrocast/issues/42) |
 

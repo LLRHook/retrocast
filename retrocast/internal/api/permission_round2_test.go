@@ -13,8 +13,8 @@ import (
 
 func TestGrantLimits(t *testing.T) {
 	for _, actor := range []int64{100, 200, 300} {
-		for _, bits := range []permissions.Permission{permissions.PermViewChannel, permissions.PermKickMembers, permissions.PermAdministrator, permissions.PermManageGuild} {
-			for _, op := range []string{"create", "update", "updateExisting", "everyone", "assign", "remove", "replaceAdd", "replaceRemove", "override"} {
+		for _, bits := range []permissions.Permission{permissions.PermViewChannel, permissions.PermKickMembers, permissions.PermAdministrator, permissions.PermManageGuild, permissions.PermBanMembers, permissions.Permission(-2147483648), permissions.Permission(-1)} {
+			for _, op := range []string{"create", "update", "updateExisting", "nameOnly", "colorOnly", "strip", "delete", "everyone", "assign", "remove", "replaceAdd", "replaceRemove", "override"} {
 				t.Run(fmt.Sprintf("%d/%d/%s", actor, bits, op), func(t *testing.T) {
 					ctx := context.Background()
 					g, m, r, o := permMocks(permissions.PermViewChannel)
@@ -45,6 +45,7 @@ func TestGrantLimits(t *testing.T) {
 					writes := 0
 					r.CreateFn = func(context.Context, *models.Role) error { writes++; return nil }
 					r.UpdateFn = func(context.Context, *models.Role) error { writes++; return nil }
+					r.DeleteFn = func(context.Context, int64) error { writes++; return nil }
 					m.AddRoleFn = func(context.Context, int64, int64, int64) error { writes++; return nil }
 					m.RemoveRoleFn = func(context.Context, int64, int64, int64) error { writes++; return nil }
 					o.SetFn = func(context.Context, *models.ChannelOverride) error { writes++; return nil }
@@ -59,6 +60,18 @@ func TestGrantLimits(t *testing.T) {
 						_, err = svc.UpdateRole(ctx, 1000, actor, 10, nil, nil, &permBits, nil)
 					case "updateExisting":
 						_, err = svc.UpdateRole(ctx, 1000, actor, 10, nil, nil, nil, nil)
+					case "nameOnly":
+						name := "renamed"
+						_, err = svc.UpdateRole(ctx, 1000, actor, 10, &name, nil, nil, nil)
+					case "colorOnly":
+						color := 42
+						_, err = svc.UpdateRole(ctx, 1000, actor, 10, nil, &color, nil, nil)
+					case "strip":
+						zero := int64(0)
+						_, err = svc.UpdateRole(ctx, 1000, actor, 10, nil, nil, &zero, nil)
+					case "delete":
+						err = svc.DeleteRole(ctx, 1000, actor, 10)
+
 					case "assign":
 						err = svc.AssignRole(ctx, 1000, actor, 400, 10)
 					case "remove":

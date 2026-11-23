@@ -133,7 +133,7 @@ func (s *RoleService) UpdateRole(ctx context.Context, guildID, actorID, roleID i
 	}
 	effectiveBits := role.Permissions
 	if permBits != nil {
-		effectiveBits = *permBits
+		effectiveBits |= *permBits
 	}
 	if err := s.perms.RequireGrantPermissions(ctx, guildID, actorID, effectiveBits); err != nil {
 		return nil, err
@@ -191,6 +191,10 @@ func (s *RoleService) DeleteRole(ctx context.Context, guildID, actorID, roleID i
 	}
 	if role.IsDefault {
 		return Forbidden("CANNOT_DELETE", "cannot delete the @everyone role")
+	}
+
+	if err := s.perms.RequireGrantPermissions(ctx, guildID, actorID, role.Permissions); err != nil {
+		return err
 	}
 
 	isOwner, err := s.perms.IsGuildOwner(ctx, guildID, actorID)

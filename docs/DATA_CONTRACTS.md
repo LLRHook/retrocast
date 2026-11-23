@@ -140,7 +140,7 @@ Guild-scoped checks (`RequireGuildPermission`) delegate to `RequireGuildPermissi
 and use step 2, including the default role even when no member-role row exists (PR #44, D-04 fixed). The guild owner is never subject to the role
 hierarchy (SV-FR-070).
 
-SV-FR-078 limits non-owner, non-Administrator role managers to this guild base permission set when creating/updating roles, assigning/removing roles, replacing member roles or setting override allow bits. Channel overrides never expand the grantable set. The @everyone position stays 0 for every caller.
+SV-FR-078 limits non-owner, non-Administrator role managers to this guild base permission set when creating/updating/deleting roles, assigning/removing roles, replacing member roles or setting override allow bits. Updates check the union of current and requested permission bits; deletions check current bits. Member replacements check and write only added or removed roles, preserving unchanged roles; all role validation precedes nickname or role writes. Channel overrides never expand the grantable set. The @everyone position stays 0 for every caller.
 
 ### 3.3 Snowflake ids
 Source: `retrocast/internal/snowflake/snowflake.go`. 64 bits: 42 bits of milliseconds since
@@ -194,12 +194,12 @@ are as documented in OpenAPI; where the code differs, the Notes column says so.
 | API-034 | updateSelf | PATCH /guilds/{guildId}/members/@me | 200 member | yes | nickname; no `CHANGE_NICKNAME` check | SV-FR-077 |
 | API-035 | leaveGuild | DELETE /guilds/{guildId}/members/@me | 204 | — | owner gets 403 | SV-FR-022 |
 | API-036 | getMember | GET /guilds/{guildId}/members/{userId} | 200 member | yes | | SV-FR-024 |
-| API-037 | updateMember | PATCH /guilds/{guildId}/members/{userId} | 200 member | yes | nickname, roles | SV-FR-043, SV-FR-077 |
+| API-037 | updateMember | PATCH /guilds/{guildId}/members/{userId} | 200 member | yes | nickname, roles; validate role changes before writes; unchanged roles preserved | SV-FR-043, SV-FR-077 |
 | API-038 | kickMember | DELETE /guilds/{guildId}/members/{userId} | 204 | — | KICK_MEMBERS, strict hierarchy and owner protection; self kick returns 400 CANNOT_KICK_SELF | SV-FR-066, SV-FR-070 |
 | API-039 | createRole | POST /guilds/{guildId}/roles | 201 role | no | | SV-FR-040 |
 | API-040 | listRoles | GET /guilds/{guildId}/roles | 200 roles | no | membership required; non-members receive 404 | SV-FR-044 |
-| API-041 | updateRole | PATCH /guilds/{guildId}/roles/{roleId} | 200 role | no | | SV-FR-041 |
-| API-042 | deleteRole | DELETE /guilds/{guildId}/roles/{roleId} | 204 | — | `@everyone` gives 403 `CANNOT_DELETE` | SV-FR-042 |
+| API-041 | updateRole | PATCH /guilds/{guildId}/roles/{roleId} | 200 role | no | MANAGE_ROLES, same-guild role, hierarchy and grant limit on current plus requested bits; @everyone position fixed at 0
+| API-042 | deleteRole | DELETE /guilds/{guildId}/roles/{roleId} | 204 | — | `@everyone` gives 403 `CANNOT_DELETE`; MANAGE_ROLES, same-guild role, hierarchy and grant limit on current bits required | SV-FR-042 |
 | API-043 | assignRole | PUT /guilds/{guildId}/members/{userId}/roles/{roleId} | 204 | — | | SV-FR-043 |
 | API-044 | removeRole | DELETE /guilds/{guildId}/members/{userId}/roles/{roleId} | 204 | — | | SV-FR-043 |
 | API-045 | setChannelOverride | PUT /channels/{channelId}/permissions/{roleId} | 200 override | no | channel MANAGE_ROLES and same-guild role required; allow bits limited to guild base permissions unless owner or Administrator (SV-FR-078) | SV-FR-047 |
