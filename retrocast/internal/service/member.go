@@ -133,19 +133,10 @@ func (s *MemberService) UpdateMember(ctx context.Context, guildID, callerID, tar
 		return nil, NotFound("NOT_FOUND", "member not found")
 	}
 
-	if nickname != nil {
-		if len(*nickname) > 32 {
-			return nil, BadRequest("INVALID_NICKNAME", "nickname must be 32 characters or fewer")
-		}
-		if *nickname == "" {
-			member.Nickname = nil
-		} else {
-			member.Nickname = nickname
-		}
-		if err := s.members.Update(ctx, member); err != nil {
-			return nil, Internal("INTERNAL", "internal server error")
-		}
+	if nickname != nil && len(*nickname) > 32 {
+		return nil, BadRequest("INVALID_NICKNAME", "nickname must be 32 characters or fewer")
 	}
+	var current, requested map[int64]bool
 
 	if roleIDs != nil {
 		guildRoles, err := s.roles.GetByGuildID(ctx, guildID)
@@ -160,20 +151,64 @@ func (s *MemberService) UpdateMember(ctx context.Context, guildID, callerID, tar
 			}
 		}
 
-		for _, roleID := range member.Roles {
-			if validRoles[roleID] {
+		isOwner, err := s.perms.IsGuildOwner(ctx, guildID, callerID)
+		if err != nil {
+			return nil, err
+		}
+		highest, err := s.perms.HighestRolePosition(ctx, guildID, callerID)
+		if err != nil {
+			return nil, err
+		}
+		requested = make(map[int64]bool)
+		for _, id := range *roleIDs {
+			if !validRoles[id] {
+				return nil, BadRequest("INVALID_ROLE", "invalid role ID")
+			}
+			requested[id] = true
+		}
+		current = make(map[int64]bool)
+		for _, id := range member.Roles {
+			if validRoles[id] {
+				current[id] = true
+			}
+		}
+		for _, role := range guildRoles {
+			if !role.IsDefault && current[role.ID] != requested[role.ID] {
+				if err := s.perms.RequireGrantPermissions(ctx, guildID, callerID, role.Permissions); err != nil {
+					return nil, err
+				}
+			}
+
+			if !isOwner && current[role.ID] != requested[role.ID] && role.Position >= highest {
+				return nil, RoleHierarchyError("cannot change a role at or above your highest role")
+			}
+		}
+	}
+
+	if nickname != nil {
+		if *nickname == "" {
+			member.Nickname = nil
+		} else {
+			member.Nickname = nickname
+		}
+		if err := s.members.Update(ctx, member); err != nil {
+			return nil, Internal("INTERNAL", "internal server error")
+		}
+	}
+
+	if roleIDs != nil {
+		for roleID := range current {
+			if !requested[roleID] {
 				if err := s.members.RemoveRole(ctx, guildID, targetUserID, roleID); err != nil {
 					return nil, Internal("INTERNAL", "internal server error")
 				}
 			}
 		}
-
-		for _, roleID := range *roleIDs {
-			if !validRoles[roleID] {
-				return nil, BadRequest("INVALID_ROLE", "invalid role ID")
-			}
-			if err := s.members.AddRole(ctx, guildID, targetUserID, roleID); err != nil {
-				return nil, Internal("INTERNAL", "internal server error")
+		for roleID := range requested {
+			if !current[roleID] {
+				if err := s.members.AddRole(ctx, guildID, targetUserID, roleID); err != nil {
+					return nil, Internal("INTERNAL", "internal server error")
+				}
 			}
 		}
 
@@ -193,10 +228,18 @@ func (s *MemberService) KickMember(ctx context.Context, guildID, callerID, targe
 		return err
 	}
 
+	if callerID == targetUserID {
+		return BadRequest("CANNOT_KICK_SELF", "cannot kick yourself")
+	}
+
 	guild, err := s.guilds.GetByID(ctx, guildID)
 	if err != nil {
 		return Internal("INTERNAL", "internal server error")
 	}
+	if guild == nil {
+		return NotFound("NOT_FOUND", "guild not found")
+	}
+
 	if guild != nil && guild.OwnerID == targetUserID {
 		return Forbidden("FORBIDDEN", "cannot kick the guild owner")
 	}
@@ -207,6 +250,20 @@ func (s *MemberService) KickMember(ctx context.Context, guildID, callerID, targe
 	}
 	if member == nil {
 		return NotFound("NOT_FOUND", "member not found")
+	}
+
+	if guild.OwnerID != callerID {
+		callerPos, err := s.perms.HighestRolePosition(ctx, guildID, callerID)
+		if err != nil {
+			return err
+		}
+		targetPos, err := s.perms.HighestRolePosition(ctx, guildID, targetUserID)
+		if err != nil {
+			return err
+		}
+		if callerPos <= targetPos {
+			return RoleHierarchyError("cannot kick a member at or above your highest role")
+		}
 	}
 
 	if err := s.members.Delete(ctx, guildID, targetUserID); err != nil {

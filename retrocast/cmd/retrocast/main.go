@@ -107,6 +107,7 @@ func main() {
 	memberSvc := service.NewMemberService(members, guilds, roles, gwManager, permChecker)
 	roleSvc := service.NewRoleService(guilds, roles, members, channels, overrides, sf, gwManager, permChecker)
 	messageSvc := service.NewMessageService(messages, channels, dmChannels, sf, gwManager, permChecker)
+	messageSvc.SetTypingStore(rdb)
 	inviteSvc := service.NewInviteService(invites, guilds, members, bans, gwManager, permChecker)
 	banSvc := service.NewBanService(guilds, members, roles, bans, gwManager, permChecker)
 	dmSvc := service.NewDMService(dmChannels, users, sf, gwManager)
@@ -129,7 +130,6 @@ func main() {
 	banHandler := api.NewBanHandler(banSvc)
 	dmHandler := api.NewDMHandler(dmSvc)
 	uploadHandler := api.NewUploadHandler(uploadSvc)
-	typingHandler := gateway.NewTypingHandler(channels, rdb, gwManager)
 	readStateHandler := api.NewReadStateHandler(readStateSvc)
 	reactionHandler := api.NewReactionHandler(reactionSvc)
 	searchHandler := api.NewSearchHandler(searchSvc)
@@ -151,7 +151,6 @@ func main() {
 		Reactions:    reactionHandler,
 		Search:       searchHandler,
 		Voice:        voiceHandler,
-		Typing:       typingHandler,
 		Gateway:      gwManager,
 		TokenService: tokenSvc,
 		Pool:         pool,

@@ -2,7 +2,6 @@ package gateway
 
 import (
 	"encoding/json"
-	"strconv"
 )
 
 // mustMarshal marshals v to json.RawMessage, panicking on error.
@@ -13,9 +12,4 @@ func mustMarshal(v any) json.RawMessage {
 		panic("gateway: mustMarshal: " + err.Error())
 	}
 	return data
-}
-
-// parseSnowflake parses a string snowflake ID to int64.
-func parseSnowflake(s string) (int64, error) {
-	return strconv.ParseInt(s, 10, 64)
 }

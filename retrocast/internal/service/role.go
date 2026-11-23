@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"github.com/victorivanov/retrocast/internal/permissions"
 
 	"github.com/victorivanov/retrocast/internal/database"
 	"github.com/victorivanov/retrocast/internal/gateway"
@@ -46,6 +47,16 @@ func NewRoleService(
 
 // CreateRole creates a new role in a guild with role hierarchy enforcement.
 func (s *RoleService) CreateRole(ctx context.Context, guildID, actorID int64, name string, color int, permBits int64, position int) (*models.Role, error) {
+	if err := s.perms.RequireGuildPermissionByPerm(ctx, guildID, actorID, permissions.PermManageRoles); err != nil {
+		return nil, err
+	}
+	if err := s.perms.RequireGrantPermissions(ctx, guildID, actorID, permBits); err != nil {
+		return nil, err
+	}
+
+	if position < 0 {
+		return nil, BadRequest("INVALID_POSITION", "position must be non-negative")
+	}
 	if name == "" || len(name) > 100 {
 		return nil, BadRequest("INVALID_NAME", "name must be 1-100 characters")
 	}
@@ -82,7 +93,15 @@ func (s *RoleService) CreateRole(ctx context.Context, guildID, actorID int64, na
 }
 
 // ListRoles returns all roles for a guild.
-func (s *RoleService) ListRoles(ctx context.Context, guildID int64) ([]models.Role, error) {
+func (s *RoleService) ListRoles(ctx context.Context, guildID, actorID int64) ([]models.Role, error) {
+	member, err := s.members.GetByGuildAndUser(ctx, guildID, actorID)
+	if err != nil {
+		return nil, Internal("INTERNAL", "internal server error")
+	}
+	if member == nil {
+		return nil, NotFound("NOT_FOUND", "guild not found")
+	}
+
 	roles, err := s.roles.GetByGuildID(ctx, guildID)
 	if err != nil {
 		return nil, Internal("INTERNAL", "internal server error")
@@ -95,12 +114,29 @@ func (s *RoleService) ListRoles(ctx context.Context, guildID int64) ([]models.Ro
 
 // UpdateRole updates a role with hierarchy enforcement.
 func (s *RoleService) UpdateRole(ctx context.Context, guildID, actorID, roleID int64, name *string, color *int, permBits *int64, position *int) (*models.Role, error) {
+	if err := s.perms.RequireGuildPermissionByPerm(ctx, guildID, actorID, permissions.PermManageRoles); err != nil {
+		return nil, err
+	}
+	if position != nil && *position < 0 {
+		return nil, BadRequest("INVALID_POSITION", "position must be non-negative")
+	}
 	role, err := s.roles.GetByID(ctx, roleID)
 	if err != nil {
 		return nil, Internal("INTERNAL", "internal server error")
 	}
-	if role == nil {
+	if role == nil || role.GuildID != guildID {
 		return nil, NotFound("NOT_FOUND", "role not found")
+	}
+
+	if role.IsDefault && position != nil && *position != 0 {
+		return nil, BadRequest("INVALID_POSITION", "the @everyone role must stay at position 0")
+	}
+	effectiveBits := role.Permissions
+	if permBits != nil {
+		effectiveBits |= *permBits
+	}
+	if err := s.perms.RequireGrantPermissions(ctx, guildID, actorID, effectiveBits); err != nil {
+		return nil, err
 	}
 
 	isOwner, err := s.perms.IsGuildOwner(ctx, guildID, actorID)
@@ -112,7 +148,7 @@ func (s *RoleService) UpdateRole(ctx context.Context, guildID, actorID, roleID i
 		if err != nil {
 			return nil, err
 		}
-		if role.Position >= highest {
+		if role.Position >= highest || (position != nil && *position >= highest) {
 			return nil, RoleHierarchyError("cannot modify a role at or above your highest role position")
 		}
 	}
@@ -143,15 +179,22 @@ func (s *RoleService) UpdateRole(ctx context.Context, guildID, actorID, roleID i
 
 // DeleteRole deletes a role with hierarchy enforcement.
 func (s *RoleService) DeleteRole(ctx context.Context, guildID, actorID, roleID int64) error {
+	if err := s.perms.RequireGuildPermissionByPerm(ctx, guildID, actorID, permissions.PermManageRoles); err != nil {
+		return err
+	}
 	role, err := s.roles.GetByID(ctx, roleID)
 	if err != nil {
 		return Internal("INTERNAL", "internal server error")
 	}
-	if role == nil {
+	if role == nil || role.GuildID != guildID {
 		return NotFound("NOT_FOUND", "role not found")
 	}
 	if role.IsDefault {
 		return Forbidden("CANNOT_DELETE", "cannot delete the @everyone role")
+	}
+
+	if err := s.perms.RequireGrantPermissions(ctx, guildID, actorID, role.Permissions); err != nil {
+		return err
 	}
 
 	isOwner, err := s.perms.IsGuildOwner(ctx, guildID, actorID)
@@ -178,6 +221,9 @@ func (s *RoleService) DeleteRole(ctx context.Context, guildID, actorID, roleID i
 
 // AssignRole assigns a role to a member with hierarchy enforcement.
 func (s *RoleService) AssignRole(ctx context.Context, guildID, actorID, userID, roleID int64) error {
+	if err := s.perms.RequireGuildPermissionByPerm(ctx, guildID, actorID, permissions.PermManageRoles); err != nil {
+		return err
+	}
 	member, err := s.members.GetByGuildAndUser(ctx, guildID, userID)
 	if err != nil {
 		return Internal("INTERNAL", "internal server error")
@@ -192,6 +238,10 @@ func (s *RoleService) AssignRole(ctx context.Context, guildID, actorID, userID, 
 	}
 	if role == nil || role.GuildID != guildID {
 		return NotFound("NOT_FOUND", "role not found")
+	}
+
+	if err := s.perms.RequireGrantPermissions(ctx, guildID, actorID, role.Permissions); err != nil {
+		return err
 	}
 
 	isOwner, err := s.perms.IsGuildOwner(ctx, guildID, actorID)
@@ -217,6 +267,21 @@ func (s *RoleService) AssignRole(ctx context.Context, guildID, actorID, userID, 
 
 // RemoveRole removes a role from a member with hierarchy enforcement.
 func (s *RoleService) RemoveRole(ctx context.Context, guildID, actorID, userID, roleID int64) error {
+	if err := s.perms.RequireGuildPermissionByPerm(ctx, guildID, actorID, permissions.PermManageRoles); err != nil {
+		return err
+	}
+	role, err := s.roles.GetByID(ctx, roleID)
+	if err != nil {
+		return Internal("INTERNAL", "internal server error")
+	}
+	if role == nil || role.GuildID != guildID {
+		return NotFound("NOT_FOUND", "role not found")
+	}
+
+	if err := s.perms.RequireGrantPermissions(ctx, guildID, actorID, role.Permissions); err != nil {
+		return err
+	}
+
 	isOwner, err := s.perms.IsGuildOwner(ctx, guildID, actorID)
 	if err != nil {
 		return err
@@ -245,13 +310,21 @@ func (s *RoleService) RemoveRole(ctx context.Context, guildID, actorID, userID, 
 }
 
 // SetChannelOverride creates or updates a channel permission override.
-func (s *RoleService) SetChannelOverride(ctx context.Context, channelID, roleID, allow, deny int64) (*models.ChannelOverride, error) {
+func (s *RoleService) SetChannelOverride(ctx context.Context, channelID, actorID, roleID, allow, deny int64) (*models.ChannelOverride, error) {
 	ch, err := s.channels.GetByID(ctx, channelID)
 	if err != nil {
 		return nil, Internal("INTERNAL", "internal server error")
 	}
 	if ch == nil {
 		return nil, NotFound("NOT_FOUND", "channel not found")
+	}
+
+	if err := s.checkOverride(ctx, ch, actorID, roleID); err != nil {
+		return nil, err
+	}
+
+	if err := s.perms.RequireGrantPermissions(ctx, ch.GuildID, actorID, allow); err != nil {
+		return nil, err
 	}
 
 	override := &models.ChannelOverride{
@@ -269,9 +342,34 @@ func (s *RoleService) SetChannelOverride(ctx context.Context, channelID, roleID,
 }
 
 // DeleteChannelOverride removes a channel permission override.
-func (s *RoleService) DeleteChannelOverride(ctx context.Context, channelID, roleID int64) error {
+func (s *RoleService) DeleteChannelOverride(ctx context.Context, channelID, actorID, roleID int64) error {
+	ch, err := s.channels.GetByID(ctx, channelID)
+	if err != nil {
+		return Internal("INTERNAL", "internal server error")
+	}
+	if ch == nil {
+		return NotFound("NOT_FOUND", "channel not found")
+	}
+	if err := s.checkOverride(ctx, ch, actorID, roleID); err != nil {
+		return err
+	}
+
 	if err := s.overrides.Delete(ctx, channelID, roleID); err != nil {
 		return Internal("INTERNAL", "internal server error")
+	}
+	return nil
+}
+
+func (s *RoleService) checkOverride(ctx context.Context, ch *models.Channel, actorID, roleID int64) error {
+	if err := s.perms.RequireChannelPermission(ctx, ch.GuildID, ch.ID, actorID, permissions.PermManageRoles); err != nil {
+		return err
+	}
+	role, err := s.roles.GetByID(ctx, roleID)
+	if err != nil {
+		return Internal("INTERNAL", "internal server error")
+	}
+	if role == nil || role.GuildID != ch.GuildID {
+		return NotFound("NOT_FOUND", "role not found")
 	}
 	return nil
 }

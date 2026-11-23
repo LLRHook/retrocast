@@ -1,6 +1,6 @@
 # Retrocast — Architecture
 
-Status: Baselined (rev 2)
+Status: Baselined (rev 6)
 Related: [SRS](SRS.md) · [Data Contracts](DATA_CONTRACTS.md) · [Product Brief](PRODUCT_BRIEF.md)
 
 It describes the system as built at commit `6bc385e`, re-read at `origin/main` 55e50eb
@@ -120,7 +120,7 @@ flowchart LR
 
 Inside CMP-001, requests pass handler → service → repository. Services own validation and
 permission checks (`internal/service/permission.go`) and call the gateway manager to dispatch
-events. `internal/api/permission_middleware.go` exists but no route uses it.
+events.
 `docs/legacy/architecture.md` predates the service layer.
 
 ### 5.1 Runtime views
@@ -259,8 +259,8 @@ access token in IDENTIFY and RESUME.
 ### 7.2 Authorisation
 Permission bitfields on roles and per-channel allow and deny overrides
 (DATA_CONTRACTS §3.1). Owner and Administrator bypass every check (SV-FR-046). Channel checks
-follow DATA_CONTRACTS §3.2; guild-level checks and role management have the gaps D-01–D-04.
-Kick and ban act only on members ranked below the caller (SV-FR-070; kick lacks it, D-28).
+follow DATA_CONTRACTS section 3.2; guild checks include the default role and role management requires MANAGE_ROLES (PR #44).
+Kick and ban act only on members ranked below the caller (SV-FR-070; kick fixed in PR #44).
 Resolution is in Go (ADR-009).
 
 ### 7.3 Real-time delivery
@@ -282,8 +282,7 @@ provisioned Grafana dashboard (SYS-FR-001); `/metrics` stays inside the compose 
 (SV-NFR-012).
 
 ### 7.6 Error handling
-One JSON error envelope with stable codes (DATA_CONTRACTS §5), except for the JWT middleware
-and the typing handler (SV-IR-003). Every success body is `{"data": …}` from REST contract
+One JSON error envelope with stable codes (DATA_CONTRACTS §5), except for the JWT middleware (SV-IR-003). Every success body is `{"data": …}` from REST contract
 v2.0.0 (SV-IR-007, ADR-013).
 
 ### 7.7 Identifiers
@@ -345,12 +344,12 @@ they affect stay Later.
 
 | ID | Defect | Evidence (file:line) | Affects | Blocks | Issue |
 |---|---|---|---|---|---|
-| D-01 | Role and override management checks no `MANAGE_ROLES`; the hierarchy check allows negative positions, so a member with no roles can create an Administrator role at position -1 and assign it to themself | retrocast/internal/service/role.go:48–82, :180–245, :248–277; permission.go:208–219 | SV-FR-040–SV-FR-043, SV-FR-047 | Pilot | [#26](https://github.com/LLRHook/retrocast/issues/26) |
-| D-02 | Update and delete do not check that the role belongs to the guild in the path; a new position is not checked against the caller's highest role | retrocast/internal/service/role.go:97–142, :145–177 | SV-FR-041, SV-FR-042 | Pilot | [#27](https://github.com/LLRHook/retrocast/issues/27) |
-| D-03 | Listing roles checks no membership | retrocast/internal/service/role.go:85–94 | SV-FR-044 | Pilot | [#28](https://github.com/LLRHook/retrocast/issues/28) |
-| D-04 | Guild-level checks combine only assigned roles, and invite joiners get no `@everyone` row, so `@everyone` guild permissions do not apply to them | retrocast/internal/service/permission.go:36–76; invite.go:173–181 | SV-FR-045, SV-FR-020 | Pilot | [#29](https://github.com/LLRHook/retrocast/issues/29) |
+| D-01 | Fixed in [PR #44](https://github.com/LLRHook/retrocast/pull/44). Previous defect: Role and override management checks no `MANAGE_ROLES`; the hierarchy check allows negative positions, so a member with no roles can create an Administrator role at position -1 and assign it to themself | retrocast/internal/service/role.go:49; retrocast/internal/service/role.go:223; retrocast/internal/service/role.go:313; retrocast/internal/service/permission.go:168 | SV-FR-040–SV-FR-043, SV-FR-047 | Pilot | [#26](https://github.com/LLRHook/retrocast/issues/26) |
+| D-02 | Fixed in [PR #44](https://github.com/LLRHook/retrocast/pull/44). Previous defect: Update and delete do not check that the role belongs to the guild in the path; a new position is not checked against the caller's highest role | retrocast/internal/service/role.go:116; retrocast/internal/service/role.go:181 | SV-FR-041, SV-FR-042 | Pilot | [#27](https://github.com/LLRHook/retrocast/issues/27) |
+| D-03 | Fixed in [PR #44](https://github.com/LLRHook/retrocast/pull/44). Previous defect: Listing roles checks no membership | retrocast/internal/service/role.go:96 | SV-FR-044 | Pilot | [#28](https://github.com/LLRHook/retrocast/issues/28) |
+| D-04 | Fixed in [PR #44](https://github.com/LLRHook/retrocast/pull/44). Previous defect: Guild-level checks combine only assigned roles, and invite joiners get no `@everyone` row, so `@everyone` guild permissions do not apply to them | retrocast/internal/service/permission.go:125; retrocast/internal/service/invite.go:173-181 | SV-FR-045, SV-FR-020 | Pilot | [#29](https://github.com/LLRHook/retrocast/issues/29) |
 | D-05 | `SubscribeToGuild` and `UnsubscribeFromGuild` have no callers: members who create or join a guild after connecting get no events, and removed members keep receiving them | retrocast/internal/gateway/manager.go:130–140 | SV-FR-026, SV-FR-020, SV-FR-066, SV-FR-071 | Pilot | [#30](https://github.com/LLRHook/retrocast/issues/30) |
-| D-06 | Event fan-out and search ignore channel `VIEW_CHANNEL` overrides | retrocast/internal/gateway/manager.go:159; internal/service/search.go:33 | SV-FR-026, SV-FR-059, SV-FR-016 | Pilot | [#31](https://github.com/LLRHook/retrocast/issues/31) |
+| D-06 | Partial: search now filters VIEW_CHANNEL and READ_MESSAGE_HISTORY (PR #44); event fan-out still ignores channel VIEW_CHANNEL overrides (B3) | retrocast/internal/service/search.go:57; retrocast/internal/gateway/manager.go:159 | SV-FR-026, SV-FR-059, SV-FR-016 | Pilot | [#31](https://github.com/LLRHook/retrocast/issues/31) |
 | D-07 | RESUME replays a per-guild buffer using the client's per-connection sequence, does not check the session id, and sends no RECONNECT when events were lost | retrocast/internal/gateway/manager.go:287–336, :395–458 | SV-FR-038 | Pilot | — |
 | D-08 | DM messages violate `messages_channel_id_fkey` (DM channels are not in `channels`) | retrocast/migrations/000007_create_messages.up.sql; 000014_create_dm_channels.up.sql | SV-FR-055, WEB-FR-016, IOS-FR-009; RISK-002 | Pilot (RISK-002, Q-003) | [#37](https://github.com/LLRHook/retrocast/issues/37) |
 | D-09 | Upload inserts the attachment with `message_id` 0, violating `attachments_message_id_fkey`; no API links an attachment to a message | retrocast/internal/service/upload.go:92 | SV-FR-051, WEB-FR-017; RISK-002 | Pilot (RISK-002, Q-003) | [#24](https://github.com/LLRHook/retrocast/issues/24) |
@@ -362,7 +361,7 @@ they affect stay Later.
 | D-15 | The web client keeps the old refresh token after rotation | retrocast-web/src/stores/auth.ts:83–93 | WEB-FR-003 | Pilot | — |
 | D-16 | The web client revokes invites at `/invites/{code}` without `/api/v1` | retrocast-web/src/components/InviteModal.tsx:42 | WEB-FR-012 | Pilot | — |
 | D-17 | CORS allows every origin and the gateway accepts every origin | retrocast/cmd/retrocast/main.go:182–183; internal/gateway/server.go:14 | SV-NFR-011 | Pilot | [#33](https://github.com/LLRHook/retrocast/issues/33) |
-| D-18 | The typing route checks no membership or permission and returns 404 for DM channels; `MessageService.Typing` has no route | retrocast/internal/gateway/typing.go:30–59; internal/api/router.go:194; internal/service/message.go:225 | SV-FR-031 | Pilot | [#34](https://github.com/LLRHook/retrocast/issues/34) |
+| D-18 | Fixed in [PR #44](https://github.com/LLRHook/retrocast/pull/44). Previous defect: The typing route checks no membership or permission and returns 404 for DM channels; `MessageService.Typing` has no route | retrocast/internal/api/router.go:197; retrocast/internal/service/message.go:233 | SV-FR-031 | Pilot | [#34](https://github.com/LLRHook/retrocast/issues/34) |
 | D-19 | READY has no presence snapshot, and heartbeats do not extend the 5-minute presence TTL | retrocast/internal/gateway/events.go:75–80; internal/redis/client.go:48 | SV-FR-032 | Pilot | — |
 | D-20 | Invite `uses` is checked and incremented without a lock, so concurrent accepts can pass `max_uses` | retrocast/internal/service/invite.go:153, :183 | SV-FR-020 | — | — |
 | D-21 | Refresh rotation reads then deletes the token in two commands, so two concurrent refreshes can both succeed | retrocast/internal/redis/client.go:58, :75 | SV-FR-005, SV-NFR-002 | Pilot | [#43](https://github.com/LLRHook/retrocast/issues/43) |
@@ -371,8 +370,8 @@ they affect stay Later.
 | D-24 | Users cannot be deleted while they own a guild or have messages (foreign keys without ON DELETE) | retrocast/migrations/000002_create_guilds.up.sql; 000007_create_messages.up.sql | CAP-038 (account deletion, Later) | Later | — |
 | D-25 | With the `.env.example` values, LiveKit rejects the `LIVEKIT_KEYS` value that compose builds (`${LIVEKIT_API_KEY}:${LIVEKIT_API_SECRET}`) as not in its key/secret format and restarts in a loop (11 restarts in the compose smoke run of 2026-11-23 on 55e50eb's tree) | retrocast/docker-compose.yml:68 | SYS-CON-001; voice (Later) | Pilot | [#35](https://github.com/LLRHook/retrocast/issues/35) |
 | D-26 | Compose publishes internal ports on every interface: the API on 8080 (including `/metrics`), MinIO on 9000 and 9001, Prometheus on 9090 and Grafana on 3000 | retrocast/docker-compose.yml:5, :51–52, :96, :104 | SV-NFR-008, SV-NFR-009, SV-NFR-012, SYS-FR-001 | Pilot | [#38](https://github.com/LLRHook/retrocast/issues/38) |
-| D-27 | New guilds give `@everyone` 32771 (View, Send, Read history) instead of `DefaultEveryonePerms` (230147) | retrocast/internal/service/guild.go:68 | SV-FR-008 | Pilot | [#39](https://github.com/LLRHook/retrocast/issues/39) |
-| D-28 | Kick checks `KICK_MEMBERS` and the owner only: no role-hierarchy check and no self check (ban has both) | retrocast/internal/service/member.go:191–217 | SV-FR-066, SV-FR-070 | Pilot | [#40](https://github.com/LLRHook/retrocast/issues/40) |
+| D-27 | Fixed in [PR #44](https://github.com/LLRHook/retrocast/pull/44). Previous defect: New guilds give `@everyone` 32771 (View, Send, Read history) instead of `DefaultEveryonePerms` (230147) | retrocast/internal/service/guild.go:68 | SV-FR-008 | Pilot | [#39](https://github.com/LLRHook/retrocast/issues/39) |
+| D-28 | Fixed in [PR #44](https://github.com/LLRHook/retrocast/pull/44). Previous defect: Kick checks `KICK_MEMBERS` and the owner only: no role-hierarchy check and no self check (ban has both) | retrocast/internal/service/member.go:226 | SV-FR-066, SV-FR-070 | Pilot | [#40](https://github.com/LLRHook/retrocast/issues/40) |
 | D-29 | The web client parses every successful response as JSON, so an empty 204 body rejects: deleting a server or channel, leaving a server and other 204 calls report failure although the server succeeded | retrocast-web/src/lib/api.ts:97–114; components/GuildSettingsModal.tsx:56–74; components/ChannelModal.tsx:56–65 | WEB-FR-006, WEB-FR-014, WEB-FR-021, WEB-FR-022, WEB-FR-024 | Pilot | [#41](https://github.com/LLRHook/retrocast/issues/41) |
 | D-30 | Web sign-out clears the local tokens without calling API-004, so the refresh token stays valid for up to 7 days | retrocast-web/src/stores/auth.ts:68–75 | WEB-FR-024 | Pilot | [#42](https://github.com/LLRHook/retrocast/issues/42) |
 
@@ -394,3 +393,6 @@ See [SRS §1.3](SRS.md) and §5.3.
 | 1 | 2026-11-23T12:58:05-05:00 | 918f0a8471d3 | INIT | Initial architecture CMP-001–CMP-011, ADR-001–ADR-012, defects D-01–D-24 |
 | 2 | 2026-11-23T15:17:07-05:00 | 701009f47d68 | REVISION | Renamed from ARCHITECTURE_SPEC.md; status Baselined; Go 1.26.11; CMP-012; ADR-013–ADR-020 and assumptions; defects linked to issues; D-13 partly fixed by PR #23; D-25–D-30 |
 | 3 | 2026-11-23T15:35:12-05:00 | 8cbf60de297e | REVISION | Review fixes: D-08 and D-09 block the Pilot (RISK-002); D-21 Pilot with #43; issues #38–#42 linked for D-26–D-30 |
+| 4 | 2026-11-23T15:52:00-05:00 | c350426f94c5 | REVISION | PR #44: permission management, default roles, channel search filtering, checked typing and kick hierarchy; residual B3 delivery gaps recorded |
+| 5 | 2026-11-23T16:25:23-05:00 | 7af05226f577 | REVISION | PR #44 round 2: SV-FR-078 grant limits, fixed default-role position, API notes and restored evidence |
+| 6 | 2026-11-23T16:57:25-05:00 | 3444c6dce8b6 | REVISION | PR #44 round 3: protect current role permissions on update/delete; member role deltas and validation before writes; evidence and UI corrections |

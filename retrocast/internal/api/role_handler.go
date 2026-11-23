@@ -55,7 +55,7 @@ func (h *RoleHandler) ListRoles(c echo.Context) error {
 		return errorJSON(c, http.StatusBadRequest, "INVALID_ID", "invalid guild id")
 	}
 
-	roles, err := h.service.ListRoles(c.Request().Context(), guildID)
+	roles, err := h.service.ListRoles(c.Request().Context(), guildID, auth.GetUserID(c))
 	if err != nil {
 		return mapServiceError(c, err)
 	}
@@ -192,7 +192,7 @@ func (h *RoleHandler) SetChannelOverride(c echo.Context) error {
 		return errorJSON(c, http.StatusBadRequest, "INVALID_BODY", "invalid request body")
 	}
 
-	override, err := h.service.SetChannelOverride(c.Request().Context(), channelID, roleID, req.Allow, req.Deny)
+	override, err := h.service.SetChannelOverride(c.Request().Context(), channelID, auth.GetUserID(c), roleID, req.Allow, req.Deny)
 	if err != nil {
 		return mapServiceError(c, err)
 	}
@@ -212,7 +212,7 @@ func (h *RoleHandler) DeleteChannelOverride(c echo.Context) error {
 		return errorJSON(c, http.StatusBadRequest, "INVALID_ID", "invalid role id")
 	}
 
-	if err := h.service.DeleteChannelOverride(c.Request().Context(), channelID, roleID); err != nil {
+	if err := h.service.DeleteChannelOverride(c.Request().Context(), channelID, auth.GetUserID(c), roleID); err != nil {
 		return mapServiceError(c, err)
 	}
 

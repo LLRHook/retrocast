@@ -38,23 +38,22 @@ const swaggerUIHTML = `<!DOCTYPE html>
 
 // Dependencies holds all handler instances and middleware for route wiring.
 type Dependencies struct {
-	Auth     *AuthHandler
-	Guilds   *GuildHandler
-	Channels *ChannelHandler
-	Members  *MemberHandler
-	Users    *UserHandler
-	Messages *MessageHandler
-	Invites  *InviteHandler
-	Roles    *RoleHandler
-	Uploads  *UploadHandler
-	Bans     *BanHandler
+	Auth       *AuthHandler
+	Guilds     *GuildHandler
+	Channels   *ChannelHandler
+	Members    *MemberHandler
+	Users      *UserHandler
+	Messages   *MessageHandler
+	Invites    *InviteHandler
+	Roles      *RoleHandler
+	Uploads    *UploadHandler
+	Bans       *BanHandler
 	DMs        *DMHandler
 	ReadStates *ReadStateHandler
 	Reactions  *ReactionHandler
 	Search     *SearchHandler
 	Voice      *VoiceHandler
-	Typing     *gateway.TypingHandler
-	Gateway  *gateway.Manager
+	Gateway    *gateway.Manager
 
 	TokenService *auth.TokenService
 	Pool         *pgxpool.Pool
@@ -195,7 +194,7 @@ func SetupRouter(e *echo.Echo, deps *Dependencies) {
 	protected.POST("/channels/:id/attachments", deps.Uploads.Upload)
 
 	// Typing
-	protected.POST("/channels/:id/typing", deps.Typing.Handle)
+	protected.POST("/channels/:id/typing", deps.Messages.Typing)
 
 	// Read states (ack)
 	protected.PUT("/channels/:id/ack/:message_id", deps.ReadStates.Ack)
