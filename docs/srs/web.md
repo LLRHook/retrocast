@@ -125,3 +125,4 @@ Bound by SYS-CON-003 (existing stack: React 19, Vite 7, TypeScript, Tailwind 4, 
 | 2 | 2026-11-23T15:17:07-05:00 | 701009f47d68 | REVISION | Added WEB-FR-019–WEB-FR-024, WEB-NFR-001, WEB-NFR-002; WEB-FR-006 and WEB-FR-014 Partial (D-29) |
 | 3 | 2026-11-23T15:35:12-05:00 | 8cbf60de297e | REVISION | Review fix: WEB-FR-018 Partial (no moderator Delete in the context menu) |
 | 4 | 2026-11-23T17:24:36-05:00 | 001716422223 | REVISION | PR #45: REST v2 envelopes and string ids; web Pilot flow fixes; API-059 and role ordering remain partial |
+| 5 | 2026-11-23T18:35:55-05:00 | 8c86806c1499 | REVISION | PR #45 round 2: optional configuration, unified error mapping, API-059/B5 remainder and unconditional local sign-out |
