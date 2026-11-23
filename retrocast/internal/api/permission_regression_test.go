@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/labstack/echo/v4"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/victorivanov/retrocast/internal/auth"
 	"github.com/victorivanov/retrocast/internal/models"
 	"github.com/victorivanov/retrocast/internal/permissions"
@@ -357,6 +358,13 @@ func TestPermissionRegressionMemberRoleReplacement(t *testing.T) {
 }
 
 func TestPermissionRegressionTypingRoute(t *testing.T) {
+	oldRegisterer := prometheus.DefaultRegisterer
+	oldGatherer := prometheus.DefaultGatherer
+	registry := prometheus.NewRegistry()
+	prometheus.DefaultRegisterer = registry
+	prometheus.DefaultGatherer = registry
+	t.Cleanup(func() { prometheus.DefaultRegisterer = oldRegisterer; prometheus.DefaultGatherer = oldGatherer })
+
 	g, m, r, o := permMocks(permissions.PermSendMessages)
 	m.GetByGuildAndUserFn = func(context.Context, int64, int64) (*models.Member, error) { return nil, nil }
 	h := newMessageHandler(&mockMessageRepo{}, channelMock(), m, r, g, o, &mockGateway{})
