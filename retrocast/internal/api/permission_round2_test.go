@@ -14,7 +14,7 @@ import (
 func TestGrantLimits(t *testing.T) {
 	for _, actor := range []int64{100, 200, 300} {
 		for _, bits := range []permissions.Permission{permissions.PermViewChannel, permissions.PermKickMembers, permissions.PermAdministrator, permissions.PermManageGuild, permissions.PermBanMembers, permissions.Permission(-2147483648), permissions.Permission(-1)} {
-			for _, op := range []string{"create", "update", "updateExisting", "nameOnly", "colorOnly", "strip", "delete", "everyone", "assign", "remove", "replaceAdd", "replaceRemove", "override"} {
+			for _, op := range []string{"create", "update", "addBits", "updateExisting", "nameOnly", "colorOnly", "strip", "delete", "everyone", "assign", "remove", "replaceAdd", "replaceRemove", "override"} {
 				t.Run(fmt.Sprintf("%d/%d/%s", actor, bits, op), func(t *testing.T) {
 					ctx := context.Background()
 					g, m, r, o := permMocks(permissions.PermViewChannel)
@@ -34,6 +34,10 @@ func TestGrantLimits(t *testing.T) {
 						return []models.Role{baseRole}, nil
 					}
 					target := models.Role{ID: 10, GuildID: 1000, Position: 1, Permissions: int64(bits)}
+					if op == "addBits" {
+						target.Permissions = int64(permissions.PermKickMembers)
+					}
+
 					if op == "everyone" {
 						target.IsDefault = true
 						target.Position = 0
@@ -56,7 +60,7 @@ func TestGrantLimits(t *testing.T) {
 					switch op {
 					case "create":
 						_, err = svc.CreateRole(ctx, 1000, actor, "role", 0, permBits, 1)
-					case "update", "everyone":
+					case "update", "addBits", "everyone":
 						_, err = svc.UpdateRole(ctx, 1000, actor, 10, nil, nil, &permBits, nil)
 					case "updateExisting":
 						_, err = svc.UpdateRole(ctx, 1000, actor, 10, nil, nil, nil, nil)
