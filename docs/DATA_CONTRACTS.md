@@ -24,11 +24,11 @@ server stops at start with an error naming the keys.
 |---|---|---|
 | `DATABASE_URL` | yes | PostgreSQL connection string |
 | `JWT_SECRET` | yes | HMAC key for access tokens (no minimum length is enforced) |
-| `REDIS_URL` | no | Redis connection (default `redis://localhost:6379`) |
-| `SERVER_ADDR` | no | Listen address (default `:8080`; compose publishes 8080 until SV-NFR-008 ships) |
-| `LOG_LEVEL` | no | slog level (default `info`) |
-| `REGISTRATION_MODE` | no | `open`, `invite` or `closed` (default `invite`); any other value stops the server at start (SV-FR-062). Specified in rev 2, not yet read by the code |
-| `ALLOWED_ORIGINS` | no | Comma-separated browser origins allowed besides the server's own (SV-NFR-011). Specified in rev 2, not yet read by the code |
+| `REDIS_URL` | yes | Redis connection (default `redis://localhost:6379`) |
+| `SERVER_ADDR` | yes | Listen address (default `:8080`; compose publishes 8080 until SV-NFR-008 ships) |
+| `LOG_LEVEL` | yes | slog level (default `info`) |
+| `REGISTRATION_MODE` | yes | `open`, `invite` or `closed` (default `invite`); any other value stops the server at start (SV-FR-062). Specified in rev 2, not yet read by the code |
+| `ALLOWED_ORIGINS` | yes | Comma-separated browser origins allowed besides the server's own (SV-NFR-011). Specified in rev 2, not yet read by the code |
 | `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY` | yes for uploads | Object store; bucket `retrocast` is created at start |
 | `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | yes for voice | Token minting (§7.1) |
 | `POSTGRES_PASSWORD`, `MINIO_ROOT_PASSWORD` | compose only | Service passwords used by `docker-compose.yml` |
@@ -73,14 +73,14 @@ message (D-09).
 ## 3. Entities
 
 All ids are 64-bit snowflakes (`retrocast/internal/snowflake`) encoded in JSON as decimal
-strings, except where noted (SV-IR-004, D-11).
+strings (SV-IR-004; D-11 fixed in B2).
 
 | ID | Entity | Store | Fields (constraints) | Integrity | Classification | Requirements | Version |
 |---|---|---|---|---|---|---|---|
 | ENT-001 | User | PostgreSQL `users` | id PK; username VARCHAR(32) unique (case-sensitive); display_name VARCHAR(32); avatar_hash VARCHAR(64) null; password_hash TEXT (never serialised); created_at | Referenced by guilds.owner_id, messages.author_id, invites.creator_id and bans.created_by without ON DELETE, so a user who owns a guild or wrote a message cannot be deleted (account deletion is Later, CAP-038) | Personal (username, display name); Secret (password hash) | SV-FR-001–SV-FR-004, SV-FR-053, SV-FR-060, SV-FR-062–SV-FR-065, SV-NFR-001 | v1.0.0 |
 | ENT-002 | Guild | PostgreSQL `guilds` | id PK; name VARCHAR(100) (2–100 in service); icon_hash VARCHAR(64) null; owner_id FK users; created_at | Deleting a guild cascades to channels, roles, members, invites and bans | Internal | SV-FR-007–SV-FR-013 | v1.0.0 |
 | ENT-003 | Channel | PostgreSQL `channels` | id PK; guild_id FK cascade; name VARCHAR(100); type SMALLINT (0 text, 2 voice, 4 category); position INT; topic VARCHAR(1024) null; parent_id FK channels null | UNIQUE(guild_id, name); parent_id has no ON DELETE | Internal | SV-FR-009, SV-FR-014–SV-FR-017 | v1.0.0 |
-| ENT-004 | Member | PostgreSQL `members` | PK (guild_id, user_id), both FK cascade; nickname VARCHAR(32) null; joined_at; JSON adds `roles` (role ids as JSON numbers, D-11) | Cascades to member_roles | Personal (nickname) | SV-FR-020, SV-FR-022–SV-FR-024, SV-FR-063, SV-FR-066, SV-FR-067, SV-FR-071, SV-FR-077 | v1.0.0 |
+| ENT-004 | Member | PostgreSQL `members` | PK (guild_id, user_id), both FK cascade; nickname VARCHAR(32) null; joined_at; JSON adds `roles` (role ids as decimal strings) | Cascades to member_roles | Personal (nickname) | SV-FR-020, SV-FR-022–SV-FR-024, SV-FR-063, SV-FR-066, SV-FR-067, SV-FR-071, SV-FR-077 | v1.0.0 |
 | ENT-005 | MemberRole | PostgreSQL `member_roles` | PK (guild_id, user_id, role_id); role_id FK roles cascade; (guild_id, user_id) FK members cascade | No check that the role belongs to the same guild at the database level | Internal | SV-FR-008, SV-FR-043, SV-FR-045 | v1.0.0 |
 | ENT-006 | Role | PostgreSQL `roles` | id PK; guild_id FK cascade; name VARCHAR(100); color INT; permissions BIGINT bitfield (§3.1); position INT; is_default BOOL (`@everyone`) | — | Internal | SV-FR-008, SV-FR-040–SV-FR-046 | v1.0.0 |
 | ENT-007 | ChannelOverride | PostgreSQL `channel_overrides` | PK (channel_id, role_id), both FK cascade; allow_perms BIGINT; deny_perms BIGINT | No check that the role and channel share a guild | Internal | SV-FR-045, SV-FR-047 | v1.0.0 |
@@ -153,23 +153,23 @@ sent in JSON as decimal strings (SV-IR-004).
 Base path `/api/v1`; JSON bodies; `Authorization: Bearer <access token>` on every operation
 except API-001–API-003 and API-049. Every operation is version v2.0.0 (rev 2): every success
 body is `{"data": …}` and a 204 has no body (SV-IR-007, ADR-013, §9). The "Wrapped today"
-column shows the code's current shape, which v2.0.0 changes where it says "no". Status codes
+column shows the implemented v2.0.0 response shape. Status codes
 are as documented in OpenAPI; where the code differs, the Notes column says so.
 
 | ID | Operation | Method and path | Success | Wrapped today | Notes | Requirements |
 |---|---|---|---|---|---|---|
-| API-001 | register | POST /auth/register | 200 tokens + user | no | the legacy api.md said 201; optional `invite_code` (rev 2, used in mode `invite`); 403 `INVITE_REQUIRED`, `INVALID_INVITE` or `REGISTRATION_CLOSED` by mode | SV-FR-001–SV-FR-003, SV-FR-062–SV-FR-065, SYS-CON-002 |
-| API-002 | login | POST /auth/login | 200 tokens + user | no | | SV-FR-004 |
-| API-003 | refreshToken | POST /auth/refresh | 200 token pair | no | | SV-FR-005 |
+| API-001 | register | POST /auth/register | 200 tokens + user | yes | the legacy api.md said 201; optional `invite_code` (rev 2, used in mode `invite`); 403 `INVITE_REQUIRED`, `INVALID_INVITE` or `REGISTRATION_CLOSED` by mode | SV-FR-001–SV-FR-003, SV-FR-062–SV-FR-065, SYS-CON-002 |
+| API-002 | login | POST /auth/login | 200 tokens + user | yes | | SV-FR-004 |
+| API-003 | refreshToken | POST /auth/refresh | 200 token pair | yes | | SV-FR-005 |
 | API-004 | logout | POST /auth/logout | 204 | — | | SV-FR-006 |
 | API-005 | getMe | GET /users/@me | 200 user | yes | | SV-FR-053 |
 | API-006 | updateMe | PATCH /users/@me | 200 user | yes | | SV-FR-053 |
 | API-007 | listMyGuilds | GET /users/@me/guilds | 200 guilds | yes | | SV-FR-013 |
-| API-008 | createDM | POST /users/@me/channels | 200 DM channel | no | `recipient_id` (DM) or `recipient_ids` (group) | SV-FR-054, SV-FR-056 |
-| API-009 | listDMs | GET /users/@me/channels | 200 DM channels | no | | SV-FR-058 |
+| API-008 | createDM | POST /users/@me/channels | 200 DM channel | yes | `recipient_id` (DM) or `recipient_ids` (group) | SV-FR-054, SV-FR-056 |
+| API-009 | listDMs | GET /users/@me/channels | 200 DM channels | yes | | SV-FR-058 |
 | API-010 | addGroupDMMember | PUT /channels/{channelId}/recipients/{userId} | 204 | — | | SV-FR-057 |
 | API-011 | removeGroupDMMember | DELETE /channels/{channelId}/recipients/{userId} | 204 | — | | SV-FR-057 |
-| API-012 | getReadStates | GET /users/@me/read-states | 200 read states | no | | SV-FR-076 |
+| API-012 | getReadStates | GET /users/@me/read-states | 200 read states | yes | | SV-FR-076 |
 | API-013 | createGuild | POST /guilds | 201 guild | yes | | SV-FR-007–SV-FR-009 |
 | API-014 | getGuild | GET /guilds/{guildId} | 200 guild | yes | | SV-FR-010 |
 | API-015 | updateGuild | PATCH /guilds/{guildId} | 200 guild | yes | | SV-FR-011 |
@@ -179,43 +179,43 @@ are as documented in OpenAPI; where the code differs, the Notes column says so.
 | API-019 | getChannel | GET /channels/{channelId} | 200 channel | yes | | SV-FR-016 |
 | API-020 | updateChannel | PATCH /channels/{channelId} | 200 channel | yes | | SV-FR-015 |
 | API-021 | deleteChannel | DELETE /channels/{channelId} | 204 | — | | SV-FR-015 |
-| API-022 | sendMessage | POST /channels/{channelId}/messages | 201 message | no | DM channels fail (D-08) | SV-FR-025, SV-FR-055 |
-| API-023 | getMessages | GET /channels/{channelId}/messages | 200 messages | no | `limit` 1–100 (50), `before` | SV-FR-027, SV-FR-052 |
-| API-024 | getMessage | GET /channels/{channelId}/messages/{messageId} | 200 message | no | | SV-FR-028 |
-| API-025 | editMessage | PATCH /channels/{channelId}/messages/{messageId} | 200 message | no | | SV-FR-029 |
+| API-022 | sendMessage | POST /channels/{channelId}/messages | 201 message | yes | DM channels fail (D-08) | SV-FR-025, SV-FR-055 |
+| API-023 | getMessages | GET /channels/{channelId}/messages | 200 messages | yes | `limit` 1–100 (50), `before` | SV-FR-027, SV-FR-052 |
+| API-024 | getMessage | GET /channels/{channelId}/messages/{messageId} | 200 message | yes | | SV-FR-028 |
+| API-025 | editMessage | PATCH /channels/{channelId}/messages/{messageId} | 200 message | yes | | SV-FR-029 |
 | API-026 | deleteMessage | DELETE /channels/{channelId}/messages/{messageId} | 204 | — | | SV-FR-030 |
-| API-027 | uploadAttachment | POST /channels/{channelId}/attachments | 201 attachment | no | multipart; ≤10 MB; JPEG, PNG, GIF, WebP, PDF, plain text, and any `image/*` type (SVG included). Rev 2 target (Later): pre-signed upload, no SVG (SV-FR-051, ADR-019) | SV-FR-051 |
+| API-027 | uploadAttachment | POST /channels/{channelId}/attachments | 201 attachment | yes | multipart; ≤10 MB; JPEG, PNG, GIF, WebP, PDF, plain text, and any `image/*` type (SVG included). Rev 2 target (Later): pre-signed upload, no SVG (SV-FR-051, ADR-019) | SV-FR-051 |
 | API-028 | triggerTyping | POST /channels/{channelId}/typing | 204 | — | MessageService.Typing: guild SEND_MESSAGES after overrides; DM participants only; 403 for unauthorized callers, 404 for unknown channels; writes Redis marker before dispatch | SV-FR-031 |
 | API-029 | ackMessage | PUT /channels/{channelId}/ack/{messageId} | 204 | — | | SV-FR-076 |
 | API-030 | addReaction | PUT /channels/{channelId}/messages/{messageId}/reactions/{emoji}/@me | 204 | — | | SV-FR-074 |
 | API-031 | removeReaction | DELETE /channels/{channelId}/messages/{messageId}/reactions/{emoji}/@me | 204 | — | | SV-FR-074 |
-| API-032 | getReactions | GET /channels/{channelId}/messages/{messageId}/reactions/{emoji} | 200 users | no | user ids as JSON numbers (D-11) | SV-FR-075 |
+| API-032 | getReactions | GET /channels/{channelId}/messages/{messageId}/reactions/{emoji} | 200 users | yes | user ids as JSON numbers (D-11) | SV-FR-075 |
 | API-033 | listMembers | GET /guilds/{guildId}/members | 200 members | yes | `limit` 1–100 (50), `offset` | SV-FR-023 |
 | API-034 | updateSelf | PATCH /guilds/{guildId}/members/@me | 200 member | yes | nickname; no `CHANGE_NICKNAME` check | SV-FR-077 |
 | API-035 | leaveGuild | DELETE /guilds/{guildId}/members/@me | 204 | — | owner gets 403 | SV-FR-022 |
 | API-036 | getMember | GET /guilds/{guildId}/members/{userId} | 200 member | yes | | SV-FR-024 |
 | API-037 | updateMember | PATCH /guilds/{guildId}/members/{userId} | 200 member | yes | nickname, roles; validate role changes before writes; unchanged roles preserved | SV-FR-043, SV-FR-077 |
 | API-038 | kickMember | DELETE /guilds/{guildId}/members/{userId} | 204 | — | KICK_MEMBERS, strict hierarchy and owner protection; self kick returns 400 CANNOT_KICK_SELF | SV-FR-066, SV-FR-070 |
-| API-039 | createRole | POST /guilds/{guildId}/roles | 201 role | no | | SV-FR-040 |
-| API-040 | listRoles | GET /guilds/{guildId}/roles | 200 roles | no | membership required; non-members receive 404 | SV-FR-044 |
-| API-041 | updateRole | PATCH /guilds/{guildId}/roles/{roleId} | 200 role | no | MANAGE_ROLES, same-guild role, hierarchy and grant limit on current plus requested bits; @everyone position fixed at 0 | SV-FR-041 |
+| API-039 | createRole | POST /guilds/{guildId}/roles | 201 role | yes | | SV-FR-040 |
+| API-040 | listRoles | GET /guilds/{guildId}/roles | 200 roles | yes | membership required; non-members receive 404 | SV-FR-044 |
+| API-041 | updateRole | PATCH /guilds/{guildId}/roles/{roleId} | 200 role | yes | MANAGE_ROLES, same-guild role, hierarchy and grant limit on current plus requested bits; @everyone position fixed at 0 | SV-FR-041 |
 | API-042 | deleteRole | DELETE /guilds/{guildId}/roles/{roleId} | 204 | — | `@everyone` gives 403 `CANNOT_DELETE`; MANAGE_ROLES, same-guild role, hierarchy and grant limit on current bits required | SV-FR-042 |
 | API-043 | assignRole | PUT /guilds/{guildId}/members/{userId}/roles/{roleId} | 204 | — | | SV-FR-043 |
 | API-044 | removeRole | DELETE /guilds/{guildId}/members/{userId}/roles/{roleId} | 204 | — | | SV-FR-043 |
-| API-045 | setChannelOverride | PUT /channels/{channelId}/permissions/{roleId} | 200 override | no | channel MANAGE_ROLES and same-guild role required; allow bits limited to guild base permissions unless owner or Administrator (SV-FR-078) | SV-FR-047 |
+| API-045 | setChannelOverride | PUT /channels/{channelId}/permissions/{roleId} | 200 override | yes | channel MANAGE_ROLES and same-guild role required; allow bits limited to guild base permissions unless owner or Administrator (SV-FR-078) | SV-FR-047 |
 | API-046 | deleteChannelOverride | DELETE /channels/{channelId}/permissions/{roleId} | 204 | — | channel MANAGE_ROLES and same-guild role required | SV-FR-047 |
-| API-047 | createInvite | POST /guilds/{guildId}/invites | 201 invite | no | `max_age_seconds` default 86 400, `max_uses` default 0 | SV-FR-018 |
-| API-048 | listInvites | GET /guilds/{guildId}/invites | 200 invites | no | | SV-FR-021 |
-| API-049 | getInvite | GET /invites/{code} | 200 invite preview | no | public; expired gives 404 `EXPIRED`; no rate limit today | SV-FR-019, SV-NFR-003 |
-| API-050 | acceptInvite | POST /invites/{code} | 200 guild | no | code also returns 410 and 403 `BANNED`, which OpenAPI omits | SV-FR-020 |
+| API-047 | createInvite | POST /guilds/{guildId}/invites | 201 invite | yes | `max_age_seconds` default 86 400, `max_uses` default 0 | SV-FR-018 |
+| API-048 | listInvites | GET /guilds/{guildId}/invites | 200 invites | yes | | SV-FR-021 |
+| API-049 | getInvite | GET /invites/{code} | 200 invite preview | yes | public; expired gives 404 `EXPIRED`; no rate limit today | SV-FR-019, SV-NFR-003 |
+| API-050 | acceptInvite | POST /invites/{code} | 200 guild | yes | code also returns 410 and 403 `BANNED`, which OpenAPI omits | SV-FR-020 |
 | API-051 | revokeInvite | DELETE /invites/{code} | 204 | — | | SV-FR-021 |
-| API-052 | listBans | GET /guilds/{guildId}/bans | 200 bans | no | | SV-FR-068 |
+| API-052 | listBans | GET /guilds/{guildId}/bans | 200 bans | yes | | SV-FR-068 |
 | API-053 | banMember | PUT /guilds/{guildId}/bans/{userId} | 204 | — | body `{"reason": string or null}` | SV-FR-067, SV-FR-070 |
 | API-054 | unbanMember | DELETE /guilds/{guildId}/bans/{userId} | 204 | — | | SV-FR-069 |
-| API-055 | searchMessages | GET /guilds/{guildId}/messages/search | 200 messages | no | `q`, `author_id`, `before`, `after`, `limit` 1–100 (25) | SV-FR-059 |
-| API-056 | joinVoice | POST /channels/{channelId}/voice/join | 200 token + voice states | no | no LiveKit URL in the response | SV-FR-048, SV-IR-006 |
+| API-055 | searchMessages | GET /guilds/{guildId}/messages/search | 200 messages | yes | `q`, `author_id`, `before`, `after`, `limit` 1–100 (25) | SV-FR-059 |
+| API-056 | joinVoice | POST /channels/{channelId}/voice/join | 200 token + voice states | yes | no LiveKit URL in the response | SV-FR-048, SV-IR-006 |
 | API-057 | leaveVoice | POST /channels/{channelId}/voice/leave | 204 | — | | SV-FR-049 |
-| API-058 | getVoiceStates | GET /channels/{channelId}/voice/states | 200 voice states | no | | SV-FR-050 |
+| API-058 | getVoiceStates | GET /channels/{channelId}/voice/states | 200 voice states | yes | | SV-FR-050 |
 | API-059 | changePassword | PUT /users/@me/password | 200 tokens + user | — | added rev 2, not built; body `current_password`, `new_password`; 403 `INVALID_CREDENTIALS`, 400 `INVALID_PASSWORD`; credential rate limit | SV-FR-060, SV-FR-061 |
 
 Routes outside `/api/v1`: `GET /health`, `GET /metrics` (Prometheus), `GET /docs`,
@@ -340,7 +340,7 @@ together with the iOS client (Q-025); APNs is the one optional outside service G
 
 | Rev | Contract | From | To | Change | Clients | Decision |
 |---|---|---|---|---|---|---|
-| 2 | REST operations (§4) | v1.0.0 | v2.0.0 (breaking) | Every success body is `{"data": …}`; the operations marked "no" under "Wrapped today" change shape; 204 responses have no body; error bodies are unchanged; the path stays `/api/v1` | No parallel v1 shape is served. The web client already reads `data` (it must stop parsing 204 bodies, D-29). The iOS client accepts both shapes except on refresh, which v2.0.0 fixes; its update is tracked when the iOS client is scheduled | Q-010 (owner); ADR-013 (driver) |
+| 2 | REST operations (§4) | v1.0.0 | v2.0.0 (breaking) | Every success body is `{"data": …}`; the formerly bare auth, DM, read-state, message, upload, reaction-list, role, override, invite, ban-list, search and voice operations change shape; 204 responses have no body; error bodies are unchanged; the path stays `/api/v1` | No parallel v1 shape is served. The web client already reads `data` (empty 204 handling fixed in B2, D-29). The iOS client accepts both shapes except on refresh, which v2.0.0 fixes; its update is tracked when the iOS client is scheduled | Q-010 (owner); ADR-013 (driver); implemented in PR #45 |
 | 2 | API-001 register | v1.0.0 | v2.0.0 | Optional `invite_code`; 403 codes by registration mode | Web register page gains the field (WEB-FR-020) | Q-012; ADR-014 |
 | 2 | EVT-007 RECONNECT | v1.0.0 | v1.0.0 (frame unchanged) | Sent in fewer cases: not for a second IDENTIFY | A client that reads op 7 as "signed in elsewhere" must not | Q-009; ADR-017 |
 
