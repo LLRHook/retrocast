@@ -1,6 +1,6 @@
 # Retrocast — Architecture
 
-Status: Baselined (rev 5)
+Status: Baselined (rev 6)
 Related: [SRS](SRS.md) · [Data Contracts](DATA_CONTRACTS.md) · [Product Brief](PRODUCT_BRIEF.md)
 
 It describes the system as built at commit `6bc385e`, re-read at `origin/main` 55e50eb
@@ -395,3 +395,4 @@ See [SRS §1.3](SRS.md) and §5.3.
 | 3 | 2026-11-23T15:35:12-05:00 | 8cbf60de297e | REVISION | Review fixes: D-08 and D-09 block the Pilot (RISK-002); D-21 Pilot with #43; issues #38–#42 linked for D-26–D-30 |
 | 4 | 2026-11-23T15:52:00-05:00 | c350426f94c5 | REVISION | PR #44: permission management, default roles, channel search filtering, checked typing and kick hierarchy; residual B3 delivery gaps recorded |
 | 5 | 2026-11-23T16:25:23-05:00 | 7af05226f577 | REVISION | PR #44 round 2: SV-FR-078 grant limits, fixed default-role position, API notes and restored evidence |
+| 6 | 2026-11-23T16:56:04-05:00 | 98d86a8bf6e9 | REVISION | PR #44 round 3: protect current role permissions on update/delete; member role deltas and validation before writes; evidence and UI corrections |
