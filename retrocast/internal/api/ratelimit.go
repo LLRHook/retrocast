@@ -10,6 +10,18 @@ import (
 	"github.com/victorivanov/retrocast/internal/redis"
 )
 
+// ClientIPExtractor returns the extractor Echo uses for Context.RealIP.
+//
+// Since Echo v4.16.3, RealIP returns the socket peer when no extractor is set, so
+// every client behind the bundled Caddy reverse proxy would share one rate-limit
+// key. This extractor reads X-Forwarded-For but trusts a hop only when it is a
+// loopback, link-local or private address (Echo's default trust set, which covers
+// the Docker network Caddy runs on). A client connecting from a public address
+// cannot choose its own rate-limit key by sending forwarding headers.
+func ClientIPExtractor() echo.IPExtractor {
+	return echo.ExtractIPFromXFFHeader()
+}
+
 // RateLimitMiddleware creates per-IP (unauthenticated) or per-user (authenticated)
 // rate limiting using Redis. Sets standard rate limit response headers.
 func RateLimitMiddleware(redisClient *redis.Client, limit int, window time.Duration) echo.MiddlewareFunc {

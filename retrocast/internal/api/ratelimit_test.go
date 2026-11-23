@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -34,6 +35,39 @@ func TestRateLimit_ForwardedHeadersCannotRotateKey(t *testing.T) {
 		}
 		if rec.Code != tc.want {
 			t.Fatalf("request %d: got %d, want %d", i, rec.Code, tc.want)
+		}
+	}
+}
+
+func TestRateLimit_ClientIPExtractorSeparatesProxiedClients(t *testing.T) {
+	rdb := newTestRedis(t)
+	e := echo.New()
+	e.IPExtractor = ClientIPExtractor()
+	e.GET("/api/v1/test", func(c echo.Context) error {
+		return c.String(http.StatusOK, "ok")
+	}, RateLimitMiddleware(rdb, 1, time.Minute))
+
+	const proxy = "172.18.0.5:41000" // Caddy on the compose network (private address)
+	for i, tc := range []struct {
+		peer      string
+		forwarded string
+		want      int
+	}{
+		// Two clients behind the trusted proxy are limited separately.
+		{proxy, "203.0.113.10", http.StatusOK},
+		{proxy, "203.0.113.10", http.StatusTooManyRequests},
+		{proxy, "203.0.113.11", http.StatusOK},
+		// A client connecting directly from a public address cannot rotate its key.
+		{"198.51.100.7:5000", "203.0.113.20", http.StatusOK},
+		{"198.51.100.7:5001", "203.0.113.21", http.StatusTooManyRequests},
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/test", nil)
+		req.RemoteAddr = tc.peer
+		req.Header.Set(echo.HeaderXForwardedFor, tc.forwarded)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		if rec.Code != tc.want {
+			t.Fatalf("request %d (peer %s, X-Forwarded-For %s): got %d, want %d", i, tc.peer, tc.forwarded, rec.Code, tc.want)
 		}
 	}
 }
