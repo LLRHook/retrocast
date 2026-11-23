@@ -140,6 +140,8 @@ Guild-scoped checks (`RequireGuildPermission`) delegate to `RequireGuildPermissi
 and use step 2, including the default role even when no member-role row exists (PR #44, D-04 fixed). The guild owner is never subject to the role
 hierarchy (SV-FR-070).
 
+SV-FR-078 limits non-owner, non-Administrator role managers to this guild base permission set when creating/updating roles, assigning/removing roles, replacing member roles or setting override allow bits. Channel overrides never expand the grantable set. The @everyone position stays 0 for every caller.
+
 ### 3.3 Snowflake ids
 Source: `retrocast/internal/snowflake/snowflake.go`. 64 bits: 42 bits of milliseconds since
 the epoch 2025-01-01T00:00:00Z (1735689600000), 5 bits worker id, 5 bits process id and 12
@@ -183,7 +185,7 @@ are as documented in OpenAPI; where the code differs, the Notes column says so.
 | API-025 | editMessage | PATCH /channels/{channelId}/messages/{messageId} | 200 message | no | | SV-FR-029 |
 | API-026 | deleteMessage | DELETE /channels/{channelId}/messages/{messageId} | 204 | — | | SV-FR-030 |
 | API-027 | uploadAttachment | POST /channels/{channelId}/attachments | 201 attachment | no | multipart; ≤10 MB; JPEG, PNG, GIF, WebP, PDF, plain text, and any `image/*` type (SVG included). Rev 2 target (Later): pre-signed upload, no SVG (SV-FR-051, ADR-019) | SV-FR-051 |
-| API-028 | triggerTyping | POST /channels/{channelId}/typing | 204 | — | routed to `gateway.TypingHandler`, not the service | SV-FR-031 |
+| API-028 | triggerTyping | POST /channels/{channelId}/typing | 204 | — | MessageService.Typing: guild SEND_MESSAGES after overrides; DM participants only; 403 for unauthorized callers, 404 for unknown channels; writes Redis marker before dispatch | SV-FR-031 |
 | API-029 | ackMessage | PUT /channels/{channelId}/ack/{messageId} | 204 | — | | SV-FR-076 |
 | API-030 | addReaction | PUT /channels/{channelId}/messages/{messageId}/reactions/{emoji}/@me | 204 | — | | SV-FR-074 |
 | API-031 | removeReaction | DELETE /channels/{channelId}/messages/{messageId}/reactions/{emoji}/@me | 204 | — | | SV-FR-074 |
@@ -193,15 +195,15 @@ are as documented in OpenAPI; where the code differs, the Notes column says so.
 | API-035 | leaveGuild | DELETE /guilds/{guildId}/members/@me | 204 | — | owner gets 403 | SV-FR-022 |
 | API-036 | getMember | GET /guilds/{guildId}/members/{userId} | 200 member | yes | | SV-FR-024 |
 | API-037 | updateMember | PATCH /guilds/{guildId}/members/{userId} | 200 member | yes | nickname, roles | SV-FR-043, SV-FR-077 |
-| API-038 | kickMember | DELETE /guilds/{guildId}/members/{userId} | 204 | — | no hierarchy or self check today (D-28); target adds 400 `CANNOT_KICK_SELF` | SV-FR-066, SV-FR-070 |
+| API-038 | kickMember | DELETE /guilds/{guildId}/members/{userId} | 204 | — | KICK_MEMBERS, strict hierarchy and owner protection; self kick returns 400 CANNOT_KICK_SELF | SV-FR-066, SV-FR-070 |
 | API-039 | createRole | POST /guilds/{guildId}/roles | 201 role | no | | SV-FR-040 |
-| API-040 | listRoles | GET /guilds/{guildId}/roles | 200 roles | no | no membership check (D-03) | SV-FR-044 |
+| API-040 | listRoles | GET /guilds/{guildId}/roles | 200 roles | no | membership required; non-members receive 404 | SV-FR-044 |
 | API-041 | updateRole | PATCH /guilds/{guildId}/roles/{roleId} | 200 role | no | | SV-FR-041 |
 | API-042 | deleteRole | DELETE /guilds/{guildId}/roles/{roleId} | 204 | — | `@everyone` gives 403 `CANNOT_DELETE` | SV-FR-042 |
 | API-043 | assignRole | PUT /guilds/{guildId}/members/{userId}/roles/{roleId} | 204 | — | | SV-FR-043 |
 | API-044 | removeRole | DELETE /guilds/{guildId}/members/{userId}/roles/{roleId} | 204 | — | | SV-FR-043 |
-| API-045 | setChannelOverride | PUT /channels/{channelId}/permissions/{roleId} | 200 override | no | no permission check (D-01) | SV-FR-047 |
-| API-046 | deleteChannelOverride | DELETE /channels/{channelId}/permissions/{roleId} | 204 | — | no permission check (D-01) | SV-FR-047 |
+| API-045 | setChannelOverride | PUT /channels/{channelId}/permissions/{roleId} | 200 override | no | channel MANAGE_ROLES and same-guild role required; allow bits limited to guild base permissions unless owner or Administrator (SV-FR-078) | SV-FR-047 |
+| API-046 | deleteChannelOverride | DELETE /channels/{channelId}/permissions/{roleId} | 204 | — | channel MANAGE_ROLES and same-guild role required | SV-FR-047 |
 | API-047 | createInvite | POST /guilds/{guildId}/invites | 201 invite | no | `max_age_seconds` default 86 400, `max_uses` default 0 | SV-FR-018 |
 | API-048 | listInvites | GET /guilds/{guildId}/invites | 200 invites | no | | SV-FR-021 |
 | API-049 | getInvite | GET /invites/{code} | 200 invite preview | no | public; expired gives 404 `EXPIRED`; no rate limit today | SV-FR-019, SV-NFR-003 |
@@ -227,13 +229,15 @@ anything else 500 `INTERNAL`. Rate limiting returns 429 `RATE_LIMITED` with `Ret
 The JWT middleware returns Echo's message body instead
 (SV-IR-003). REST contract v2.0.0 keeps this error shape; only success bodies change.
 
-Codes in use: `INVALID_USERNAME`, `INVALID_PASSWORD`, `USERNAME_TAKEN`,
+Codes in use: `INVALID_POSITION`, `INVALID_USERNAME`, `INVALID_PASSWORD`, `USERNAME_TAKEN`,
 `INVALID_CREDENTIALS`, `MISSING_TOKEN`, `INVALID_TOKEN`, `INVALID_NAME`, `INVALID_TYPE`,
 `INVALID_CONTENT`, `INVALID_CHANNEL`, `NOT_VOICE_CHANNEL`, `INVALID_DISPLAY_NAME`,
 `INVALID_NICKNAME`, `INVALID_ROLE`, `INVALID_EMOJI`, `INVALID_QUERY`, `INVALID_RECIPIENT`,
 `INVALID_RECIPIENTS`, `MAX_MEMBERS`, `FILE_TOO_LARGE`, `INVALID_CONTENT_TYPE`,
 `CANNOT_BAN_SELF`, `CANNOT_DELETE`, `NOT_FOUND`, `EXPIRED`, `MAX_USES`, `ALREADY_MEMBER`,
 `BANNED`, `FORBIDDEN`, `MISSING_PERMISSIONS`, `ROLE_HIERARCHY`, `RATE_LIMITED`, `INTERNAL`.
+
+`INVALID_POSITION` is 400 for a negative role position or an attempt to move @everyone away from position 0 (SV-FR-008, SV-FR-078). Grant-limit failures return 403 `MISSING_PERMISSIONS`.
 
 Codes added in rev 2 (specified; CANNOT_KICK_SELF implemented in PR #44):
 

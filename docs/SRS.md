@@ -85,7 +85,7 @@ The operator sets secrets and endpoints in `retrocast/.env` (template `.env.exam
 - Registration mode: SV-FR-062–SV-FR-065, WEB-FR-020
 - Servers, channels, invites and membership: SV-FR-007–SV-FR-024, WEB-FR-005, WEB-FR-006, WEB-FR-012, WEB-FR-014, IOS-FR-004, IOS-FR-007
 - Text chat, typing and presence: SV-FR-025–SV-FR-038, SV-FR-071, SV-FR-072, WEB-FR-004, WEB-FR-007–WEB-FR-011, IOS-FR-003, IOS-FR-005, IOS-FR-006, IOS-FR-012
-- Roles and permissions: SV-FR-040–SV-FR-047, WEB-FR-013, IOS-FR-008
+- Roles and permissions: SV-FR-040–SV-FR-047, WEB-FR-013, IOS-FR-008; grant limits: SV-FR-078 (CAP-014).
 - Moderation (kick and ban): SV-FR-066–SV-FR-070, WEB-FR-021–WEB-FR-023
 - Operator health, metrics, backups and CLI: SV-NFR-005, SV-NFR-012, SV-NFR-013, SV-FR-073, SYS-FR-001–SYS-FR-004, SYS-NFR-005, SYS-NFR-006
 - Voice (Later): SV-FR-048–SV-FR-050, IOS-FR-011
@@ -126,7 +126,7 @@ The operator sets secrets and endpoints in `retrocast/.env` (template `.env.exam
 ### 1.8 Apportioning of requirements
 | Phase | Scope (FR/NFR ids) | Exit criteria |
 |---|---|---|
-| Pilot (MVP: the owner's group; SYSTEM_DESIGN Phase 1 on the web client, Q-003) | SV-FR-001–SV-FR-016, SV-FR-018–SV-FR-028, SV-FR-031–SV-FR-038, SV-FR-040–SV-FR-046, SV-FR-060–SV-FR-073; SV-IR-001–SV-IR-005, SV-IR-007, SV-IR-008; SV-NFR-001–SV-NFR-013; WEB-FR-001–WEB-FR-014, WEB-FR-019–WEB-FR-024; WEB-NFR-001, WEB-NFR-002 (Should); SYS-FR-001–SYS-FR-004; SYS-CON-001–SYS-CON-004; SYS-NFR-001–SYS-NFR-007 | Every Must requirement in this row Verified; the ARCHITECTURE §9 defects marked "Blocks Pilot" closed (they include D-08 and D-09, so RISK-002 is fixed as Q-003 requires); one restore drill recorded (SYS-NFR-006) |
+| Pilot (MVP: the owner's group; SYSTEM_DESIGN Phase 1 on the web client, Q-003) | SV-FR-078, SV-FR-001–SV-FR-016, SV-FR-018–SV-FR-028, SV-FR-031–SV-FR-038, SV-FR-040–SV-FR-046, SV-FR-060–SV-FR-073; SV-IR-001–SV-IR-005, SV-IR-007, SV-IR-008; SV-NFR-001–SV-NFR-013; WEB-FR-001–WEB-FR-014, WEB-FR-019–WEB-FR-024; WEB-NFR-001, WEB-NFR-002 (Should); SYS-FR-001–SYS-FR-004; SYS-CON-001–SYS-CON-004; SYS-NFR-001–SYS-NFR-007 | Every Must requirement in this row Verified; the ARCHITECTURE §9 defects marked "Blocks Pilot" closed (they include D-08 and D-09, so RISK-002 is fixed as Q-003 requires); one restore drill recorded (SYS-NFR-006) |
 | Production | No separate tier: the product stays a self-hosted instance for one private group (Q-001, Q-002), so the Pilot exit is the release | — |
 | Later — iOS client (follows the web, Q-004) | IOS-FR-001–IOS-FR-008, IOS-FR-012, IOS-NFR-001; the iOS update to REST contract v2.0.0 | Scheduled by the owner |
 | Later — Phase 2, voice and media | CAP-003, CAP-017 (web voice, audio only), CAP-018, CAP-019: SV-FR-048–SV-FR-053, SV-IR-006, WEB-FR-015, WEB-FR-017, IOS-FR-011 | Scheduled by the owner |

@@ -180,6 +180,12 @@ func (s *MemberService) UpdateMember(ctx context.Context, guildID, callerID, tar
 			current[id] = true
 		}
 		for _, role := range guildRoles {
+			if !role.IsDefault && (current[role.ID] || requested[role.ID]) {
+				if err := s.perms.RequireGrantPermissions(ctx, guildID, callerID, role.Permissions); err != nil {
+					return nil, err
+				}
+			}
+
 			if !isOwner && current[role.ID] != requested[role.ID] && role.Position >= highest {
 				return nil, RoleHierarchyError("cannot change a role at or above your highest role")
 			}
@@ -226,6 +232,10 @@ func (s *MemberService) KickMember(ctx context.Context, guildID, callerID, targe
 	if err != nil {
 		return Internal("INTERNAL", "internal server error")
 	}
+	if guild == nil {
+		return NotFound("NOT_FOUND", "guild not found")
+	}
+
 	if guild != nil && guild.OwnerID == targetUserID {
 		return Forbidden("FORBIDDEN", "cannot kick the guild owner")
 	}

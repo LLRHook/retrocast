@@ -111,33 +111,45 @@ func (p *PermissionChecker) RequireChannelPermission(ctx context.Context, guildI
 // RequireGuildPermissionByPerm is like RequireGuildPermission but uses permissions.Permission type.
 // Used by invite/ban handlers that pass permissions.Permission instead of raw int64.
 func (p *PermissionChecker) RequireGuildPermissionByPerm(ctx context.Context, guildID, userID int64, perm permissions.Permission) error {
+	computed, err := p.GuildBasePermissions(ctx, guildID, userID)
+	if err != nil {
+		return err
+	}
+	if !computed.Has(perm) {
+		return Forbidden("MISSING_PERMISSIONS", "you do not have the required permissions")
+	}
+	return nil
+}
+
+// GuildBasePermissions resolves owner, membership, @everyone and assigned roles.
+func (p *PermissionChecker) GuildBasePermissions(ctx context.Context, guildID, userID int64) (permissions.Permission, error) {
 	guild, err := p.guilds.GetByID(ctx, guildID)
 	if err != nil {
-		return Internal("INTERNAL", "internal server error")
+		return 0, Internal("INTERNAL", "internal server error")
 	}
 	if guild == nil {
-		return NotFound("NOT_FOUND", "guild not found")
+		return 0, NotFound("NOT_FOUND", "guild not found")
 	}
 	if guild.OwnerID == userID {
-		return nil
+		return permissions.PermAll, nil
 	}
 
 	member, err := p.members.GetByGuildAndUser(ctx, guildID, userID)
 	if err != nil {
-		return Internal("INTERNAL", "internal server error")
+		return 0, Internal("INTERNAL", "internal server error")
 	}
 	if member == nil {
-		return Forbidden("FORBIDDEN", "you are not a member of this guild")
+		return 0, Forbidden("FORBIDDEN", "you are not a member of this guild")
 	}
 
 	memberRoles, err := p.roles.GetByMember(ctx, guildID, userID)
 	if err != nil {
-		return Internal("INTERNAL", "internal server error")
+		return 0, Internal("INTERNAL", "internal server error")
 	}
 
 	allRoles, err := p.roles.GetByGuildID(ctx, guildID)
 	if err != nil {
-		return Internal("INTERNAL", "internal server error")
+		return 0, Internal("INTERNAL", "internal server error")
 	}
 
 	var everyoneRole models.Role
@@ -148,11 +160,22 @@ func (p *PermissionChecker) RequireGuildPermissionByPerm(ctx context.Context, gu
 		}
 	}
 
-	computed := permissions.ComputeBasePermissions(everyoneRole, memberRoles)
-	if !computed.Has(perm) {
-		return Forbidden("MISSING_PERMISSIONS", "you do not have the required permissions")
-	}
+	return permissions.ComputeBasePermissions(everyoneRole, memberRoles), nil
+}
 
+// RequireGrantPermissions prevents delegated role managers from granting bits they lack.
+// Owner and Administrator bypass the grant limit, as they do other permission checks.
+func (p *PermissionChecker) RequireGrantPermissions(ctx context.Context, guildID, userID, bits int64) error {
+	base, err := p.GuildBasePermissions(ctx, guildID, userID)
+	if err != nil {
+		return err
+	}
+	if base.Has(permissions.PermAdministrator) {
+		return nil
+	}
+	if bits&^int64(base) != 0 {
+		return Forbidden("MISSING_PERMISSIONS", "cannot manage permissions you do not hold")
+	}
 	return nil
 }
 

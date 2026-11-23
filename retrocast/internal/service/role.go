@@ -50,6 +50,10 @@ func (s *RoleService) CreateRole(ctx context.Context, guildID, actorID int64, na
 	if err := s.perms.RequireGuildPermissionByPerm(ctx, guildID, actorID, permissions.PermManageRoles); err != nil {
 		return nil, err
 	}
+	if err := s.perms.RequireGrantPermissions(ctx, guildID, actorID, permBits); err != nil {
+		return nil, err
+	}
+
 	if position < 0 {
 		return nil, BadRequest("INVALID_POSITION", "position must be non-negative")
 	}
@@ -122,6 +126,17 @@ func (s *RoleService) UpdateRole(ctx context.Context, guildID, actorID, roleID i
 	}
 	if role == nil || role.GuildID != guildID {
 		return nil, NotFound("NOT_FOUND", "role not found")
+	}
+
+	if role.IsDefault && position != nil && *position != 0 {
+		return nil, BadRequest("INVALID_POSITION", "the @everyone role must stay at position 0")
+	}
+	effectiveBits := role.Permissions
+	if permBits != nil {
+		effectiveBits = *permBits
+	}
+	if err := s.perms.RequireGrantPermissions(ctx, guildID, actorID, effectiveBits); err != nil {
+		return nil, err
 	}
 
 	isOwner, err := s.perms.IsGuildOwner(ctx, guildID, actorID)
@@ -221,6 +236,10 @@ func (s *RoleService) AssignRole(ctx context.Context, guildID, actorID, userID, 
 		return NotFound("NOT_FOUND", "role not found")
 	}
 
+	if err := s.perms.RequireGrantPermissions(ctx, guildID, actorID, role.Permissions); err != nil {
+		return err
+	}
+
 	isOwner, err := s.perms.IsGuildOwner(ctx, guildID, actorID)
 	if err != nil {
 		return err
@@ -253,6 +272,10 @@ func (s *RoleService) RemoveRole(ctx context.Context, guildID, actorID, userID, 
 	}
 	if role == nil || role.GuildID != guildID {
 		return NotFound("NOT_FOUND", "role not found")
+	}
+
+	if err := s.perms.RequireGrantPermissions(ctx, guildID, actorID, role.Permissions); err != nil {
+		return err
 	}
 
 	isOwner, err := s.perms.IsGuildOwner(ctx, guildID, actorID)
@@ -293,6 +316,10 @@ func (s *RoleService) SetChannelOverride(ctx context.Context, channelID, actorID
 	}
 
 	if err := s.checkOverride(ctx, ch, actorID, roleID); err != nil {
+		return nil, err
+	}
+
+	if err := s.perms.RequireGrantPermissions(ctx, ch.GuildID, actorID, allow); err != nil {
 		return nil, err
 	}
 
