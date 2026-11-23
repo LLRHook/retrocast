@@ -9,10 +9,12 @@ Conventions for this file:
 - The iOS client has no tests and no CI job, and it cannot be built on the Windows review host
   (Stack Profile flag 4). Every requirement is therefore `Partial`: the Swift source is
   present, but it was not compiled or run in this review.
-- iOS requirements are `Should` until the owner sets client priority (TBD-004); the web
-  client's MVP requirements are `Must`.
+- The iOS client follows the web client (Q-004, TBD-004 resolved). iOS requirements stay
+  `Should` or `Could` and are not part of the Pilot (SRS §1.8); the web client's MVP
+  requirements are `Must`.
+- Rev 2 (2026-11-23): no iOS code changed on `origin/main` since `6bc385e`.
 - Defect ids (D-nn) are listed in
-  [ARCHITECTURE_SPEC.md §9](../ARCHITECTURE_SPEC.md#9-risks-and-technical-debt).
+  [ARCHITECTURE.md §9](../ARCHITECTURE.md#9-risks-and-technical-debt).
 
 ## 3. Requirements
 
@@ -21,8 +23,8 @@ Conventions for this file:
 | ID | Priority | Requirement | Acceptance | Verification | Delivery | UI | Traces | Source | Evidence |
 |---|---|---|---|---|---|---|---|---|---|
 | IOS-FR-001 | Should | The iOS client shall ask for the server address, then let the user register or sign in. | Given a fresh install, when the user enters a server address and signs in as alice, then the server list opens. | Demonstration | Partial (Swift source present; not compiled or run in this review) | ios — ServerAddressView; LoginView; RegisterView | API-001, API-002 | CAP-001 | Views/Auth/ServerAddressView.swift; Views/Auth/LoginView.swift; Views/Auth/RegisterView.swift; ViewModels/AuthViewModel.swift |
-| IOS-FR-002 | Should | The iOS client shall keep its tokens in the Keychain (server address in user defaults) and refresh the access token once on a 401. | Given an access token older than 15 minutes, when the user opens a channel, then the request succeeds after one refresh and the rotated refresh token is saved in the Keychain. | Demonstration | Partial (Swift source present; not compiled or run in this review; the refresh path decodes only a `data`-wrapped body, which API-003 does not send, D-14) | none (system-only) | API-003 | CAP-002 | Networking/TokenManager.swift:10–24; Utilities/KeychainHelper.swift; Networking/APIClient.swift:160–215 |
-| IOS-FR-003 | Should | The iOS client shall keep a gateway connection with heartbeats and reconnect with backoff after a drop. | Given a signed-in user, when the network drops and returns, then the client reconnects and receives new messages without a restart. | Demonstration | Partial (Swift source present; not compiled or run in this review) | ios — ErrorBanner | EVT-001–EVT-007 | CAP-009 | Gateway/GatewayClient.swift; Gateway/ReconnectionStrategy.swift; Gateway/GatewayPayload.swift |
+| IOS-FR-002 | Should | The iOS client shall keep its tokens in the Keychain (server address in user defaults) and refresh the access token once on a 401. | Given an access token older than 15 minutes, when the user opens a channel, then the request succeeds after one refresh and the rotated refresh token is saved in the Keychain. | Demonstration | Partial (Swift source present; not compiled or run in this review; the refresh path decodes only a `data`-wrapped body, which API-003 does not send, D-14; SV-IR-007 makes the server send it) | none (system-only) | API-003 | CAP-002 | Networking/TokenManager.swift:10–24; Utilities/KeychainHelper.swift; Networking/APIClient.swift:160–215 |
+| IOS-FR-003 | Should | The iOS client shall keep a gateway connection with heartbeats and reconnect with backoff after a drop. | Given a signed-in user, when the network drops and returns, then the client reconnects and receives new messages without a restart. | Demonstration | Partial (Swift source present; not compiled or run in this review) | ios — ErrorBanner | EVT-001–EVT-007 | CAP-009 | Gateway/GatewayClient.swift; Gateway/ReconnectionStrategy.swift:5–14 (delay 1 s doubling to at most 60 s, 0–10% jitter, 10 attempts); Gateway/GatewayPayload.swift |
 | IOS-FR-004 | Should | The iOS client shall show the user's servers with their channels (create a server, join one by invite code, create a channel). | Given an invite code, when the user joins with it, then the server appears in the server list. | Demonstration | Partial (Swift source present; not compiled or run in this review) | ios — ServerListView; ChannelSidebarView; CreateGuildSheet; JoinGuildSheet; CreateChannelSheet | API-007, API-013, API-017, API-018, API-050 | CAP-004, CAP-005, CAP-006 | Views/Main/ServerListView.swift; Views/Main/ChannelSidebarView.swift; Views/Guild/*.swift; ViewModels/ServerListViewModel.swift; ViewModels/ChannelListViewModel.swift |
 | IOS-FR-005 | Should | The iOS client shall show a channel's messages live (history paging, sending, typing display). | Given an open channel, when another member sends "hi", then it appears at the bottom without a refresh. | Demonstration | Partial (Swift source present; not compiled or run in this review) | ios — ChatAreaView; MessageListView; MessageInput; TypingIndicator | API-022, API-023, API-028, EVT-009, EVT-024 | CAP-009, CAP-010, CAP-011 | Views/Main/ChatAreaView.swift; Views/Chat/*.swift; ViewModels/ChatViewModel.swift |
 | IOS-FR-006 | Should | The iOS client shall list a server's members with their presence and roles. | Given a member going idle, when EVT-025 arrives, then their presence dot changes. | Demonstration | Partial (Swift source present; not compiled or run in this review) | ios — MemberListView; MemberRow; PresenceDot; UserProfilePopover | API-033, EVT-025 | CAP-012 | Views/Members/*.swift; Components/PresenceDot.swift; State/PresenceState.swift; ViewModels/MemberListViewModel.swift |
@@ -34,15 +36,23 @@ Conventions for this file:
 | IOS-FR-012 | Should | The iOS client shall render message Markdown without running content as code. | Given a message with `**bold**`, when it is shown, then the text is bold. | Demonstration | Partial (Swift source present; not compiled or run in this review) | ios — MessageRow | EVT-009 | CAP-009, RISK-011 | Utilities/MarkdownParser.swift; Views/Chat/MessageRow.swift |
 
 ### 3.2 Performance requirements
-No iOS-specific targets are stated; system targets are SYS-NFR-001 and SYS-NFR-002 (TBD-031).
+No iOS-specific targets; system targets are SYS-NFR-001, SYS-NFR-002 and SYS-NFR-007 (Q-031,
+TBD-031 resolved).
 
 ### 3.3 Usability requirements
-No usability or accessibility targets are stated (TBD-032). The iOS 7-era look (CAP-026) is a
-Later capability with no requirement yet.
+
+| ID | Priority | Requirement | Acceptance | Verification | Delivery | UI | Traces | Source | Evidence |
+|---|---|---|---|---|---|---|---|---|---|
+| IOS-NFR-001 | Should | Compatibility: the iOS client shall support iOS 17 and later. Measure: the iOS deployment target in project.yml. | Given retrocast-client/Retrocast/project.yml, when it is read, then the iOS deployment target is 17.0. | Inspection | Implemented | ios — every view | CMP-009 | GOAL-001 | Added rev 2 (Q-032, TBD-032 resolved). project.yml:4–5 |
+
+No iOS accessibility level was set (Q-032 names WCAG 2.2 AA for the web client only). The
+iOS 7-era look (CAP-026) is a Later capability with no requirement yet.
 
 ### 3.4 Interface requirements
-The client uses SV-IR-001–SV-IR-004. `Networking/APIClient.swift:47–61` accepts both wrapped
-and bare JSON bodies for ordinary requests; the refresh path accepts only the wrapped form.
+The client uses SV-IR-001–SV-IR-004 and SV-IR-007. `Networking/APIClient.swift:47–61`
+accepts both wrapped and bare JSON bodies for ordinary requests; the refresh path accepts only
+the wrapped form, which SV-IR-007 (REST contract v2.0.0) makes the only form. The iOS update to
+v2.0.0 is tracked when the iOS client is scheduled (Q-004).
 
 ### 3.5 Logical database requirements
 The client stores tokens in the Keychain and the server address in user defaults
@@ -50,8 +60,8 @@ The client stores tokens in the Keychain and the server address in user defaults
 
 ### 3.6 Design constraints
 Bound by SYS-CON-003 (SwiftUI, iOS 17 deployment target, Swift 6.0, XcodeGen). Push
-notifications (CAP-023) would need the Apple Push Notification service, which conflicts with
-SYS-CON-002 (TBD-025).
+notifications (CAP-023) are Later, together with the iOS client (Q-025, TBD-025 resolved). They
+need the Apple Push Notification service, the one optional outside service GOAL-004 allows.
 
 ### 3.7 Software system attributes
 - Security: tokens in the Keychain (IOS-FR-002).
@@ -59,7 +69,8 @@ SYS-CON-002 (TBD-025).
 
 ### 3.8 Supporting information
 - `retrocast-client/system_design.md` describes the intended client architecture.
-- Distribution through the App Store (STK-005) is not decided (TBD-004).
+- Distribution through the App Store (STK-005) is decided when the iOS client is scheduled
+  (Q-004: web first, iOS follows).
 
 ## 5.1 Traceability matrix
 
@@ -77,6 +88,7 @@ SYS-CON-002 (TBD-025).
 | IOS-FR-010 | Could | Partial | ENT-008 | API-055 | CMP-009, CMP-001 | Demonstration |
 | IOS-FR-011 | Could | Partial | ENT-016 | API-056, API-057, EVT-026 | CMP-009, CMP-007 | Demonstration |
 | IOS-FR-012 | Should | Partial | ENT-008 | EVT-009 | CMP-009 | Demonstration |
+| IOS-NFR-001 | Should | Implemented | — | — | CMP-009 | Inspection |
 
 ## Revision history
 | Rev | Date | Commit | Mode | Summary |

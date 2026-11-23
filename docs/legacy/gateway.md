@@ -1,3 +1,5 @@
+> **Legacy, superseded by [DATA_CONTRACTS.md](../DATA_CONTRACTS.md) §6** (gateway frames and events). Kept for history; it does not describe the current code.
+
 # WebSocket Gateway
 
 The gateway handles real-time event delivery over WebSocket. It runs in-process alongside the REST API in the same Go binary.

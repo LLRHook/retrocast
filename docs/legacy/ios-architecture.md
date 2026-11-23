@@ -1,3 +1,5 @@
+> **Legacy, superseded by [srs/ios.md](../srs/ios.md)** (iOS client requirements; component CMP-009 in [ARCHITECTURE.md](../ARCHITECTURE.md)). Kept for history.
+
 # iOS Client Architecture
 
 The iOS/macOS client is a native SwiftUI app using MVVM architecture. Source: `retrocast-client/Retrocast/Sources/`.

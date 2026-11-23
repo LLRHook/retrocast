@@ -1,3 +1,5 @@
+> **Legacy, superseded by [DATA_CONTRACTS.md](../DATA_CONTRACTS.md) §4–§5** (REST operations and errors; operation detail in `retrocast/docs/openapi.yaml`). Kept for history; it does not describe the current code.
+
 # API Reference
 
 All endpoints are defined in `retrocast/internal/api/router.go`. Base path: `/api/v1`.

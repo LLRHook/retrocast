@@ -4,9 +4,9 @@ info:
   description: |
     Discord-compatible chat platform API. All IDs are snowflake integers
     serialized as strings in JSON to avoid JavaScript precision loss.
-  version: "1.0.0"
+  version: "2.0.0"
   license:
-    name: MIT
+    name: "Proprietary. All rights reserved."
 
 servers:
   - url: /api/v1

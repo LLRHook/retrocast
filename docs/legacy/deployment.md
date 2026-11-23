@@ -1,3 +1,5 @@
+> **Legacy, superseded by [ARCHITECTURE.md](../ARCHITECTURE.md) §6** (deployment view; backups in SRS [system.md](../srs/system.md)). Kept for history; it does not describe the current compose file.
+
 # Deployment
 
 Retrocast is deployed as a set of Docker containers orchestrated by Docker Compose. This document covers the container setup, reverse proxy, monitoring, environment configuration, and backup procedures.
