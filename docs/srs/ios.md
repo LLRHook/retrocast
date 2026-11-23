@@ -81,3 +81,4 @@ SYS-CON-002 (TBD-025).
 ## Revision history
 | Rev | Date | Commit | Mode | Summary |
 |---|---|---|---|---|
+| 1 | 2026-11-23T12:58:05-05:00 | 918f0a8471d3 | INIT | Initial iOS client requirements IOS-FR-001–IOS-FR-012 |

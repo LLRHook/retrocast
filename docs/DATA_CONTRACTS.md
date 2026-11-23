@@ -275,3 +275,4 @@ Not integrated. `device_tokens` (ENT-017) exists without code (TBD-025).
 ## Revision history
 | Rev | Date | Commit | Mode | Summary |
 |---|---|---|---|---|
+| 1 | 2026-11-23T12:58:05-05:00 | 918f0a8471d3 | INIT | Initial contracts ENT-001–ENT-022, API-001–API-058, EVT-001–EVT-030 |

@@ -95,3 +95,4 @@ Server logging is SV-NFR-006. Metrics and dashboards wait for CAP-035 (TBD-039).
 ## Revision history
 | Rev | Date | Commit | Mode | Summary |
 |---|---|---|---|---|
+| 1 | 2026-11-23T12:58:05-05:00 | 918f0a8471d3 | INIT | Initial system constraints and qualities SYS-CON-001–SYS-CON-004, SYS-NFR-001–SYS-NFR-005 |

@@ -232,3 +232,4 @@ Options and evidence are in PRODUCT_BRIEF §14.
 ## Revision history
 | Rev | Date | Commit | Mode | Summary |
 |---|---|---|---|---|
+| 1 | 2026-11-23T12:58:05-05:00 | 918f0a8471d3 | INIT | Initial SRS index from repository evidence (unattended INIT); TBD-001–TBD-040 |

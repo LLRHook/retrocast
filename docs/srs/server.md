@@ -301,3 +301,4 @@ Metrics (`/metrics`, Prometheus, Grafana) wait for the release decision on CAP-0
 ## Revision history
 | Rev | Date | Commit | Mode | Summary |
 |---|---|---|---|---|
+| 1 | 2026-11-23T12:58:05-05:00 | 918f0a8471d3 | INIT | Initial server requirements SV-FR-001–SV-FR-059, SV-IR-001–SV-IR-006, SV-NFR-001–SV-NFR-008 |
