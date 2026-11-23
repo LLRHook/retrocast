@@ -65,6 +65,7 @@ func SetupRouter(e *echo.Echo, deps *Dependencies) {
 	// Resolve client IPs (used for unauthenticated rate limiting) through the
 	// reverse proxy's X-Forwarded-For header; see ClientIPExtractor.
 	e.IPExtractor = ClientIPExtractor()
+	e.HTTPErrorHandler = HTTPErrorHandler
 
 	// Health check — deep: pings Postgres and Redis
 	e.GET("/health", func(c echo.Context) error {

@@ -82,5 +82,5 @@ func (h *BanHandler) ListBans(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, bans)
+	return Success(c, http.StatusOK, bans)
 }

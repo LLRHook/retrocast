@@ -75,5 +75,5 @@ func (h *SearchHandler) SearchMessages(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, messages)
+	return Success(c, http.StatusOK, messages)
 }

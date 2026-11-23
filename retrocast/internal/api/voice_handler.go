@@ -33,7 +33,7 @@ func (h *VoiceHandler) JoinVoice(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, resp)
+	return Success(c, http.StatusOK, resp)
 }
 
 // LeaveVoice handles POST /api/v1/channels/:id/voice/leave.
@@ -66,5 +66,5 @@ func (h *VoiceHandler) GetVoiceStates(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, states)
+	return Success(c, http.StatusOK, states)
 }

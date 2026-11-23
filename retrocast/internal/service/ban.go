@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/victorivanov/retrocast/internal/database"
@@ -88,7 +89,7 @@ func (s *BanService) BanMember(ctx context.Context, guildID, callerID, targetUse
 	_ = s.members.Delete(ctx, guildID, targetUserID)
 
 	s.gateway.DispatchToGuild(guildID, gateway.EventGuildBanAdd, ban)
-	s.gateway.DispatchToGuild(guildID, gateway.EventGuildMemberRemove, map[string]any{"guild_id": guildID, "user_id": targetUserID})
+	s.gateway.DispatchToGuild(guildID, gateway.EventGuildMemberRemove, map[string]any{"guild_id": strconv.FormatInt(guildID, 10), "user_id": strconv.FormatInt(targetUserID, 10)})
 
 	return nil
 }
@@ -103,7 +104,7 @@ func (s *BanService) UnbanMember(ctx context.Context, guildID, callerID, targetU
 		return Internal("INTERNAL", "internal server error")
 	}
 
-	s.gateway.DispatchToGuild(guildID, gateway.EventGuildBanRemove, map[string]any{"guild_id": guildID, "user_id": targetUserID})
+	s.gateway.DispatchToGuild(guildID, gateway.EventGuildBanRemove, map[string]any{"guild_id": strconv.FormatInt(guildID, 10), "user_id": strconv.FormatInt(targetUserID, 10)})
 
 	return nil
 }

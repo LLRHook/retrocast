@@ -46,7 +46,7 @@ func (h *ChannelHandler) CreateChannel(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusCreated, map[string]any{"data": ch})
+	return Success(c, http.StatusCreated, ch)
 }
 
 // ListChannels handles GET /api/v1/guilds/:id/channels.
@@ -63,7 +63,7 @@ func (h *ChannelHandler) ListChannels(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, map[string]any{"data": channels})
+	return Success(c, http.StatusOK, channels)
 }
 
 // GetChannel handles GET /api/v1/channels/:id.
@@ -80,7 +80,7 @@ func (h *ChannelHandler) GetChannel(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, map[string]any{"data": ch})
+	return Success(c, http.StatusOK, ch)
 }
 
 type updateChannelRequest struct {
@@ -108,7 +108,7 @@ func (h *ChannelHandler) UpdateChannel(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, map[string]any{"data": ch})
+	return Success(c, http.StatusOK, ch)
 }
 
 // DeleteChannel handles DELETE /api/v1/channels/:id.

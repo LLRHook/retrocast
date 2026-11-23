@@ -21,25 +21,25 @@ const (
 
 // Event names for DISPATCH payloads.
 const (
-	EventReady              = "READY"
-	EventMessageCreate      = "MESSAGE_CREATE"
-	EventMessageUpdate      = "MESSAGE_UPDATE"
-	EventMessageDelete      = "MESSAGE_DELETE"
-	EventGuildCreate        = "GUILD_CREATE"
-	EventGuildUpdate        = "GUILD_UPDATE"
-	EventGuildDelete        = "GUILD_DELETE"
-	EventChannelCreate      = "CHANNEL_CREATE"
-	EventChannelUpdate      = "CHANNEL_UPDATE"
-	EventChannelDelete      = "CHANNEL_DELETE"
-	EventGuildMemberAdd     = "GUILD_MEMBER_ADD"
-	EventGuildMemberRemove  = "GUILD_MEMBER_REMOVE"
-	EventGuildMemberUpdate  = "GUILD_MEMBER_UPDATE"
-	EventGuildRoleCreate    = "GUILD_ROLE_CREATE"
-	EventGuildRoleUpdate    = "GUILD_ROLE_UPDATE"
-	EventGuildRoleDelete    = "GUILD_ROLE_DELETE"
-	EventTypingStart        = "TYPING_START"
-	EventPresenceUpdate     = "PRESENCE_UPDATE"
-	EventVoiceStateUpdate   = "VOICE_STATE_UPDATE"
+	EventReady                 = "READY"
+	EventMessageCreate         = "MESSAGE_CREATE"
+	EventMessageUpdate         = "MESSAGE_UPDATE"
+	EventMessageDelete         = "MESSAGE_DELETE"
+	EventGuildCreate           = "GUILD_CREATE"
+	EventGuildUpdate           = "GUILD_UPDATE"
+	EventGuildDelete           = "GUILD_DELETE"
+	EventChannelCreate         = "CHANNEL_CREATE"
+	EventChannelUpdate         = "CHANNEL_UPDATE"
+	EventChannelDelete         = "CHANNEL_DELETE"
+	EventGuildMemberAdd        = "GUILD_MEMBER_ADD"
+	EventGuildMemberRemove     = "GUILD_MEMBER_REMOVE"
+	EventGuildMemberUpdate     = "GUILD_MEMBER_UPDATE"
+	EventGuildRoleCreate       = "GUILD_ROLE_CREATE"
+	EventGuildRoleUpdate       = "GUILD_ROLE_UPDATE"
+	EventGuildRoleDelete       = "GUILD_ROLE_DELETE"
+	EventTypingStart           = "TYPING_START"
+	EventPresenceUpdate        = "PRESENCE_UPDATE"
+	EventVoiceStateUpdate      = "VOICE_STATE_UPDATE"
 	EventGuildBanAdd           = "GUILD_BAN_ADD"
 	EventGuildBanRemove        = "GUILD_BAN_REMOVE"
 	EventMessageReactionAdd    = "MESSAGE_REACTION_ADD"
@@ -48,10 +48,10 @@ const (
 
 // GatewayPayload is the envelope for all gateway messages.
 type GatewayPayload struct {
-	Op       int              `json:"op"`
-	Data     json.RawMessage  `json:"d,omitempty"`
-	Sequence *int64           `json:"s,omitempty"`
-	Event    *string          `json:"t,omitempty"`
+	Op       int             `json:"op"`
+	Data     json.RawMessage `json:"d,omitempty"`
+	Sequence *int64          `json:"s,omitempty"`
+	Event    *string         `json:"t,omitempty"`
 }
 
 // IdentifyData is sent by the client in an Op 2 IDENTIFY.
@@ -75,7 +75,7 @@ type HelloData struct {
 type ReadyData struct {
 	SessionID  string             `json:"session_id"`
 	UserID     int64              `json:"user_id,string"`
-	Guilds     []int64            `json:"guilds"`
+	Guilds     models.StringIDs   `json:"guilds"`
 	ReadStates []models.ReadState `json:"read_states"`
 }
 

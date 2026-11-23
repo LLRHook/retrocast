@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/victorivanov/retrocast/internal/database"
 	"github.com/victorivanov/retrocast/internal/gateway"
@@ -170,6 +171,6 @@ func (s *ChannelService) DeleteChannel(ctx context.Context, channelID, userID in
 		return Internal("INTERNAL", "internal server error")
 	}
 
-	s.gateway.DispatchToGuild(ch.GuildID, gateway.EventChannelDelete, map[string]any{"id": channelID, "guild_id": ch.GuildID})
+	s.gateway.DispatchToGuild(ch.GuildID, gateway.EventChannelDelete, map[string]any{"id": strconv.FormatInt(channelID, 10), "guild_id": strconv.FormatInt(ch.GuildID, 10)})
 	return nil
 }

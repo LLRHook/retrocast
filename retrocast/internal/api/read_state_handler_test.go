@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"testing"
 	"time"
@@ -173,7 +172,7 @@ func TestGetReadStates_Success(t *testing.T) {
 	}
 
 	var result []models.ReadState
-	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+	if err := decodeResponse(rec, &result); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 	if len(result) != 1 {
@@ -206,7 +205,7 @@ func TestGetReadStates_Empty(t *testing.T) {
 	}
 
 	var result []models.ReadState
-	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+	if err := decodeResponse(rec, &result); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 	if len(result) != 0 {

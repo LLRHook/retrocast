@@ -445,7 +445,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AuthResponse"
+                type: object
+                required: [data]
+                additionalProperties: false
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AuthResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "409":
@@ -476,7 +481,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AuthResponse"
+                type: object
+                required: [data]
+                additionalProperties: false
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AuthResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -504,7 +514,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RefreshResponse"
+                type: object
+                required: [data]
+                additionalProperties: false
+                properties:
+                  data:
+                    $ref: "#/components/schemas/RefreshResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -646,7 +661,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/DMChannel"
+                type: object
+                required: [data]
+                additionalProperties: false
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DMChannel"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -666,9 +686,14 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/DMChannel"
+                type: object
+                required: [data]
+                additionalProperties: false
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DMChannel"
         "401":
           $ref: "#/components/responses/Unauthorized"
 
@@ -754,9 +779,14 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/ReadState"
+                type: object
+                required: [data]
+                additionalProperties: false
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ReadState"
         "401":
           $ref: "#/components/responses/Unauthorized"
 
@@ -1075,7 +1105,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MessageWithAuthor"
+                type: object
+                required: [data]
+                additionalProperties: false
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MessageWithAuthor"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1110,9 +1145,14 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/MessageWithAuthor"
+                type: object
+                required: [data]
+                additionalProperties: false
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/MessageWithAuthor"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1145,7 +1185,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MessageWithAuthor"
+                type: object
+                required: [data]
+                additionalProperties: false
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MessageWithAuthor"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
@@ -1174,7 +1219,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MessageWithAuthor"
+                type: object
+                required: [data]
+                additionalProperties: false
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MessageWithAuthor"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1234,7 +1284,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Attachment"
+                type: object
+                required: [data]
+                additionalProperties: false
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Attachment"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1403,10 +1458,15 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  type: integer
-                  format: int64
+                type: object
+                required: [data]
+                additionalProperties: false
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: integer
+                      format: int64
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1646,7 +1706,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Role"
+                type: object
+                required: [data]
+                additionalProperties: false
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Role"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1666,9 +1731,14 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Role"
+                type: object
+                required: [data]
+                additionalProperties: false
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Role"
         "401":
           $ref: "#/components/responses/Unauthorized"
 
@@ -1713,7 +1783,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Role"
+                type: object
+                required: [data]
+                additionalProperties: false
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Role"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1829,7 +1904,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ChannelOverride"
+                type: object
+                required: [data]
+                additionalProperties: false
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ChannelOverride"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1891,7 +1971,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Invite"
+                type: object
+                required: [data]
+                additionalProperties: false
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Invite"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1911,9 +1996,14 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Invite"
+                type: object
+                required: [data]
+                additionalProperties: false
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Invite"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -1939,7 +2029,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Invite"
+                type: object
+                required: [data]
+                additionalProperties: false
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Invite"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -1956,7 +2051,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Guild"
+                type: object
+                required: [data]
+                additionalProperties: false
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Guild"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
@@ -2003,9 +2103,14 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Ban"
+                type: object
+                required: [data]
+                additionalProperties: false
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Ban"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -2126,9 +2231,14 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/MessageWithAuthor"
+                type: object
+                required: [data]
+                additionalProperties: false
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/MessageWithAuthor"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -2164,7 +2274,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/JoinVoiceResponse"
+                type: object
+                required: [data]
+                additionalProperties: false
+                properties:
+                  data:
+                    $ref: "#/components/schemas/JoinVoiceResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -2220,9 +2335,14 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/VoiceState"
+                type: object
+                required: [data]
+                additionalProperties: false
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/VoiceState"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":

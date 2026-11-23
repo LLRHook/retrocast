@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"testing"
 	"time"
@@ -116,7 +115,7 @@ func TestJoinVoice_Success(t *testing.T) {
 	}
 
 	var resp service.JoinChannelResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+	if err := decodeResponse(rec, &resp); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 	if resp.Token == "" {
@@ -329,7 +328,7 @@ func TestGetVoiceStates_Success(t *testing.T) {
 	}
 
 	var states []models.VoiceState
-	if err := json.Unmarshal(rec.Body.Bytes(), &states); err != nil {
+	if err := decodeResponse(rec, &states); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 	if len(states) != 1 {
@@ -387,7 +386,7 @@ func TestGetVoiceStates_EmptyChannel(t *testing.T) {
 	}
 
 	var states []models.VoiceState
-	if err := json.Unmarshal(rec.Body.Bytes(), &states); err != nil {
+	if err := decodeResponse(rec, &states); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 	if len(states) != 0 {

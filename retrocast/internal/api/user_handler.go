@@ -27,7 +27,7 @@ func (h *UserHandler) GetMe(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, map[string]any{"data": user})
+	return Success(c, http.StatusOK, user)
 }
 
 type updateUserRequest struct {
@@ -49,5 +49,5 @@ func (h *UserHandler) UpdateMe(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, map[string]any{"data": user})
+	return Success(c, http.StatusOK, user)
 }

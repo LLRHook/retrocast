@@ -10,6 +10,7 @@ interface AuthResponse {
 
 interface RefreshResponse {
   access_token: string;
+  refresh_token: string;
 }
 
 interface AuthState {
@@ -66,6 +67,10 @@ export const useAuthStore = create<AuthState>()((set, get) => {
     },
 
     logout: async () => {
+      const { refreshToken } = get();
+      if (refreshToken) {
+        await api.post("/api/v1/auth/logout", { refresh_token: refreshToken });
+      }
       localStorage.removeItem("refreshToken");
       set({
         user: null,
@@ -88,7 +93,8 @@ export const useAuthStore = create<AuthState>()((set, get) => {
       const data = await api.post<RefreshResponse>("/api/v1/auth/refresh", {
         refresh_token: refreshToken,
       });
-      set({ accessToken: data.access_token });
+      localStorage.setItem("refreshToken", data.refresh_token);
+      set({ accessToken: data.access_token, refreshToken: data.refresh_token });
       return data.access_token;
     },
   };

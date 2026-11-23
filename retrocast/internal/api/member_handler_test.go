@@ -232,7 +232,7 @@ func TestUpdateMember_Roles(t *testing.T) {
 	}
 	h := newMemberHandlerOwner(members, roles, gw)
 
-	body := `{"roles":[10,20]}`
+	body := `{"roles":["10","20"]}`
 	c, rec := newTestContext(http.MethodPatch, "/api/v1/guilds/1/members/200", strings.NewReader(body))
 	c.SetParamNames("id", "user_id")
 	c.SetParamValues("1", "200")

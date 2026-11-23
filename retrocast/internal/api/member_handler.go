@@ -6,6 +6,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/victorivanov/retrocast/internal/auth"
+	"github.com/victorivanov/retrocast/internal/models"
 	"github.com/victorivanov/retrocast/internal/service"
 )
 
@@ -36,7 +37,7 @@ func (h *MemberHandler) ListMembers(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, map[string]any{"data": members})
+	return Success(c, http.StatusOK, members)
 }
 
 // GetMember handles GET /api/v1/guilds/:id/members/:user_id.
@@ -58,12 +59,12 @@ func (h *MemberHandler) GetMember(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, map[string]any{"data": member})
+	return Success(c, http.StatusOK, member)
 }
 
 type updateMemberRequest struct {
-	Nickname *string  `json:"nickname"`
-	Roles    *[]int64 `json:"roles"`
+	Nickname *string           `json:"nickname"`
+	Roles    *models.StringIDs `json:"roles"`
 }
 
 // UpdateSelf handles PATCH /api/v1/guilds/:id/members/@me.
@@ -85,7 +86,7 @@ func (h *MemberHandler) UpdateSelf(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, map[string]any{"data": member})
+	return Success(c, http.StatusOK, member)
 }
 
 // UpdateMember handles PATCH /api/v1/guilds/:id/members/:user_id.
@@ -107,12 +108,12 @@ func (h *MemberHandler) UpdateMember(c echo.Context) error {
 		return errorJSON(c, http.StatusBadRequest, "INVALID_BODY", "invalid request body")
 	}
 
-	member, err := h.service.UpdateMember(c.Request().Context(), guildID, callerID, targetUserID, req.Nickname, req.Roles)
+	member, err := h.service.UpdateMember(c.Request().Context(), guildID, callerID, targetUserID, req.Nickname, (*[]int64)(req.Roles))
 	if err != nil {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, map[string]any{"data": member})
+	return Success(c, http.StatusOK, member)
 }
 
 // KickMember handles DELETE /api/v1/guilds/:id/members/:user_id.

@@ -45,7 +45,7 @@ func (h *RoleHandler) CreateRole(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusCreated, role)
+	return Success(c, http.StatusCreated, role)
 }
 
 // ListRoles handles GET /api/v1/guilds/:id/roles.
@@ -60,7 +60,7 @@ func (h *RoleHandler) ListRoles(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, roles)
+	return Success(c, http.StatusOK, roles)
 }
 
 type updateRoleRequest struct {
@@ -94,7 +94,7 @@ func (h *RoleHandler) UpdateRole(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, role)
+	return Success(c, http.StatusOK, role)
 }
 
 // DeleteRole handles DELETE /api/v1/guilds/:id/roles/:role_id.
@@ -197,7 +197,7 @@ func (h *RoleHandler) SetChannelOverride(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, override)
+	return Success(c, http.StatusOK, override)
 }
 
 // DeleteChannelOverride handles DELETE /api/v1/channels/:id/permissions/:role_id.

@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"testing"
 	"time"
@@ -253,8 +252,8 @@ func TestGetReactions_Success(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var result []int64
-	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+	var result []string
+	if err := decodeResponse(rec, &result); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 	if len(result) != 2 {

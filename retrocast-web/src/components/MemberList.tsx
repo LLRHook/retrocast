@@ -7,6 +7,9 @@ import AvatarView from "@/components/AvatarView";
 import UserProfilePopover from "@/components/UserProfilePopover";
 import type { Member, Role } from "@/types";
 
+const EMPTY_MEMBERS = new Map<string, Member>();
+const EMPTY_ROLES: Role[] = [];
+
 interface MemberListProps {
   guildId: string;
 }
@@ -86,10 +89,10 @@ function MemberRow({
 
 export default function MemberList({ guildId }: MemberListProps) {
   const membersMap = useMembersStore(
-    (s) => s.membersByGuild.get(guildId) || new Map<string, Member>(),
+    (s) => s.membersByGuild.get(guildId) || EMPTY_MEMBERS,
   );
   const fetchMembers = useMembersStore((s) => s.fetchMembers);
-  const roles = useRolesStore((s) => s.rolesByGuild.get(guildId) || []);
+  const roles = useRolesStore((s) => s.rolesByGuild.get(guildId) || EMPTY_ROLES);
   const fetchRoles = useRolesStore((s) => s.fetchRoles);
   const presences = usePresenceStore((s) => s.presences);
   const usersCache = useUsersStore((s) => s.users);

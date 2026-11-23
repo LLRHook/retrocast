@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -95,7 +94,7 @@ func TestCreateDM_Success(t *testing.T) {
 	}
 
 	var result models.DMChannel
-	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+	if err := decodeResponse(rec, &result); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 	if result.Type != models.DMTypeDM {
@@ -153,7 +152,7 @@ func TestCreateDM_ExistingChannel(t *testing.T) {
 	}
 
 	var result models.DMChannel
-	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+	if err := decodeResponse(rec, &result); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 	if result.ID != testDMChannelID {
@@ -179,7 +178,7 @@ func TestCreateDM_SelfDM(t *testing.T) {
 	}
 
 	var errResp ErrorResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
+	if err := decodeResponse(rec, &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error response: %v", err)
 	}
 	if errResp.Error.Code != "INVALID_RECIPIENT" {
@@ -204,7 +203,7 @@ func TestCreateDM_InvalidBody_MissingRecipient(t *testing.T) {
 	}
 
 	var errResp ErrorResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
+	if err := decodeResponse(rec, &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error response: %v", err)
 	}
 	if errResp.Error.Code != "INVALID_RECIPIENT" {
@@ -229,7 +228,7 @@ func TestCreateDM_InvalidBody_NonNumericRecipient(t *testing.T) {
 	}
 
 	var errResp ErrorResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
+	if err := decodeResponse(rec, &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error response: %v", err)
 	}
 	if errResp.Error.Code != "INVALID_RECIPIENT" {
@@ -254,7 +253,7 @@ func TestCreateDM_InvalidBody_ZeroRecipient(t *testing.T) {
 	}
 
 	var errResp ErrorResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
+	if err := decodeResponse(rec, &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error response: %v", err)
 	}
 	if errResp.Error.Code != "INVALID_RECIPIENT" {
@@ -285,7 +284,7 @@ func TestCreateDM_RecipientNotFound(t *testing.T) {
 	}
 
 	var errResp ErrorResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
+	if err := decodeResponse(rec, &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error response: %v", err)
 	}
 	if errResp.Error.Code != "NOT_FOUND" {
@@ -315,7 +314,7 @@ func TestCreateDM_RepoError_UserLookup(t *testing.T) {
 	}
 
 	var errResp ErrorResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
+	if err := decodeResponse(rec, &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error response: %v", err)
 	}
 	if errResp.Error.Code != "INTERNAL" {
@@ -345,7 +344,7 @@ func TestCreateDM_RepoError_GetOrCreateDM(t *testing.T) {
 	}
 
 	var errResp ErrorResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
+	if err := decodeResponse(rec, &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error response: %v", err)
 	}
 	if errResp.Error.Code != "INTERNAL" {
@@ -396,7 +395,7 @@ func TestListDMs_Success(t *testing.T) {
 	}
 
 	var result []models.DMChannel
-	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+	if err := decodeResponse(rec, &result); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 	if len(result) != 1 {
@@ -433,7 +432,7 @@ func TestListDMs_Empty(t *testing.T) {
 
 	// Must be an empty JSON array, not null.
 	var result []models.DMChannel
-	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+	if err := decodeResponse(rec, &result); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 	if result == nil {
@@ -445,7 +444,7 @@ func TestListDMs_Empty(t *testing.T) {
 
 	// Verify the raw JSON is [] not null.
 	raw := strings.TrimSpace(rec.Body.String())
-	if raw != "[]" {
+	if raw != `{"data":[]}` {
 		t.Fatalf("expected raw JSON to be [], got %s", raw)
 	}
 }
@@ -471,7 +470,7 @@ func TestListDMs_RepoError(t *testing.T) {
 	}
 
 	var errResp ErrorResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
+	if err := decodeResponse(rec, &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error response: %v", err)
 	}
 	if errResp.Error.Code != "INTERNAL" {

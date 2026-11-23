@@ -8,7 +8,7 @@ interface RoleEditorProps {
 }
 
 const PERMISSION_BITS: { name: string; bit: number; category: string }[] = [
-  { name: "Administrator", bit: 1 << 31, category: "General" },
+  { name: "Administrator", bit: (1 << 31) >>> 0, category: "General" },
   { name: "Manage Guild", bit: 1 << 7, category: "General" },
   { name: "Manage Channels", bit: 1 << 3, category: "General" },
   { name: "Manage Roles", bit: 1 << 4, category: "General" },
@@ -96,7 +96,7 @@ function RoleForm({
 
   function togglePermission(bit: number) {
     setPermissions((prev) =>
-      (prev & bit) !== 0 ? prev & ~bit : prev | bit,
+      ((prev & bit) !== 0 ? prev & ~bit : prev | bit) >>> 0,
     );
   }
 
@@ -128,8 +128,8 @@ function RoleForm({
         setRole(created);
       }
       onCancel();
-    } catch {
-      setError(role ? "Failed to update role" : "Failed to create role");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : (role ? "Failed to update role" : "Failed to create role"));
     } finally {
       setSaving(false);
     }
@@ -232,7 +232,7 @@ function RoleForm({
 }
 
 export default function RoleEditor({ guildId }: RoleEditorProps) {
-  const roles = useRolesStore((s) => s.rolesByGuild.get(guildId) || []);
+  const roles = (useRolesStore((s) => s.rolesByGuild.get(guildId)) || []);
   const fetchRoles = useRolesStore((s) => s.fetchRoles);
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [creating, setCreating] = useState(false);

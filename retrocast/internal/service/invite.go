@@ -189,6 +189,7 @@ func (s *InviteService) AcceptInvite(ctx context.Context, code string, userID in
 		return nil, Internal("INTERNAL", "internal server error")
 	}
 
+	s.gateway.SubscribeToGuild(userID, invite.GuildID)
 	s.gateway.DispatchToGuild(invite.GuildID, gateway.EventGuildMemberAdd, member)
 
 	return guild, nil

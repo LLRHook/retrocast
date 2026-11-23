@@ -49,5 +49,5 @@ func (h *ReadStateHandler) GetReadStates(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, states)
+	return Success(c, http.StatusOK, states)
 }

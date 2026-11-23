@@ -7,6 +7,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/victorivanov/retrocast/internal/auth"
+	"github.com/victorivanov/retrocast/internal/models"
 	"github.com/victorivanov/retrocast/internal/service"
 )
 
@@ -105,5 +106,5 @@ func (h *ReactionHandler) GetReactions(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, userIDs)
+	return Success(c, http.StatusOK, models.StringIDs(userIDs))
 }

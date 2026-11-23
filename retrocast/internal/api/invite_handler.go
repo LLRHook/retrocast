@@ -43,7 +43,7 @@ func (h *InviteHandler) CreateInvite(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusCreated, invite)
+	return Success(c, http.StatusCreated, invite)
 }
 
 // ListInvites handles GET /api/v1/guilds/:id/invites.
@@ -60,7 +60,7 @@ func (h *InviteHandler) ListInvites(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, invites)
+	return Success(c, http.StatusOK, invites)
 }
 
 // GetInvite handles GET /api/v1/invites/:code (no auth required).
@@ -72,7 +72,7 @@ func (h *InviteHandler) GetInvite(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, info)
+	return Success(c, http.StatusOK, info)
 }
 
 // AcceptInvite handles POST /api/v1/invites/:code (auth required).
@@ -85,7 +85,7 @@ func (h *InviteHandler) AcceptInvite(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, guild)
+	return Success(c, http.StatusOK, guild)
 }
 
 // RevokeInvite handles DELETE /api/v1/invites/:code.

@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -60,7 +59,7 @@ func TestCreateInvite_Success(t *testing.T) {
 	}
 
 	var invite models.Invite
-	if err := json.Unmarshal(rec.Body.Bytes(), &invite); err != nil {
+	if err := decodeResponse(rec, &invite); err != nil {
 		t.Fatalf("failed to unmarshal: %v", err)
 	}
 	if invite.Code == "" {
@@ -115,7 +114,7 @@ func TestGetInvite_Public(t *testing.T) {
 	}
 
 	var resp service.InviteInfo
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+	if err := decodeResponse(rec, &resp); err != nil {
 		t.Fatalf("failed to unmarshal: %v", err)
 	}
 	if resp.GuildName != "Test Guild" {
@@ -206,6 +205,9 @@ func TestAcceptInvite_Success(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
+	if len(gw.subscriptions) != 1 || gw.subscriptions[0] != [2]int64{200, 1} {
+		t.Fatal("joining member not subscribed for live events")
+	}
 	if !memberCreated {
 		t.Error("expected member to be created")
 	}
@@ -251,7 +253,7 @@ func TestAcceptInvite_AlreadyMember(t *testing.T) {
 	}
 
 	var resp ErrorResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+	if err := decodeResponse(rec, &resp); err != nil {
 		t.Fatalf("failed to unmarshal: %v", err)
 	}
 	if resp.Error.Code != "ALREADY_MEMBER" {
@@ -293,7 +295,7 @@ func TestAcceptInvite_MaxUsesReached(t *testing.T) {
 	}
 
 	var resp ErrorResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+	if err := decodeResponse(rec, &resp); err != nil {
 		t.Fatalf("failed to unmarshal: %v", err)
 	}
 	if resp.Error.Code != "MAX_USES" {

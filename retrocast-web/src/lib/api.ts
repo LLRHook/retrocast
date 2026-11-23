@@ -61,7 +61,7 @@ class ApiClient {
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
 
-    if (res.status === 401 && retry && this.tokenRefresher) {
+    if (res.status === 401 && retry && !path.startsWith("/api/v1/auth/") && this.tokenRefresher) {
       const newToken = await this.refreshToken();
       if (newToken) {
         headers["Authorization"] = `Bearer ${newToken}`;
@@ -109,6 +109,7 @@ class ApiClient {
       );
     }
 
+    if (res.status === 204) return undefined as T;
     const json = await res.json();
     return json.data as T;
   }
@@ -160,7 +161,7 @@ class ApiClient {
         res.status,
       );
     }
-    return (await res.json()) as T;
+    return this.handleResponse<T>(res);
   }
 }
 
