@@ -119,3 +119,4 @@ Server logging is SV-NFR-006; metrics are SV-NFR-013; scraping and dashboards ar
 | Rev | Date | Commit | Mode | Summary |
 |---|---|---|---|---|
 | 1 | 2026-11-23T12:58:05-05:00 | 918f0a8471d3 | INIT | Initial system constraints and qualities SYS-CON-001–SYS-CON-004, SYS-NFR-001–SYS-NFR-005 |
+| 2 | 2026-11-23T15:17:07-05:00 | 701009f47d68 | REVISION | Added SYS-FR-001–SYS-FR-004, SYS-NFR-006, SYS-NFR-007; performance, RPO and licence decisions; SYS-CON-001 Partial (D-25) |

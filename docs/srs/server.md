@@ -383,3 +383,4 @@ Scraping and dashboards are SYS-FR-001 in [system.md](system.md).
 | Rev | Date | Commit | Mode | Summary |
 |---|---|---|---|---|
 | 1 | 2026-11-23T12:58:05-05:00 | 918f0a8471d3 | INIT | Initial server requirements SV-FR-001–SV-FR-059, SV-IR-001–SV-IR-006, SV-NFR-001–SV-NFR-008 |
+| 2 | 2026-11-23T15:17:07-05:00 | 701009f47d68 | REVISION | Added SV-FR-060–SV-FR-077, SV-IR-007, SV-IR-008, SV-NFR-009–SV-NFR-013; SV-FR-039 deprecated (superseded by SV-FR-072); smoke-run deliveries set to Partial; REST v2.0.0 envelope |

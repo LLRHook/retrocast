@@ -123,3 +123,4 @@ Bound by SYS-CON-003 (existing stack: React 19, Vite 7, TypeScript, Tailwind 4, 
 | Rev | Date | Commit | Mode | Summary |
 |---|---|---|---|---|
 | 1 | 2026-11-23T12:58:05-05:00 | 918f0a8471d3 | INIT | Initial web client requirements WEB-FR-001–WEB-FR-018 |
+| 2 | 2026-11-23T15:17:07-05:00 | 701009f47d68 | REVISION | Added WEB-FR-019–WEB-FR-024, WEB-NFR-001, WEB-NFR-002; WEB-FR-006 and WEB-FR-014 Partial (D-29) |

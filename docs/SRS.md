@@ -260,3 +260,4 @@ ARCHITECTURE §8.
 | Rev | Date | Commit | Mode | Summary |
 |---|---|---|---|---|
 | 1 | 2026-11-23T12:58:05-05:00 | 918f0a8471d3 | INIT | Initial SRS index from repository evidence (unattended INIT); TBD-001–TBD-040 |
+| 2 | 2026-11-23T15:17:07-05:00 | 701009f47d68 | REVISION | Owner decisions Q-001–Q-034 recorded (accepted all recommendations, PR #25); status Baselined; TBD-001–TBD-040 resolved; Pilot scope and exit criteria; legacy docs moved |

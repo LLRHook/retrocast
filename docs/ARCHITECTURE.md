@@ -390,3 +390,4 @@ See [SRS §1.3](SRS.md) and §5.3.
 | Rev | Date | Commit | Mode | Summary |
 |---|---|---|---|---|
 | 1 | 2026-11-23T12:58:05-05:00 | 918f0a8471d3 | INIT | Initial architecture CMP-001–CMP-011, ADR-001–ADR-012, defects D-01–D-24 |
+| 2 | 2026-11-23T15:17:07-05:00 | 701009f47d68 | REVISION | Renamed from ARCHITECTURE_SPEC.md; status Baselined; Go 1.26.11; CMP-012; ADR-013–ADR-020 and assumptions; defects linked to issues; D-13 partly fixed by PR #23; D-25–D-30 |

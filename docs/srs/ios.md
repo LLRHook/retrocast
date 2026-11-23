@@ -94,3 +94,4 @@ need the Apple Push Notification service, the one optional outside service GOAL-
 | Rev | Date | Commit | Mode | Summary |
 |---|---|---|---|---|
 | 1 | 2026-11-23T12:58:05-05:00 | 918f0a8471d3 | INIT | Initial iOS client requirements IOS-FR-001–IOS-FR-012 |
+| 2 | 2026-11-23T15:17:07-05:00 | 701009f47d68 | REVISION | iOS follows the web client (Q-004); added IOS-NFR-001; envelope notes for REST v2.0.0 |
