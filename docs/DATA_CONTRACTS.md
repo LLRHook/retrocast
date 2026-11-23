@@ -137,8 +137,8 @@ Source: `retrocast/internal/permissions/resolver.go`; called by
    combined allow.
 5. The result is the member's permission set in that channel.
 
-Guild-scoped checks (`RequireGuildPermission`) use step 2 but today OR only the member's
-assigned roles and skip `@everyone` (D-04). The guild owner is never subject to the role
+Guild-scoped checks (`RequireGuildPermission`) delegate to `RequireGuildPermissionByPerm`
+and use step 2, including the default role even when no member-role row exists (PR #44, D-04 fixed). The guild owner is never subject to the role
 hierarchy (SV-FR-070).
 
 ### 3.3 Snowflake ids
@@ -236,7 +236,7 @@ Codes in use: `INVALID_USERNAME`, `INVALID_PASSWORD`, `USERNAME_TAKEN`,
 `CANNOT_BAN_SELF`, `CANNOT_DELETE`, `NOT_FOUND`, `EXPIRED`, `MAX_USES`, `ALREADY_MEMBER`,
 `BANNED`, `FORBIDDEN`, `MISSING_PERMISSIONS`, `ROLE_HIERARCHY`, `RATE_LIMITED`, `INTERNAL`.
 
-Codes added in rev 2 (specified, not yet in the code):
+Codes added in rev 2 (specified; CANNOT_KICK_SELF implemented in PR #44):
 
 | Code | Status | Meaning | Requirement |
 |---|---|---|---|
