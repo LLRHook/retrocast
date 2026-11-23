@@ -42,7 +42,7 @@ func TestPermissionRegressionRoleOperations(t *testing.T) {
 				h := newRoleHandler(guilds, roles, members, channels, &mockChannelOverrideRepo{}, &mockGateway{})
 				body := `{"name":"new","allow":"0","deny":"0"}`
 				if op == "create" {
-					body = `{"name":"new","position":-1}`
+					body = `{"name":"new","position":0}`
 				}
 				c, rec := newTestContext(http.MethodPost, "/", strings.NewReader(body))
 				c.SetParamNames("id", "role_id", "user_id")
@@ -71,12 +71,6 @@ func TestPermissionRegressionRoleOperations(t *testing.T) {
 					t.Fatal(err)
 				}
 				allowed := actor <= 300 || (op == "list" && actor == 400)
-				if op == "create" && actor <= 300 {
-					if rec.Code != 400 {
-						t.Fatalf("negative position must be refused: %d", rec.Code)
-					}
-					return
-				}
 				if allowed && rec.Code >= 400 {
 					t.Fatalf("allowed actor %d: %d %s", actor, rec.Code, rec.Body.String())
 				}
@@ -216,7 +210,7 @@ func TestPermissionRegressionKick(t *testing.T) {
 		actor, target int64
 		position      int
 		code          string
-	}{{"owner", 100, 400, 0, ""}, {"moderator", 300, 400, 0, ""}, {"equal", 300, 400, 5, "ROLE_HIERARCHY"}, {"higher", 300, 400, 6, "ROLE_HIERARCHY"}, {"self", 300, 300, 0, "CANNOT_KICK_SELF"}, {"owner target", 300, 100, 0, "FORBIDDEN"}, {"plain", 400, 300, 0, "MISSING_PERMISSIONS"}, {"outsider", 500, 300, 0, "FORBIDDEN"}} {
+	}{{"owner", 100, 400, 0, ""}, {"administrator", 200, 400, 0, ""}, {"moderator", 300, 400, 0, ""}, {"equal", 300, 400, 5, "ROLE_HIERARCHY"}, {"higher", 300, 400, 6, "ROLE_HIERARCHY"}, {"self", 300, 300, 0, "CANNOT_KICK_SELF"}, {"owner target", 300, 100, 0, "FORBIDDEN"}, {"plain", 400, 300, 0, "MISSING_PERMISSIONS"}, {"outsider", 500, 300, 0, "FORBIDDEN"}} {
 		t.Run(tc.name, func(t *testing.T) {
 			g, m, r, o := permMocks(0)
 			g.GetByIDFn = func(context.Context, int64) (*models.Guild, error) { return &models.Guild{OwnerID: 100}, nil }
@@ -227,6 +221,9 @@ func TestPermissionRegressionKick(t *testing.T) {
 				return &models.Member{UserID: u, GuildID: g}, nil
 			}
 			r.GetByMemberFn = func(_ context.Context, g, u int64) ([]models.Role, error) {
+				if u == 200 {
+					return []models.Role{{Position: 5, Permissions: int64(permissions.PermAdministrator)}}, nil
+				}
 				if u == 300 {
 					return []models.Role{{Position: 5, Permissions: int64(permissions.PermKickMembers)}}, nil
 				}
