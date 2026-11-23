@@ -63,6 +63,10 @@ type Dependencies struct {
 
 // SetupRouter registers all API routes on the Echo instance.
 func SetupRouter(e *echo.Echo, deps *Dependencies) {
+	// Resolve client IPs (used for unauthenticated rate limiting) through the
+	// reverse proxy's X-Forwarded-For header; see ClientIPExtractor.
+	e.IPExtractor = ClientIPExtractor()
+
 	// Health check — deep: pings Postgres and Redis
 	e.GET("/health", func(c echo.Context) error {
 		ctx := c.Request().Context()

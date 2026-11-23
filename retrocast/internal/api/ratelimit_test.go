@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -10,6 +11,66 @@ import (
 	"github.com/labstack/echo/v4"
 	redisclient "github.com/victorivanov/retrocast/internal/redis"
 )
+
+func TestRateLimit_ForwardedHeadersCannotRotateKey(t *testing.T) {
+	rdb := newTestRedis(t)
+	wrapped := RateLimitMiddleware(rdb, 1, time.Minute)(func(c echo.Context) error {
+		return c.String(http.StatusOK, "ok")
+	})
+	for i, tc := range []struct {
+		peer      string
+		forwarded string
+		want      int
+	}{
+		{"192.0.2.1:1234", "198.51.100.1", http.StatusOK},
+		{"192.0.2.1:5678", "198.51.100.2", http.StatusTooManyRequests},
+		{"192.0.2.2:1234", "198.51.100.2", http.StatusOK},
+	} {
+		c, rec := newTestContext(http.MethodGet, "/api/v1/test", nil)
+		c.Request().RemoteAddr = tc.peer
+		c.Request().Header.Set("X-Forwarded-For", tc.forwarded)
+		c.Request().Header.Set("X-Real-IP", tc.forwarded)
+		if err := wrapped(c); err != nil {
+			t.Fatal(err)
+		}
+		if rec.Code != tc.want {
+			t.Fatalf("request %d: got %d, want %d", i, rec.Code, tc.want)
+		}
+	}
+}
+
+func TestRateLimit_ClientIPExtractorSeparatesProxiedClients(t *testing.T) {
+	rdb := newTestRedis(t)
+	e := echo.New()
+	e.IPExtractor = ClientIPExtractor()
+	e.GET("/api/v1/test", func(c echo.Context) error {
+		return c.String(http.StatusOK, "ok")
+	}, RateLimitMiddleware(rdb, 1, time.Minute))
+
+	const proxy = "172.18.0.5:41000" // Caddy on the compose network (private address)
+	for i, tc := range []struct {
+		peer      string
+		forwarded string
+		want      int
+	}{
+		// Two clients behind the trusted proxy are limited separately.
+		{proxy, "203.0.113.10", http.StatusOK},
+		{proxy, "203.0.113.10", http.StatusTooManyRequests},
+		{proxy, "203.0.113.11", http.StatusOK},
+		// A client connecting directly from a public address cannot rotate its key.
+		{"198.51.100.7:5000", "203.0.113.20", http.StatusOK},
+		{"198.51.100.7:5001", "203.0.113.21", http.StatusTooManyRequests},
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/test", nil)
+		req.RemoteAddr = tc.peer
+		req.Header.Set(echo.HeaderXForwardedFor, tc.forwarded)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		if rec.Code != tc.want {
+			t.Fatalf("request %d (peer %s, X-Forwarded-For %s): got %d, want %d", i, tc.peer, tc.forwarded, rec.Code, tc.want)
+		}
+	}
+}
 
 func TestRateLimit_Allowed(t *testing.T) {
 	rdb := newTestRedis(t)
