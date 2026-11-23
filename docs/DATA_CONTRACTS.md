@@ -1,6 +1,6 @@
 # Retrocast — Data Contracts
 
-Status: Baselined (rev 6)
+Status: Baselined (rev 8)
 Related: [SRS](SRS.md) · [Architecture](ARCHITECTURE.md) · [Product Brief](PRODUCT_BRIEF.md)
 
 This document records the data and interface contracts as they exist at commit `6bc385e`
@@ -24,11 +24,11 @@ server stops at start with an error naming the keys.
 |---|---|---|
 | `DATABASE_URL` | yes | PostgreSQL connection string |
 | `JWT_SECRET` | yes | HMAC key for access tokens (no minimum length is enforced) |
-| `REDIS_URL` | yes | Redis connection (default `redis://localhost:6379`) |
-| `SERVER_ADDR` | yes | Listen address (default `:8080`; compose publishes 8080 until SV-NFR-008 ships) |
-| `LOG_LEVEL` | yes | slog level (default `info`) |
-| `REGISTRATION_MODE` | yes | `open`, `invite` or `closed` (default `invite`); any other value stops the server at start (SV-FR-062). Specified in rev 2, not yet read by the code |
-| `ALLOWED_ORIGINS` | yes | Comma-separated browser origins allowed besides the server's own (SV-NFR-011). Specified in rev 2, not yet read by the code |
+| `REDIS_URL` | no | Redis connection (default `redis://localhost:6379`) |
+| `SERVER_ADDR` | no | Listen address (default `:8080`; compose publishes 8080 until SV-NFR-008 ships) |
+| `LOG_LEVEL` | no | slog level (default `info`) |
+| `REGISTRATION_MODE` | no | `open`, `invite` or `closed` (default `invite`); any other value stops the server at start (SV-FR-062). Specified in rev 2, not yet read by the code |
+| `ALLOWED_ORIGINS` | no | Comma-separated browser origins allowed besides the server's own (SV-NFR-011). Specified in rev 2, not yet read by the code |
 | `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY` | yes for uploads | Object store; bucket `retrocast` is created at start |
 | `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | yes for voice | Token minting (§7.1) |
 | `POSTGRES_PASSWORD`, `MINIO_ROOT_PASSWORD` | compose only | Service passwords used by `docker-compose.yml` |
@@ -226,10 +226,27 @@ Handler errors use `{"error": {"code": "<CODE>", "message": "<text>"}}`
 (`retrocast/internal/api/response.go`). Service error kinds map to statuses: not found 404,
 forbidden 403, role hierarchy 403, bad request 400, conflict 409, unauthorized 401, gone 410,
 anything else 500 `INTERNAL`. Rate limiting returns 429 `RATE_LIMITED` with `Retry-After`.
-The JWT middleware returns Echo's message body instead
-(SV-IR-003). REST contract v2.0.0 keeps this error shape; only success bodies change.
+`HTTPErrorHandler` normalizes errors raised by Echo, JWT middleware and recovery
+from panics into the same envelope (SV-IR-003). Rate-limit failures also use the envelope;
+429 responses retain `Retry-After`. Internal details are redacted for 5xx errors.
 
-Codes in use: `INVALID_POSITION`, `INVALID_USERNAME`, `INVALID_PASSWORD`, `USERNAME_TAKEN`,
+| Status | Framework error code |
+|---|---|
+| 400 | `BAD_REQUEST` |
+| 401 | `UNAUTHORIZED` |
+| 403 | `FORBIDDEN` |
+| 404 | `NOT_FOUND` |
+| 405 | `METHOD_NOT_ALLOWED` |
+| 413 | `PAYLOAD_TOO_LARGE` |
+| 429 | `RATE_LIMITED` |
+| Other 4xx (for example 415, 416, 422) | `BAD_REQUEST` |
+| 5xx or non-HTTP error | `INTERNAL` |
+
+Service/handler errors retain their specific codes below. REST contract v2.0.0 keeps
+the error envelope; success bodies use the data envelope.
+
+Codes in use: `UNAUTHORIZED`, `BAD_REQUEST`, `METHOD_NOT_ALLOWED`, `PAYLOAD_TOO_LARGE`,
+`INVALID_POSITION`, `INVALID_USERNAME`, `INVALID_PASSWORD`, `USERNAME_TAKEN`,
 `INVALID_CREDENTIALS`, `MISSING_TOKEN`, `INVALID_TOKEN`, `INVALID_NAME`, `INVALID_TYPE`,
 `INVALID_CONTENT`, `INVALID_CHANNEL`, `NOT_VOICE_CHANNEL`, `INVALID_DISPLAY_NAME`,
 `INVALID_NICKNAME`, `INVALID_ROLE`, `INVALID_EMOJI`, `INVALID_QUERY`, `INVALID_RECIPIENT`,
