@@ -385,4 +385,4 @@ Scraping and dashboards are SYS-FR-001 in [system.md](system.md).
 | 1 | 2026-11-23T12:58:05-05:00 | 918f0a8471d3 | INIT | Initial server requirements SV-FR-001–SV-FR-059, SV-IR-001–SV-IR-006, SV-NFR-001–SV-NFR-008 |
 | 2 | 2026-11-23T15:17:07-05:00 | 701009f47d68 | REVISION | Added SV-FR-060–SV-FR-077, SV-IR-007, SV-IR-008, SV-NFR-009–SV-NFR-013; SV-FR-039 deprecated (superseded by SV-FR-072); smoke-run deliveries set to Partial; REST v2.0.0 envelope |
 | 3 | 2026-11-23T15:35:12-05:00 | 8cbf60de297e | REVISION | Review fixes: SV-FR-005 and SV-NFR-002 Partial (D-21, #43); password length in UTF-8 bytes; SV-NFR-011 same origin is scheme, host and port |
-| 4 | 2026-11-23T15:50:03-05:00 | 46b82d13b6f5 | REVISION | PR #44: permission management, default roles, channel search filtering, checked typing and kick hierarchy; residual B3 delivery gaps recorded |
+| 4 | 2026-11-23T15:52:00-05:00 | c350426f94c5 | REVISION | PR #44: permission management, default roles, channel search filtering, checked typing and kick hierarchy; residual B3 delivery gaps recorded |
