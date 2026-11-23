@@ -11,6 +11,33 @@ import (
 	redisclient "github.com/victorivanov/retrocast/internal/redis"
 )
 
+func TestRateLimit_ForwardedHeadersCannotRotateKey(t *testing.T) {
+	rdb := newTestRedis(t)
+	wrapped := RateLimitMiddleware(rdb, 1, time.Minute)(func(c echo.Context) error {
+		return c.String(http.StatusOK, "ok")
+	})
+	for i, tc := range []struct {
+		peer      string
+		forwarded string
+		want      int
+	}{
+		{"192.0.2.1:1234", "198.51.100.1", http.StatusOK},
+		{"192.0.2.1:5678", "198.51.100.2", http.StatusTooManyRequests},
+		{"192.0.2.2:1234", "198.51.100.2", http.StatusOK},
+	} {
+		c, rec := newTestContext(http.MethodGet, "/api/v1/test", nil)
+		c.Request().RemoteAddr = tc.peer
+		c.Request().Header.Set("X-Forwarded-For", tc.forwarded)
+		c.Request().Header.Set("X-Real-IP", tc.forwarded)
+		if err := wrapped(c); err != nil {
+			t.Fatal(err)
+		}
+		if rec.Code != tc.want {
+			t.Fatalf("request %d: got %d, want %d", i, rec.Code, tc.want)
+		}
+	}
+}
+
 func TestRateLimit_Allowed(t *testing.T) {
 	rdb := newTestRedis(t)
 
