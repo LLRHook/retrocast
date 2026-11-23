@@ -198,7 +198,7 @@ are as documented in OpenAPI; where the code differs, the Notes column says so.
 | API-038 | kickMember | DELETE /guilds/{guildId}/members/{userId} | 204 | — | KICK_MEMBERS, strict hierarchy and owner protection; self kick returns 400 CANNOT_KICK_SELF | SV-FR-066, SV-FR-070 |
 | API-039 | createRole | POST /guilds/{guildId}/roles | 201 role | no | | SV-FR-040 |
 | API-040 | listRoles | GET /guilds/{guildId}/roles | 200 roles | no | membership required; non-members receive 404 | SV-FR-044 |
-| API-041 | updateRole | PATCH /guilds/{guildId}/roles/{roleId} | 200 role | no | MANAGE_ROLES, same-guild role, hierarchy and grant limit on current plus requested bits; @everyone position fixed at 0
+| API-041 | updateRole | PATCH /guilds/{guildId}/roles/{roleId} | 200 role | no | MANAGE_ROLES, same-guild role, hierarchy and grant limit on current plus requested bits; @everyone position fixed at 0 | SV-FR-041 |
 | API-042 | deleteRole | DELETE /guilds/{guildId}/roles/{roleId} | 204 | — | `@everyone` gives 403 `CANNOT_DELETE`; MANAGE_ROLES, same-guild role, hierarchy and grant limit on current bits required | SV-FR-042 |
 | API-043 | assignRole | PUT /guilds/{guildId}/members/{userId}/roles/{roleId} | 204 | — | | SV-FR-043 |
 | API-044 | removeRole | DELETE /guilds/{guildId}/members/{userId}/roles/{roleId} | 204 | — | | SV-FR-043 |

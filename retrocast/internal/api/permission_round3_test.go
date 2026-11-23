@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"github.com/victorivanov/retrocast/internal/models"
 	"github.com/victorivanov/retrocast/internal/permissions"
 	"github.com/victorivanov/retrocast/internal/service"
@@ -112,7 +111,7 @@ func TestRefusedMemberPatchDoesNotWriteNickname(t *testing.T) {
 				t.Fatalf("want %s got %v", want, err)
 			}
 			if writes != 0 || member.Nickname == nil || *member.Nickname != "original" || len(gw.events) != 0 {
-				t.Fatal(fmt.Sprintf("refused patch changed state: writes %d nick %v events %d", writes, member.Nickname, len(gw.events)))
+				t.Fatalf("refused patch changed state: writes %d nick %v events %d", writes, member.Nickname, len(gw.events))
 			}
 		})
 	}
