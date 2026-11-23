@@ -189,7 +189,7 @@ are as documented in OpenAPI; where the code differs, the Notes column says so.
 | API-029 | ackMessage | PUT /channels/{channelId}/ack/{messageId} | 204 | — | | SV-FR-076 |
 | API-030 | addReaction | PUT /channels/{channelId}/messages/{messageId}/reactions/{emoji}/@me | 204 | — | | SV-FR-074 |
 | API-031 | removeReaction | DELETE /channels/{channelId}/messages/{messageId}/reactions/{emoji}/@me | 204 | — | | SV-FR-074 |
-| API-032 | getReactions | GET /channels/{channelId}/messages/{messageId}/reactions/{emoji} | 200 users | yes | user ids as JSON numbers (D-11) | SV-FR-075 |
+| API-032 | getReactions | GET /channels/{channelId}/messages/{messageId}/reactions/{emoji} | 200 users | yes | user ids as decimal strings (D-11 fixed in PR #45) | SV-FR-075 |
 | API-033 | listMembers | GET /guilds/{guildId}/members | 200 members | yes | `limit` 1–100 (50), `offset` | SV-FR-023 |
 | API-034 | updateSelf | PATCH /guilds/{guildId}/members/@me | 200 member | yes | nickname; no `CHANGE_NICKNAME` check | SV-FR-077 |
 | API-035 | leaveGuild | DELETE /guilds/{guildId}/members/@me | 204 | — | owner gets 403 | SV-FR-022 |
@@ -268,7 +268,7 @@ rev 2 a user may hold several connections, each receiving every event for that u
 |---|---|---|---|---|---|
 | EVT-001 | 10 | HELLO | server → client | `heartbeat_interval` (41 250 ms) | SV-FR-035 |
 | EVT-002 | 2 | IDENTIFY | client → server | `token` (access token) | SV-FR-036 |
-| EVT-003 | 0 | READY | server → client | `session_id`, `user_id`, `guilds` (ids as JSON numbers, D-11), `read_states`; no presence list | SV-FR-036, SV-FR-032 |
+| EVT-003 | 0 | READY | server → client | `session_id`, `user_id`, `guilds` (ids as decimal strings, D-11 fixed in PR #45), `read_states`; no presence list | SV-FR-036, SV-FR-032 |
 | EVT-004 | 1 | HEARTBEAT | both ways | last sequence (from the client); none (from the server) | SV-FR-037 |
 | EVT-005 | 11 | HEARTBEAT_ACK | server → client | none | SV-FR-037 |
 | EVT-006 | 6 | RESUME | client → server | `token`, `session_id`, `seq` | SV-FR-038 |
