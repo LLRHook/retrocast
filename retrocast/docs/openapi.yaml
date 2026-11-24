@@ -227,6 +227,25 @@ components:
         url:
           type: string
 
+    InvitePreview:
+      type: object
+      required: [code, guild_id, guild_name, member_count, creator_id]
+      properties:
+        code:
+          type: string
+        guild_id:
+          type: string
+          description: Guild snowflake ID
+          example: "9007199254740993"
+        guild_name:
+          type: string
+        member_count:
+          type: integer
+        creator_id:
+          type: string
+          description: Creator snowflake ID
+          example: "9007199254740994"
+
     Invite:
       type: object
       properties:
@@ -2173,7 +2192,7 @@ paths:
                 additionalProperties: false
                 properties:
                   data:
-                    $ref: "#/components/schemas/Invite"
+                    $ref: "#/components/schemas/InvitePreview"
         "404":
           $ref: "#/components/responses/NotFound"
 

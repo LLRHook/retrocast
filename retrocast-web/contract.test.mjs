@@ -118,7 +118,7 @@ function storeModule(name, state) {
 }
 let componentSequence=0;
 async function component(file, replacements, suffix='') {
- let source=readFileSync(resolve((file==='InvitePage'?'src/pages/':'src/components/')+file+'.tsx'),'utf8')+suffix;
+ let source=readFileSync(resolve((['InvitePage','LoginPage','RegisterPage'].includes(file)?'src/pages/':'src/components/')+file+'.tsx'),'utf8')+suffix;
  source=source.replace(/from "([^"]+)"/g,(whole,name)=>{
   const target=name==='react'?hooksUrl:replacements[name]??(name.startsWith('@/components/')?emptyComponentUrl:undefined);
   return target?'from '+JSON.stringify(target):whole;
@@ -464,6 +464,37 @@ test('invite acceptance coalesces replays, selects target and propagates invalid
  assert.deepEqual(calls,[['guild','target'],['select','target'],['channel',null],['fetch','target'],['channel','text']]);
  calls=[];globalThis.fetch=async()=>Response.json({error:{code:'EXPIRED',message:'invite has expired'}},{status:410});
  await assert.rejects(acceptInvite('expired'),/expired/);assert.deepEqual(calls,[]);
+});
+
+test('already-member invite previews once, loads missing guild and selects its channel',async()=>{
+ let selected=[],calls=[];
+ const g=await storeModule('useGuildsStore',{guilds:new Map(),setGuild:x=>selected.push(['guild',x.id]),selectGuild:x=>selected.push(['select',x])});
+ const c=await storeModule('useChannelsStore',{selectChannel:x=>selected.push(['channel',x]),fetchChannels:async()=>{},channelsByGuild:new Map([['invited',[{id:'first-text',type:0}]]])});
+ const source=readFileSync('src/lib/invite.ts','utf8').replace('"@/lib/api"',JSON.stringify(apiUrl)).replace('"@/stores/guilds"',JSON.stringify(g.url)).replace('"@/stores/channels"',JSON.stringify(c.url));
+ const {acceptInvite}=await import(compile(source,'member-invite'));
+ globalThis.fetch=async(url,o)=>{calls.push([o.method,url]);if(o.method==='POST')return Response.json({error:{code:'ALREADY_MEMBER',message:'already a member'}},{status:409});return Response.json({data:url.endsWith('/invites/copied')?{guild_id:'invited'}:{id:'invited'}})};
+ await Promise.all([acceptInvite('copied'),acceptInvite('copied')]);
+ assert.deepEqual(calls.map(([m,u])=>[m,new URL(u,'http://fixture').pathname]),[['POST','/api/v1/invites/copied'],['GET','/api/v1/invites/copied'],['GET','/api/v1/guilds/invited']]);
+ assert.deepEqual(selected,[['guild','invited'],['select','invited'],['channel',null],['channel','first-text']]);
+ calls=[];selected=[];globalThis.fetch=async(url,o)=>{calls.push(o.method);return Response.json({error:{code:'BANNED',message:'you are banned'}},{status:403})};
+ await assert.rejects(acceptInvite('banned'),/banned/);assert.deepEqual(calls,['POST']);assert.deepEqual(selected,[]);
+});
+
+test('login submit preserves invite destination and registration never reaccepts joined membership',async()=>{
+ let destinations=[],logins=0,registers=0,selected=[];
+ const router=compile('export const Link="Link";export const useNavigate=()=>globalThis.l37Navigate;export const useSearchParams=()=>[new URLSearchParams("invite_code=copied-code")];','post-auth-router');
+ globalThis.l37Navigate=path=>destinations.push(path);
+ const a=await storeModule('useAuthStore',{login:async()=>{logins++},register:async(_u,_p,code)=>{assert.equal(code,'copied-code');registers++}});
+ const g=await storeModule('useGuildsStore',{fetchGuilds:async()=>{},guilds:new Map([['invited',{id:'invited'}]])});
+ globalThis.l37Select=async guild=>selected.push(guild.id);
+ const invite=compile('export const selectInviteGuild=g=>globalThis.l37Select(g);','post-register-select');
+ const {default:Login}=await component('LoginPage',{'@/stores/auth':a.url,'react-router':router,'@/lib/api':apiUrl});
+ hooks.reset(['user','password','','false']);await Login().props.onSubmit({preventDefault(){}});assert.equal(logins,1);assert.deepEqual(destinations,['/invite/copied-code']);
+ const {default:Register}=await component('RegisterPage',{'@/stores/auth':a.url,'react-router':router,'@/lib/api':apiUrl,'@/stores/guilds':g.url,'@/lib/invite':invite});
+ destinations=[];hooks.reset(['copied-code','new-user','password','',false]);await Register().props.onSubmit({preventDefault(){}});
+ assert.equal(registers,1);assert.deepEqual(selected,['invited']);assert.deepEqual(destinations,['/app']);
+ g.module.setState({fetchGuilds:async()=>{},guilds:new Map()});destinations=[];hooks.reset(['copied-code','open-user','password','',false]);await Register().props.onSubmit({preventDefault(){}});assert.deepEqual(destinations,['/invite/copied-code']);
+ delete globalThis.l37Navigate;delete globalThis.l37Select;
 });
 
 } catch (error) {

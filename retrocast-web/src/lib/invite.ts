@@ -1,4 +1,4 @@
-import { api } from "@/lib/api";
+import { api, ApiClientError } from "@/lib/api";
 import { useGuildsStore } from "@/stores/guilds";
 import { useChannelsStore } from "@/stores/channels";
 import type { Guild } from "@/types";
@@ -17,7 +17,14 @@ const flights = new Map<string, Promise<void>>();
 export function acceptInvite(code: string) {
   const active = flights.get(code);
   if (active) return active;
-  const flight = api.post<Guild>(`/api/v1/invites/${encodeURIComponent(code)}`).then(selectInviteGuild)
+  const flight = api.post<Guild>(`/api/v1/invites/${encodeURIComponent(code)}`).catch(async (err: unknown) => {
+      if (!(err instanceof ApiClientError) || err.code !== "ALREADY_MEMBER") throw err;
+      // The POST may already have committed in another tab or before a reload.
+      // Preview identifies the exact destination without consuming another use.
+      const preview = await api.get<{guild_id: string}>(`/api/v1/invites/${encodeURIComponent(code)}`);
+      return useGuildsStore.getState().guilds.get(preview.guild_id)
+        ?? await api.get<Guild>(`/api/v1/guilds/${encodeURIComponent(preview.guild_id)}`);
+    }).then(selectInviteGuild)
     .finally(() => flights.delete(code));
   flights.set(code, flight);
   return flight;

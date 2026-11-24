@@ -120,6 +120,13 @@ func TestGetInvite_Public(t *testing.T) {
 	if resp.GuildName != "Test Guild" {
 		t.Errorf("expected guild name 'Test Guild', got %s", resp.GuildName)
 	}
+	var preview map[string]any
+	if err := decodeResponse(rec, &preview); err != nil {
+		t.Fatal(err)
+	}
+	if preview["guild_id"] != "1" {
+		t.Fatalf("invite guild_id = %v, want string 1", preview["guild_id"])
+	}
 	if resp.MemberCount != 2 {
 		t.Errorf("expected member count 2, got %d", resp.MemberCount)
 	}
