@@ -53,6 +53,17 @@ func TestInviteLookupLimit(t *testing.T) {
 		}
 	}
 }
+func TestDocsOffline(t *testing.T) {
+	e := echo.New()
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+	SetupRouter(e, &Dependencies{TokenService: auth.NewTokenService("test")})
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest("GET", "/docs", nil))
+	if rec.Code != 200 || strings.Contains(rec.Body.String(), "unpkg.com") || !strings.Contains(rec.Body.String(), "openapi:") {
+		t.Fatalf("docs must serve embedded raw OpenAPI")
+	}
+}
+
 func TestRouterOriginPolicy(t *testing.T) {
 	for _, tc := range []struct {
 		origin string

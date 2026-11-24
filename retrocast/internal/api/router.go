@@ -15,29 +15,6 @@ import (
 	"github.com/victorivanov/retrocast/internal/redis"
 )
 
-const swaggerUIHTML = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Retrocast API</title>
-  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
-  <style>html{box-sizing:border-box;overflow-y:scroll}*,*::before,*::after{box-sizing:inherit}body{margin:0;background:#fafafa}</style>
-</head>
-<body>
-  <div id="swagger-ui"></div>
-  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
-  <script>
-    SwaggerUIBundle({
-      url: "/docs/openapi.yaml",
-      dom_id: "#swagger-ui",
-      deepLinking: true,
-      presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
-      layout: "BaseLayout",
-    });
-  </script>
-</body>
-</html>`
-
 // Dependencies holds all handler instances and middleware for route wiring.
 type Dependencies struct {
 	AllowedOrigins string
@@ -111,7 +88,7 @@ func SetupRouter(e *echo.Echo, deps *Dependencies) {
 
 	// Swagger UI — serves the embedded OpenAPI spec
 	e.GET("/docs", func(c echo.Context) error {
-		return c.HTML(http.StatusOK, swaggerUIHTML)
+		return c.Blob(http.StatusOK, "text/plain; charset=utf-8", docs.OpenAPISpec)
 	})
 	e.GET("/docs/openapi.yaml", func(c echo.Context) error {
 		return c.Blob(http.StatusOK, "application/yaml", docs.OpenAPISpec)

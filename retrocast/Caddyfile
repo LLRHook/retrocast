@@ -7,6 +7,14 @@
         reverse_proxy api:8080
     }
 
+    handle /metrics {
+        respond 404
+    }
+
+    handle /docs* {
+        reverse_proxy api:8080
+    }
+
     handle /health {
         reverse_proxy api:8080
     }
