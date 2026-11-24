@@ -147,12 +147,6 @@ func (m *Manager) clearPresenceWithGrace(userID int64, guilds []int64, epoch uin
 	m.mu.Unlock()
 }
 func (m *Manager) subscribeLocked(userID, guildID int64) {
-	// Away devices need a new READY even when another device updates memberships.
-	for _, c := range m.sessions {
-		if c.UserID == userID && !m.connections[userID][c] {
-			c.replayFloor = c.sequence.Load() + 1
-		}
-	}
 	if len(m.connections[userID]) == 0 {
 		return
 	}
@@ -173,6 +167,12 @@ func (m *Manager) SubscribeToGuild(userID, guildID int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.membershipEpoch[userID]++
+	// Away devices need a new READY even when another device updates memberships.
+	for _, c := range m.sessions {
+		if c.UserID == userID && !m.connections[userID][c] {
+			c.replayFloor = c.sequence.Load() + 1
+		}
+	}
 	m.subscribeLocked(userID, guildID)
 }
 func (m *Manager) UnsubscribeFromGuild(userID, guildID int64) {
