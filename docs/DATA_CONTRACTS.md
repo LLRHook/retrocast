@@ -421,3 +421,4 @@ together with the iOS client (Q-025); APNs is the one optional outside service G
 | 24 | 2026-11-24T12:07:01-05:00 | 6e9507a02345 | REVISION | B7: copied invite routing and server selection; REST contract 2.2.0 and SV-IR-008 version equality through API-060 |
 | 25 | 2026-11-24T12:48:31-05:00 | dcb540ca8410 | REVISION | B7 round 2 (E339): API-049 preview guild_id in unreleased 2.2.0; API-050 unchanged; SV-IR-001/005/007 trace API-060 |
 | 26 | 2026-11-24T13:22:47-05:00 | 2b64e5b68b82 | REVISION | B8 L40: Pilot clause test index; SV-IR-001 documented success criterion; WEB-FR-009 name wording; optional public member identity per E347 |
+| 27 | 2026-11-24T14:31:40-05:00 | 23ec2de281ea | REVISION | B8 round 2: required response fields document existing non-omitempty emission within REST 2.2.0 |
