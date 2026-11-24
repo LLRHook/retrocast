@@ -304,7 +304,7 @@ rev 2 a user may hold several connections, each receiving every event for that u
 | EVT-014 | 0 | GUILD_DELETE | server → client | `id` | SV-FR-012 |
 | EVT-015 | 0 | CHANNEL_CREATE | server → client | channel (guild members) or DM channel (each recipient) | SV-FR-014, SV-FR-054 |
 | EVT-016 | 0 | CHANNEL_UPDATE | server → client | channel | SV-FR-015 |
-| EVT-017 | 0 | CHANNEL_DELETE | server → client | `id`, `guild_id` (guild channel) or DM channel | SV-FR-015 |
+| EVT-017 | 0 | CHANNEL_DELETE | server → client | `id`, `guild_id` (guild-wide metadata, regardless of VIEW_CHANNEL) or DM channel (participants only) | SV-FR-015 |
 | EVT-018 | 0 | GUILD_MEMBER_ADD | server → client | member | SV-FR-020 |
 | EVT-019 | 0 | GUILD_MEMBER_REMOVE | server → client | `guild_id`, `user_id` | SV-FR-022, SV-FR-066, SV-FR-067, SV-FR-071 |
 | EVT-020 | 0 | GUILD_MEMBER_UPDATE | server → client | member | SV-FR-043 |
@@ -318,6 +318,16 @@ rev 2 a user may hold several connections, each receiving every event for that u
 | EVT-028 | 0 | GUILD_BAN_REMOVE | server → client | `guild_id`, `user_id` | SV-FR-069 |
 | EVT-029 | 0 | MESSAGE_REACTION_ADD | server → client | reaction | SV-FR-074 |
 | EVT-030 | 0 | MESSAGE_REACTION_REMOVE | server → client | reaction | SV-FR-074 |
+
+Gateway fan-out visibility (PR #50 round 2; existing channel-list visibility retained):
+
+| Events | Audience |
+|---|---|
+| MESSAGE_CREATE/UPDATE/DELETE, reactions, TYPING_START, CHANNEL_UPDATE, voice join | Current guild members with VIEW_CHANNEL on the referenced channel |
+| CHANNEL_CREATE, CHANNEL_DELETE, GUILD_*, member/role changes, presence, voice leave without a channel | Current guild members, all their connections; channel metadata matches the existing REST channel list |
+| DM events | Current DM participants, all their connections |
+
+Only definitive permission results are cached. A transient lookup fault withholds the event, increments the gateway permission-failure counter, invalidates that session's replay window and closes its connection. RESUME receives fresh READY so clients refetch. A removal while disconnected also forces fresh READY even if no later event was missed.
 
 Op 4 (`OpVoiceStateUpdate`) is defined in `events.go:15` but the server does not handle it.
 Op 5 is unused.

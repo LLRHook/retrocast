@@ -264,8 +264,7 @@ Kick and ban act only on members ranked below the caller (SV-FR-070; kick fixed 
 Resolution is in Go (ADR-009).
 
 ### 7.3 Real-time delivery
-In-process fan-out from services to gateway connections, keyed by the guilds a connection
-subscribed to at IDENTIFY. Per-connection send buffer of 256 frames. A 100-event replay
+In-process fan-out from services to gateway connections, keyed by current guild membership; IDENTIFY retries a snapshot if removal changed the user membership epoch before registration. Per-connection send buffer of 256 frames. A 100-event replay
 buffer per session backs RESUME (PR #50); missing history receives fresh READY. A user may hold several connections
 (ADR-017) and subscriptions follow membership changes (SV-FR-071).
 
@@ -349,7 +348,7 @@ they affect stay Later.
 | D-03 | Fixed in [PR #44](https://github.com/LLRHook/retrocast/pull/44). Previous defect: Listing roles checks no membership | retrocast/internal/service/role.go:96 | SV-FR-044 | Pilot | [#28](https://github.com/LLRHook/retrocast/issues/28) |
 | D-04 | Fixed in [PR #44](https://github.com/LLRHook/retrocast/pull/44). Previous defect: Guild-level checks combine only assigned roles, and invite joiners get no `@everyone` row, so `@everyone` guild permissions do not apply to them | retrocast/internal/service/permission.go:125; retrocast/internal/service/invite.go:173-181 | SV-FR-045, SV-FR-020 | Pilot | [#29](https://github.com/LLRHook/retrocast/issues/29) |
 | D-05 | Fixed: subscriptions follow create/join/leave/kick/ban and guild deletion, only for live users (PR #50) | retrocast/internal/gateway/manager.go; session_live_test.go | SV-FR-026, SV-FR-020, SV-FR-066, SV-FR-071 | Pilot | [#30](https://github.com/LLRHook/retrocast/issues/30) |
-| D-06 | Fixed: search filters VIEW_CHANNEL/READ_MESSAGE_HISTORY (PR #44); gateway fan-out caches existing permission resolver VIEW_CHANNEL results and invalidates on roles, membership, overrides and channel changes (PR #50) | retrocast/internal/gateway/manager.go; session_live_test.go | SV-FR-026, SV-FR-059, SV-FR-016 | Pilot | [#31](https://github.com/LLRHook/retrocast/issues/31) |
+| D-06 | Fixed: search filters VIEW_CHANNEL/READ_MESSAGE_HISTORY (PR #44); content fan-out caches definitive permission results and invalidates on roles, membership, overrides and channel changes; lookup faults close and resynchronize the session; channel create/delete metadata are guild-wide (PR #50) | retrocast/internal/gateway/manager.go; session_live_test.go | SV-FR-026, SV-FR-059, SV-FR-016 | Pilot | [#31](https://github.com/LLRHook/retrocast/issues/31) |
 | D-07 | Fixed: session-scoped serialized replay with original sequences; valid token plus unavailable replay receives fresh READY/new session id (PR #50) | retrocast/internal/gateway/manager.go; session_live_test.go | SV-FR-038 | Pilot | — |
 | D-08 | Fixed: migration 000020 validates and key-share-locks guild/DM message parents and deletes messages on parent deletion | retrocast/migrations/000020_dm_messages_and_pending_attachments.up.sql; internal/service/storage_integration_test.go; internal/database/storage_migration_test.go | SV-FR-055, WEB-FR-016, IOS-FR-009; RISK-002 | Pilot (RISK-002, Q-003) | [#37](https://github.com/LLRHook/retrocast/issues/37) |
 | D-09 | Fixed: pending uploads carry uploader/channel ownership and are atomically claimed through API-022; batched hydration returns attachments | retrocast/migrations/000020_dm_messages_and_pending_attachments.up.sql; internal/service/storage_integration_test.go; internal/database/storage_migration_test.go | SV-FR-051, WEB-FR-017; RISK-002 | Pilot (RISK-002, Q-003) | [#24](https://github.com/LLRHook/retrocast/issues/24) |
