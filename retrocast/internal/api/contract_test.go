@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -459,7 +460,7 @@ func TestContractDocumentedSuccess(t *testing.T) {
 		"updateMe":       `{"display_name":"Changed"}`, "createDM": `{"recipient_id":"200"}`,
 		"createGuild": `{"name":"New guild"}`, "updateGuild": `{"name":"Renamed"}`,
 		"createChannel": `{"name":"random","type":0}`, "updateChannel": `{"name":"renamed"}`,
-		"sendMessage": `{"content":"hi"}`, "editMessage": `{"content":"changed"}`,
+		"sendMessage": `{"content":"hi","attachment_ids":["41"]}`, "editMessage": `{"content":"changed"}`,
 		"updateSelf": `{"nickname":"Buddy"}`, "updateMember": `{"nickname":"Buddy"}`,
 		"createRole": `{"name":"New role"}`, "updateRole": `{"name":"Changed"}`,
 		"reorderRoles":       `{"expected":[{"id":"30","position":0},{"id":"31","position":1}],"order":["31"]}`,
@@ -536,6 +537,33 @@ func TestContractDocumentedSuccess(t *testing.T) {
 				envelope, ok := body.(map[string]any)
 				if !ok || len(envelope) != 1 || envelope["data"] == nil {
 					t.Fatalf("data envelope: %s", rec.Body.String())
+				}
+				// These fixtures must exercise item schemas, not just empty arrays.
+				switch id {
+				case "getReactions", "getReadStates", "listBans":
+					if len(envelope["data"].([]any)) == 0 {
+						t.Fatal("empty contract fixture", id)
+					}
+				case "getMember", "updateMember", "updateSelf":
+					if len(envelope["data"].(map[string]any)["roles"].([]any)) == 0 {
+						t.Fatal("empty member roles fixture")
+					}
+				case "listMembers":
+					for _, member := range envelope["data"].([]any) {
+						if len(member.(map[string]any)["roles"].([]any)) == 0 {
+							t.Fatal("empty list member roles fixture")
+						}
+					}
+				case "sendMessage", "getMessage", "editMessage":
+					if len(envelope["data"].(map[string]any)["attachments"].([]any)) == 0 {
+						t.Fatal("empty attachment fixture", id)
+					}
+				case "getMessages", "searchMessages":
+					for _, message := range envelope["data"].([]any) {
+						if len(message.(map[string]any)["attachments"].([]any)) == 0 {
+							t.Fatal("empty list attachment fixture", id)
+						}
+					}
 				}
 				schema := responses[status].(map[string]any)["content"].(map[string]any)["application/json"].(map[string]any)["schema"].(map[string]any)
 				validateContractSchema(t, spec, schema, body, "response")
@@ -637,5 +665,70 @@ func validateContractSchema(t *testing.T, spec, schema map[string]any, value any
 		if !found {
 			t.Errorf("%s: value outside enum", path)
 		}
+	}
+}
+
+// Keep the documentation's required fields aligned with what the wire models
+// always emit. Optional projections/pointers with omitempty remain optional.
+func TestContractRequiredModelFields(t *testing.T) {
+	var spec map[string]any
+	b, err := os.ReadFile("../../docs/openapi.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = yaml.Unmarshal(b, &spec); err != nil {
+		t.Fatal(err)
+	}
+	schemas := spec["components"].(map[string]any)["schemas"].(map[string]any)
+	cases := map[string]any{"User": models.User{}, "Guild": models.Guild{}, "Channel": models.Channel{}, "Role": models.Role{}, "MemberUser": models.MemberUser{}, "Member": models.Member{}, "Message": models.Message{}, "MessageWithAuthor": models.MessageWithAuthor{}, "Attachment": models.Attachment{}, "InvitePreview": service.InviteInfo{}, "Invite": models.Invite{}, "Ban": models.Ban{}, "ChannelOverride": models.ChannelOverride{}, "DMChannel": models.DMChannel{}, "ReactionCount": models.ReactionCount{}, "ReadState": models.ReadState{}, "VoiceState": models.VoiceState{}, "JoinVoiceResponse": service.JoinChannelResponse{}, "AuthResponse": authResponse{}, "RefreshResponse": refreshResponse{}}
+	for name, value := range cases {
+		t.Run(name, func(t *testing.T) {
+			want := map[string]bool{}
+			var fields func(reflect.Type)
+			fields = func(typ reflect.Type) {
+				for i := 0; i < typ.NumField(); i++ {
+					f := typ.Field(i)
+					if f.Anonymous {
+						fields(f.Type)
+						continue
+					}
+					tag := strings.Split(f.Tag.Get("json"), ",")
+					if tag[0] == "-" {
+						continue
+					}
+					optional := false
+					for _, opt := range tag[1:] {
+						if opt == "omitempty" {
+							optional = true
+						}
+					}
+					if !optional {
+						want[tag[0]] = true
+					}
+				}
+			}
+			fields(reflect.TypeOf(value))
+			got := map[string]bool{}
+			var required func(map[string]any)
+			required = func(schema map[string]any) {
+				if ref, ok := schema["$ref"].(string); ok {
+					required(schemas[strings.TrimPrefix(ref, "#/components/schemas/")].(map[string]any))
+				}
+				if all, ok := schema["allOf"].([]any); ok {
+					for _, child := range all {
+						required(child.(map[string]any))
+					}
+				}
+				if keys, ok := schema["required"].([]any); ok {
+					for _, key := range keys {
+						got[key.(string)] = true
+					}
+				}
+			}
+			required(schemas[name].(map[string]any))
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("required fields %v, want non-omitempty JSON fields %v", got, want)
+			}
+		})
 	}
 }

@@ -72,6 +72,7 @@ components:
     # ── Domain models ──────────────────────────────────────────
     User:
       type: object
+      required: [id, username, display_name, created_at]
       properties:
         id:
           type: string
@@ -91,6 +92,7 @@ components:
 
     Guild:
       type: object
+      required: [id, name, owner_id, created_at]
       properties:
         id:
           type: string
@@ -110,6 +112,7 @@ components:
 
     Channel:
       type: object
+      required: [id, guild_id, name, type, position]
       properties:
         id:
           type: string
@@ -134,6 +137,7 @@ components:
 
     Role:
       type: object
+      required: [id, guild_id, name, color, permissions, position, is_default]
       properties:
         id:
           type: string
@@ -172,6 +176,7 @@ components:
 
     Member:
       type: object
+      required: [guild_id, user_id, joined_at, roles]
       properties:
         user:
           $ref: "#/components/schemas/MemberUser"
@@ -192,6 +197,7 @@ components:
 
     Message:
       type: object
+      required: [id, channel_id, author_id, content, created_at]
       properties:
         id:
           type: string
@@ -213,6 +219,7 @@ components:
       allOf:
         - $ref: "#/components/schemas/Message"
         - type: object
+          required: [author_username, author_display_name, attachments]
           properties:
             author_username:
               type: string
@@ -228,6 +235,7 @@ components:
 
     Attachment:
       type: object
+      required: [id, message_id, filename, content_type, size, url]
       properties:
         id:
           type: string
@@ -266,6 +274,7 @@ components:
 
     Invite:
       type: object
+      required: [code, guild_id, creator_id, max_uses, uses, created_at]
       properties:
         code:
           type: string
@@ -291,6 +300,7 @@ components:
 
     Ban:
       type: object
+      required: [guild_id, user_id, created_by, created_at]
       properties:
         guild_id:
           type: string
@@ -307,6 +317,7 @@ components:
 
     ChannelOverride:
       type: object
+      required: [channel_id, role_id, allow, deny]
       properties:
         channel_id:
           type: string
@@ -321,6 +332,7 @@ components:
 
     DMChannel:
       type: object
+      required: [id, type, recipients, created_at]
       properties:
         id:
           type: string
@@ -342,6 +354,7 @@ components:
 
     ReactionCount:
       type: object
+      required: [emoji, count, me]
       properties:
         emoji:
           type: string
@@ -355,6 +368,7 @@ components:
 
     ReadState:
       type: object
+      required: [user_id, channel_id, last_message_id, mention_count, updated_at]
       properties:
         user_id:
           type: string
@@ -374,6 +388,7 @@ components:
 
     VoiceState:
       type: object
+      required: [guild_id, channel_id, user_id, session_id, self_mute, self_deaf, joined_at]
       properties:
         guild_id:
           type: string
@@ -393,6 +408,7 @@ components:
 
     JoinVoiceResponse:
       type: object
+      required: [token, voice_states]
       properties:
         token:
           type: string
@@ -405,6 +421,7 @@ components:
     # ── Auth payloads ──────────────────────────────────────────
     AuthResponse:
       type: object
+      required: [access_token, refresh_token, user]
       properties:
         access_token:
           type: string
@@ -415,6 +432,7 @@ components:
 
     RefreshResponse:
       type: object
+      required: [access_token, refresh_token]
       properties:
         access_token:
           type: string
@@ -698,6 +716,7 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
                     $ref: "#/components/schemas/User"
@@ -729,6 +748,7 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
                     $ref: "#/components/schemas/User"
@@ -751,6 +771,7 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
                     type: array
@@ -948,6 +969,7 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
                     $ref: "#/components/schemas/Guild"
@@ -978,6 +1000,7 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
                     $ref: "#/components/schemas/Guild"
@@ -1013,6 +1036,7 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
                     $ref: "#/components/schemas/Guild"
@@ -1086,6 +1110,7 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
                     $ref: "#/components/schemas/Channel"
@@ -1109,6 +1134,7 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
                     type: array
@@ -1141,6 +1167,7 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
                     $ref: "#/components/schemas/Channel"
@@ -1175,6 +1202,7 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
                     $ref: "#/components/schemas/Channel"
@@ -1646,6 +1674,7 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
                     type: array
@@ -1688,6 +1717,7 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
                     $ref: "#/components/schemas/Member"
@@ -1736,6 +1766,7 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
                     $ref: "#/components/schemas/Member"
@@ -1773,6 +1804,7 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data]
                 properties:
                   data:
                     $ref: "#/components/schemas/Member"
