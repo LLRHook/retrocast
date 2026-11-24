@@ -260,6 +260,97 @@ test('password change stores tokens, wrong current password preserves session, r
  let body;globalThis.fetch=async(url,options)=>{body=JSON.parse(options.body);return Response.json({data:{user:{id:'new'},access_token:'a',refresh_token:'r'}})};
  await useAuthStore.getState().register('new','password','invite-code');assert.equal(body.invite_code,'invite-code');
 });
+
+// Separate module instances model tabs sharing only browser storage and Web Locks.
+let tabSequence=0;
+async function authTab() {
+ const name='tab-'+(++tabSequence);
+ const url=compile(readFileSync(resolve('src/lib/api.ts'),'utf8'),name+'-api');
+ const source=readFileSync(resolve('src/stores/auth.ts'),'utf8').replace('"@/lib/api"',JSON.stringify(url)).replace('"zustand"',JSON.stringify(pathToFileURL(require.resolve('zustand')).href));
+ const {useAuthStore:store}=await import(compile(source,name+'-auth'));
+ return store;
+}
+function installLocks(locks) {
+ const previous=Object.getOwnPropertyDescriptor(navigator,'locks');
+ Object.defineProperty(navigator,'locks',{value:locks,configurable:true});
+ return ()=>previous?Object.defineProperty(navigator,'locks',previous):delete navigator.locks;
+}
+function queuedLocks() {
+ let tail=Promise.resolve();
+ return {request(_name,action){const result=tail.then(action);tail=result.catch(()=>{});return result}};
+}
+function sharedSession() {storage.set('serverUrl','http://fixture');storage.set('refreshToken','shared-token')}
+function pairResponse(token) {return Response.json({data:{access_token:'access',refresh_token:token}})}
+function rejectedToken() {return Response.json({error:{code:'INVALID_TOKEN',message:'expired'}},{status:401})}
+
+test('no Web Locks: losing restore cannot erase the winning tab token',async()=>{
+ const reset=installLocks(undefined);
+ try {
+  sharedSession();const a=await authTab(),b=await authTab();let accepted=false;
+  globalThis.fetch=async(url,options)=>{
+   if(!url.endsWith('/auth/refresh'))return Response.json({data:{id:'shared-user'}});
+   const token=JSON.parse(options.body).refresh_token;
+   if(token==='shared-token' && !accepted){accepted=true;return pairResponse('winner-token')}
+   if(token==='shared-token'){await new Promise(setImmediate);return rejectedToken()}
+   return pairResponse('retried-token');
+  };
+  await Promise.all([a.getState().restore(),b.getState().restore()]);
+  assert.ok(storage.get('refreshToken'),'loser erased the winner token');
+  assert.equal(a.getState().isAuthenticated,true);assert.equal(b.getState().isAuthenticated,true);
+ } finally {reset()}
+});
+
+test('cross-tab lock serializes reads and rotation of the shared token',async()=>{
+ const reset=installLocks(queuedLocks());
+ try {
+  sharedSession();const a=await authTab(),b=await authTab();let expected='shared-token',calls=0;
+  globalThis.fetch=async(_url,options)=>{
+   const token=JSON.parse(options.body).refresh_token;await new Promise(setImmediate);
+   if(token!==expected)return rejectedToken();
+   expected='rotated-'+(++calls);return pairResponse(expected);
+  };
+  await Promise.all([a.getState().refreshAccessToken(),b.getState().refreshAccessToken()]);
+  assert.equal(calls,2);assert.equal(storage.get('refreshToken'),expected);
+ } finally {reset()}
+});
+
+test('refresh callers coalesce even when a lock could serialize separate calls',async()=>{
+ const reset=installLocks(queuedLocks());
+ try {
+  sharedSession();const tab=await authTab();let calls=0;
+  globalThis.fetch=async()=>{calls++;await new Promise(setImmediate);return pairResponse('coalesced')};
+  await Promise.all(Array.from({length:4},()=>tab.getState().refreshAccessToken()));
+  assert.equal(calls,1);
+ } finally {reset()}
+});
+
+test('without Web Locks logout drains the in-flight refresh before revoking',async()=>{
+ const reset=installLocks(undefined);
+ try {
+  sharedSession();const tab=await authTab();let release;const gate=new Promise(r=>release=r);const sent=[];
+  globalThis.fetch=async(url,options)=>{
+   sent.push({url,body:JSON.parse(options.body)});
+   if(url.endsWith('/auth/refresh')){await gate;return pairResponse('replacement')}
+   return new Response(null,{status:204});
+  };
+  const refresh=tab.getState().refreshAccessToken();const logout=tab.getState().logout();
+  await new Promise(setImmediate);release();await Promise.all([refresh,logout]);
+  assert.equal(sent[1].body.refresh_token,'replacement');assert.equal(storage.get('refreshToken'),undefined);
+ } finally {reset()}
+});
+
+test('password token write waits for the shared session lock',async()=>{
+ const locks=queuedLocks(),reset=installLocks(locks);
+ let release;const gate=new Promise(r=>release=r);
+ try {
+  sharedSession();const tab=await authTab();const holding=locks.request('retrocast-session',()=>gate);
+  globalThis.fetch=async()=>Response.json({data:{user:{id:'user'},access_token:'changed',refresh_token:'password-token'}});
+  const change=tab.getState().changePassword('current','nextpassword');
+  await new Promise(setImmediate);assert.equal(storage.get('refreshToken'),'shared-token');
+  release();await holding;await change;assert.equal(storage.get('refreshToken'),'password-token');
+ } finally {release();reset()}
+});
+
 } catch (error) {
  cleanup();
  throw error;

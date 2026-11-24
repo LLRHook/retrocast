@@ -37,19 +37,25 @@ async function sessionLock<T>(action: () => Promise<T>): Promise<T> {
 }
 let refreshFlight: Promise<string> | null = null;
 let restoreFlight: Promise<void> | null = null;
+// Keep the attempted token private, associated with the exact failed request.
+const rejectedTokens = new WeakMap<Error, string>();
 export const useAuthStore = create<AuthState>()((set, get) => {
   // Wire up the API client token provider
   api.setTokenProvider(() => get().accessToken);
   api.setTokenRefresher(() => get().refreshAccessToken());
 
   const rotate = async () => {
-        const refreshToken = localStorage.getItem("refreshToken");
-        if (!refreshToken) throw new Error("No refresh token");
-        const data = await api.post<RefreshResponse>("/api/v1/auth/refresh", {refresh_token: refreshToken});
-        localStorage.setItem("refreshToken", data.refresh_token);
-        set({accessToken: data.access_token, refreshToken: data.refresh_token});
-        return data.access_token;
-
+    const refreshToken = localStorage.getItem("refreshToken");
+    if (!refreshToken) throw new Error("No refresh token");
+    try {
+      const data = await api.post<RefreshResponse>("/api/v1/auth/refresh", {refresh_token: refreshToken});
+      localStorage.setItem("refreshToken", data.refresh_token);
+      set({accessToken: data.access_token, refreshToken: data.refresh_token});
+      return data.access_token;
+    } catch (err) {
+      if (err instanceof ApiClientError && err.status === 401) rejectedTokens.set(err, refreshToken);
+      throw err;
+    }
   };
 
   return {
@@ -121,8 +127,10 @@ export const useAuthStore = create<AuthState>()((set, get) => {
       const data = await api.put<AuthResponse>("/api/v1/users/@me/password", {
         current_password: current, new_password: next,
       });
-      localStorage.setItem("refreshToken", data.refresh_token);
-      set({user: data.user, accessToken: data.access_token, refreshToken: data.refresh_token});
+      await sessionLock(async () => {
+        localStorage.setItem("refreshToken", data.refresh_token);
+        set({user: data.user, accessToken: data.access_token, refreshToken: data.refresh_token});
+      });
     },
 
     restore: () => {
@@ -130,15 +138,30 @@ export const useAuthStore = create<AuthState>()((set, get) => {
       restoreFlight = (async () => {
         if (!get().serverUrl || !get().refreshToken) { set({restoreState: "ready"}); return; }
         set({restoreState: "pending"});
-        try {
-          await get().refreshAccessToken();
-          const user = await api.get<User>("/api/v1/users/@me");
-          set({user, isAuthenticated: true, restoreState: "ready"});
-        } catch (err) {
-          if (err instanceof ApiClientError && err.status === 401) {
-            localStorage.removeItem("refreshToken");
-            set({user: null, accessToken: null, refreshToken: null, isAuthenticated: false, restoreState: "ready"});
-          } else set({restoreState: "error"});
+        // One retry handles a rotation won by another tab without Web Locks.
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            await get().refreshAccessToken();
+            const user = await api.get<User>("/api/v1/users/@me");
+            set({user, isAuthenticated: true, restoreState: "ready"});
+            return;
+          } catch (err) {
+            if (!(err instanceof ApiClientError) || err.status !== 401) {
+              set({restoreState: "error"});
+              return;
+            }
+            const rejected = rejectedTokens.get(err) ?? get().refreshToken;
+            const replaced = await sessionLock(async () => {
+              const stored = localStorage.getItem("refreshToken");
+              if (stored && stored !== rejected) return true;
+              localStorage.removeItem("refreshToken");
+              set({user: null, accessToken: null, refreshToken: null, isAuthenticated: false, restoreState: "ready"});
+              return false;
+            });
+            if (!replaced) return;
+            // A second replacement is preserved for Retry instead of clearing it.
+            if (attempt === 1) set({restoreState: "error"});
+          }
         }
       })().finally(() => {restoreFlight = null;});
       return restoreFlight;
