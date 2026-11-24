@@ -24,7 +24,12 @@ import (
 func TestPilotNonmemberReads(t *testing.T) {
 	for _, op := range []string{"listChannels", "getChannel", "getMember"} {
 		t.Run(op, func(t *testing.T) {
-			m := &mockMemberRepo{}
+			m := &mockMemberRepo{GetByGuildAndUserFn: func(_ context.Context, g, u int64) (*models.Member, error) {
+				if u == 200 {
+					return &models.Member{GuildID: g, UserID: u}, nil
+				}
+				return nil, nil
+			}}
 			ch := &mockChannelRepo{GetByIDFn: func(context.Context, int64) (*models.Channel, error) { return &models.Channel{ID: 2, GuildID: 1}, nil }}
 			c, rec := newTestContext(http.MethodGet, "/", nil)
 			c.SetParamNames("id", "user_id")
@@ -46,6 +51,13 @@ func TestPilotNonmemberReads(t *testing.T) {
 			}
 			if rec.Code != 404 {
 				t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+			}
+			var detail ErrorResponse
+			if err := decodeResponse(rec, &detail); err != nil {
+				t.Fatal(err)
+			}
+			if detail.Error.Code != "NOT_FOUND" {
+				t.Fatal(detail)
 			}
 		})
 	}

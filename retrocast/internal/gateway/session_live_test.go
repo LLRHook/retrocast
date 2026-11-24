@@ -4,10 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/alicebob/miniredis/v2"
+	"github.com/gorilla/websocket"
 	"github.com/victorivanov/retrocast/internal/auth"
 	"github.com/victorivanov/retrocast/internal/models"
 	"github.com/victorivanov/retrocast/internal/permissions"
 	redisclient "github.com/victorivanov/retrocast/internal/redis"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -292,19 +296,57 @@ func TestLiveConcurrentResumeAndDispatch(t *testing.T) {
 
 func TestPilotInvisibleBroadcastsOffline(t *testing.T) {
 	m := newTestManager(t, &mockGuildRepo{})
-	a := fakeConn(m, 100, "pilot-a")
+	ready := make(chan *Connection, 1)
+	done := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ws, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		a := newConnection(ws, m)
+		a.UserID = 100
+		a.SessionID = "pilot-a"
+		m.register(a)
+		ready <- a
+		a.readPump()
+		close(done)
+	}))
+	peer, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(server.URL, "http"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := <-ready
 	b := fakeConn(m, 200, "pilot-b")
-	defer a.Close()
+	defer server.Close()
 	defer b.Close()
+	defer func() {
+		_ = peer.Close()
+		a.Close()
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Error("presence read pump did not stop")
+		}
+	}()
 	m.SubscribeToGuild(100, 1)
 	m.SubscribeToGuild(200, 1)
-	m.handlePresenceUpdate(a, json.RawMessage(`{"status":"invisible"}`))
-	events := drainEvents(b)
-	if len(events) != 1 || events[0].Op != OpDispatch || (events[0].Event == nil || *events[0].Event != EventPresenceUpdate) {
-		t.Fatalf("presence events: %+v", events)
+	if err := peer.WriteJSON(GatewayPayload{Op: OpPresenceUpdate, Data: json.RawMessage(`{"status":"invisible"}`)}); err != nil {
+		t.Fatal(err)
+	}
+	var event GatewayPayload
+	select {
+	case raw := <-b.Send:
+		if err := json.Unmarshal(raw, &event); err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("op 3 did not dispatch offline presence")
+	}
+	if event.Op != OpDispatch || event.Event == nil || *event.Event != EventPresenceUpdate {
+		t.Fatalf("presence event: %+v", event)
 	}
 	var p PresenceUpdateData
-	if err := json.Unmarshal(events[0].Data, &p); err != nil {
+	if err := json.Unmarshal(event.Data, &p); err != nil {
 		t.Fatal(err)
 	}
 	if p.UserID != 100 || p.Status != "offline" {

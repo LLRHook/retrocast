@@ -9,6 +9,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -498,7 +500,30 @@ func TestRegistrationAtomicityLive(t *testing.T) {
 		if rec.Code != 200 || len(page) != 50 {
 			t.Fatalf("page: %d %d", rec.Code, len(page))
 		}
+		expectedRoles := make(map[int64][]int64)
 		for _, m := range page {
+			rows, err := pool.Query(ctx, "SELECT role_id FROM member_roles WHERE guild_id=$1 AND user_id=$2 ORDER BY role_id", guild.ID, m.UserID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for rows.Next() {
+				var id int64
+				if err := rows.Scan(&id); err != nil {
+					t.Fatal(err)
+				}
+				expectedRoles[m.UserID] = append(expectedRoles[m.UserID], id)
+			}
+			rows.Close()
+			if rows.Err() != nil {
+				t.Fatal(rows.Err())
+			}
+		}
+		for _, m := range page {
+			actual := append([]int64(nil), m.Roles...)
+			sort.Slice(actual, func(i, j int) bool { return actual[i] < actual[j] })
+			if !reflect.DeepEqual(actual, expectedRoles[m.UserID]) {
+				t.Fatalf("user %d roles %v want seeded %v", m.UserID, actual, expectedRoles[m.UserID])
+			}
 			if len(m.Roles) == 0 || m.User == nil || m.User.ID != m.UserID {
 				t.Fatalf("roles/user missing: %+v", m)
 			}
@@ -545,7 +570,7 @@ func TestRegistrationAtomicityLive(t *testing.T) {
 		}
 		hash := user["password_hash"].(string)
 		parts := strings.Split(hash, "$")
-		if len(parts) != 6 || parts[3] != "m=65536,t=1,p=4" {
+		if len(parts) != 6 || parts[1] != "argon2id" || parts[2] != "v=19" || parts[3] != "m=65536,t=1,p=4" {
 			t.Fatal("argon parameters", hash)
 		}
 		salt, err := base64.RawStdEncoding.DecodeString(parts[4])
