@@ -1,14 +1,16 @@
 # Retrocast — Data Contracts
 
-Status: Baselined (rev 10)
+Status: Baselined (rev 25)
 Related: [SRS](SRS.md) · [Architecture](ARCHITECTURE.md) · [Product Brief](PRODUCT_BRIEF.md)
 
 This document records the data and interface contracts as they exist at commit `6bc385e`
 (re-read at `origin/main` 55e50eb in rev 2) and the contract changes rev 2 decides.
 Sources: `retrocast/migrations/000001–000020`, `retrocast/internal/models/`,
 `retrocast/internal/gateway/events.go`, `retrocast/internal/redis/client.go`,
-`retrocast/docs/openapi.yaml` (OpenAPI 3.0.3, 58 operations; `info.version` 2.0.0 from rev 2).
-Entities and gateway events retain their existing version unless noted per entity. The REST envelope is v2; API-022/API-027 are `v2.1.0` for storage/linking, with the other operations `v2.0.0` from rev 2:
+`retrocast/docs/openapi.yaml` (OpenAPI 3.0.3, 60 operations; current version recorded below).
+Current REST contract version: `2.2.0`.
+
+Entities and gateway events retain their existing version unless noted per entity. The whole REST contract is v2.2.0: API-060 and API-049 preview guild_id were added in unreleased v2.2.0; the REST envelope was introduced in v2.0.0; API-022/API-027 are `v2.1.0` for storage/linking, with API-001 through API-059 otherwise retaining the v2.0.0 shapes from rev 2:
 every success body is wrapped in `data` (§4, §9; SV-IR-007, ADR-013). The code has no
 versioning beyond the `/api/v1` prefix, and nothing has been released (Q-003).
 
@@ -152,9 +154,9 @@ sent in JSON as decimal strings (SV-IR-004).
 ## 4. REST operations
 
 Base path `/api/v1`; JSON bodies; `Authorization: Bearer <access token>` on every operation
-except API-001–API-003 and API-049. Every operation is version v2.0.0 (rev 2): every success
+except API-001–API-003 and API-049. Operation rows retain their introduction/change versions: every success
 body is `{"data": …}` and a 204 has no body (SV-IR-007, ADR-013, §9). The "Wrapped today"
-column shows the implemented v2.0.0 response shape. Status codes
+column shows the implemented v2 response shape. Status codes
 are as documented in OpenAPI; where the code differs, the Notes column says so.
 
 | ID | Operation | Method and path | Success | Wrapped today | Notes | Requirements |
@@ -207,7 +209,7 @@ are as documented in OpenAPI; where the code differs, the Notes column says so.
 | API-046 | deleteChannelOverride | DELETE /channels/{channelId}/permissions/{roleId} | 204 | — | channel MANAGE_ROLES and same-guild role required | SV-FR-047 |
 | API-047 | createInvite | POST /guilds/{guildId}/invites | 201 invite | yes | `max_age_seconds` default 86 400, `max_uses` default 0 | SV-FR-018 |
 | API-048 | listInvites | GET /guilds/{guildId}/invites | 200 invites | yes | | SV-FR-021 |
-| API-049 | getInvite | GET /invites/{code} | 200 invite preview | yes | public; expired gives 404 `EXPIRED`; 5 requests per minute per client IP; Redis outage returns 503 | SV-FR-019, SV-NFR-003 |
+| API-049 | getInvite | GET /invites/{code} | 200 invite preview | yes | public preview: code, guild_id (snowflake string), guild_name, member_count, creator_id (snowflake string); expired gives 404 `EXPIRED`; 5 requests per minute per client IP; Redis outage returns 503 | SV-FR-019, SV-NFR-003 |
 | API-050 | acceptInvite | POST /invites/{code} | 200 guild | yes | code also returns 410 and 403 `BANNED`, which OpenAPI omits | SV-FR-020 |
 | API-051 | revokeInvite | DELETE /invites/{code} | 204 | — | | SV-FR-021 |
 | API-052 | listBans | GET /guilds/{guildId}/bans | 200 bans | yes | | SV-FR-068 |
@@ -246,7 +248,7 @@ from panics into the same envelope (SV-IR-003). Rate-limit failures also use the
 | Other 4xx (for example 415, 416, 422) | `BAD_REQUEST` |
 | 5xx or non-HTTP error | `INTERNAL` |
 
-Service/handler errors retain their specific codes below. REST contract v2.0.0 keeps
+Service/handler errors retain their specific codes below. The current REST contract keeps
 the error envelope; success bodies use the data envelope.
 
 Codes in use: `UNAUTHORIZED`, `BAD_REQUEST`, `METHOD_NOT_ALLOWED`, `PAYLOAD_TOO_LARGE`,
@@ -387,8 +389,8 @@ together with the iOS client (Q-025); APNs is the one optional outside service G
 | 2 | API-001 register | v1.0.0 | v2.0.0 | Optional `invite_code`; 403 codes by registration mode | Web register page gains the field (WEB-FR-020) | Q-012; ADR-014 |
 | 2 | EVT-007 RECONNECT | v1.0.0 | v1.0.0 (frame unchanged) | Sent in fewer cases: not for a second IDENTIFY | A client that reads op 7 as "signed in elsewhere" must not | Q-009; ADR-017 |
 | 9 | API-022 / API-027, ENT-008/009/012/013/022 | REST v2.0.0 | REST v2.1.0 |Migration 000020: DM parent validation/delete triggers; nullable pending upload link with ownership backfill; attachment_ids atomic claim and batched hydration. After a refused down, the schema remains at 20 while golang-migrate marks version 19 dirty: run `migrate force 20` to recover; `force 19` then `up` fails. | Web sends uploaded ids with nonempty text; pending message_id is null; existing linked ids stay strings; down refuses while DM messages or pending attachments exist | Driver E116; Q-017; D-08/D-09/D-22 |
-
 | 11 | EVT-003 / EVT-006 gateway | v1.0.0 | v1.1.0 (compatible) | READY gains optional presences. RESUME frames unchanged; fresh READY with a new session id signals unavailable replay, sequences restart at 1. Last 100 events per session, retained 5 minutes after disconnect; authorization changes invalidate old history | Web refetches open-channel recent messages after fallback READY. iOS already accepts READY; reconnect catch-up refresh is a follow-up | Driver B3 decision; PR #50 |
+| 24 | API-060 role ordering | REST v2.1.0 | REST v2.2.0 | Additive atomic role-order operation from B6 and public API-049 guild_id preview field from B7 round 2; folded into unreleased 2.2.0 per driver E339 | No envelope or route prefix change; no iOS implementation change | SV-IR-008; issues #64/#66 |
 
 ## Revision history
 | Rev | Date | Commit | Mode | Summary |
@@ -415,3 +417,5 @@ together with the iOS client (Q-025); APNs is the one optional outside service G
 | 21 | 2026-11-24T04:24:31-05:00 | 73cb40662507 | REVISION | PR 56 round 2: clear removed guild channel state; document session 503 and late-winner residual; strengthen moderation transaction evidence |
 | 22 | 2026-11-24T08:06:57-05:00 | 23eea2497fd6 | REVISION | B6: atomic keyboard role ordering (API-060) and public HTTPS signed downloads (D-10); transactional and Caddy regressions plus owned browser evidence |
 | 23 | 2026-11-24T09:13:39-05:00 | 0edca0aaeafa | REVISION | PR #62 round 2: missing/deleted guild status and permission-before-lock; GET-only downloads and lowercase host; manager create positioning and no-room guidance; contract, operational and D-10 drift repaired |
+| 24 | 2026-11-24T12:07:01-05:00 | 6e9507a02345 | REVISION | B7: copied invite routing and server selection; REST contract 2.2.0 and SV-IR-008 version equality through API-060 |
+| 25 | 2026-11-24T12:48:31-05:00 | dcb540ca8410 | REVISION | B7 round 2 (E339): API-049 preview guild_id in unreleased 2.2.0; API-050 unchanged; SV-IR-001/005/007 trace API-060 |

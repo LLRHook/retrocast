@@ -4,7 +4,7 @@ info:
   description: |
     Discord-compatible chat platform API. All IDs are snowflake integers
     serialized as strings in JSON to avoid JavaScript precision loss.
-  version: "2.1.0"
+  version: "2.2.0"
   license:
     name: "Proprietary. All rights reserved."
 
@@ -226,6 +226,25 @@ components:
           format: int64
         url:
           type: string
+
+    InvitePreview:
+      type: object
+      required: [code, guild_id, guild_name, member_count, creator_id]
+      properties:
+        code:
+          type: string
+        guild_id:
+          type: string
+          description: Guild snowflake ID
+          example: "9007199254740993"
+        guild_name:
+          type: string
+        member_count:
+          type: integer
+        creator_id:
+          type: string
+          description: Creator snowflake ID
+          example: "9007199254740994"
 
     Invite:
       type: object
@@ -2173,7 +2192,7 @@ paths:
                 additionalProperties: false
                 properties:
                   data:
-                    $ref: "#/components/schemas/Invite"
+                    $ref: "#/components/schemas/InvitePreview"
         "404":
           $ref: "#/components/responses/NotFound"
 

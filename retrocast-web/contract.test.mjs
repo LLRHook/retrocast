@@ -118,9 +118,9 @@ function storeModule(name, state) {
 }
 let componentSequence=0;
 async function component(file, replacements, suffix='') {
- let source=readFileSync(resolve('src/components/'+file+'.tsx'),'utf8')+suffix;
+ let source=readFileSync(resolve((file==='AppLayout'?'src/layouts/':['InvitePage','LoginPage','RegisterPage'].includes(file)?'src/pages/':'src/components/')+file+'.tsx'),'utf8')+suffix;
  source=source.replace(/from "([^"]+)"/g,(whole,name)=>{
-  const target=name==='react'?hooksUrl:replacements[name]??(name.startsWith('@/components/')?emptyComponentUrl:undefined);
+  const target=name==='react'?(replacements.react??hooksUrl):replacements[name]??(name.startsWith('@/components/')?emptyComponentUrl:undefined);
   return target?'from '+JSON.stringify(target):whole;
  });
  // The JSX runtime import is introduced by TypeScript after import rewriting.
@@ -442,6 +442,80 @@ test('actual moderation hook drives kick-only, ban-only, Administrator, plain, a
   const buttons=nodes(tree).filter(n=>n.type==='button').map(n=>n.props.children).filter(s=>s==='Kick'||s==='Ban');assert.deepEqual(buttons,self?[]:expected,bits+' self='+self);
  }}finally{globalThis.window=previous}
 });
+test('copied invite route preserves code through server, register and login',async()=>{
+ assert.match(readFileSync('src/App.tsx','utf8'),/path="\/invite\/:code"/);
+ const auth=await storeModule('useAuthStore',{serverUrl:null,isAuthenticated:false});
+ const router=compile('export const Navigate="Navigate";export const Link="Link";export const useNavigate=()=>()=>{};export const useParams=()=>({code:"copied-code"});','invite-router');
+ const invite=compile('export const acceptInvite=async()=>{}','invite-action');
+ const {default:Page}=await component('InvitePage',{'@/stores/auth':auth.url,'react-router':router,'@/lib/invite':invite,'@/lib/api':apiUrl});
+ hooks.reset();assert.equal(Page().props.to,'/server?invite_code=copied-code');
+ auth.module.setState({serverUrl:'https://fixture',isAuthenticated:false});hooks.reset();assert.equal(Page().props.to,'/register?invite_code=copied-code');
+ for(const page of ['ServerAddressPage','LoginPage','RegisterPage']) assert.match(readFileSync('src/pages/'+page+'.tsx','utf8'),/encodeURIComponent\(inviteCode\)/);
+});
+
+test('invite acceptance coalesces replays, selects target and propagates invalid errors',async()=>{
+ const g=await storeModule('useGuildsStore',{setGuild:x=>calls.push(['guild',x.id]),selectGuild:x=>calls.push(['select',x])});
+ const c=await storeModule('useChannelsStore',{selectChannel:x=>calls.push(['channel',x]),fetchChannels:async x=>calls.push(['fetch',x]),channelsByGuild:new Map([['target',[{id:'text',type:0}]]])});
+ let calls=[];
+ const source=readFileSync('src/lib/invite.ts','utf8').replace('"@/lib/api"',JSON.stringify(apiUrl)).replace('"@/stores/guilds"',JSON.stringify(g.url)).replace('"@/stores/channels"',JSON.stringify(c.url));
+ const {acceptInvite}=await import(compile(source,'real-invite'));
+ let requests=0;globalThis.fetch=async()=>{requests++;await new Promise(setImmediate);return Response.json({data:{id:'target'}})};
+ await Promise.all([acceptInvite('copied'),acceptInvite('copied')]);assert.equal(requests,1);
+ assert.deepEqual(calls,[['guild','target'],['select','target'],['channel',null],['fetch','target'],['channel','text']]);
+ calls=[];globalThis.fetch=async()=>Response.json({error:{code:'EXPIRED',message:'invite has expired'}},{status:410});
+ await assert.rejects(acceptInvite('expired'),/expired/);assert.deepEqual(calls,[]);
+});
+
+test('already-member invite previews once, loads missing guild and selects its channel',async()=>{
+ let selected=[],calls=[];
+ const g=await storeModule('useGuildsStore',{guilds:new Map(),setGuild:x=>selected.push(['guild',x.id]),selectGuild:x=>selected.push(['select',x])});
+ const c=await storeModule('useChannelsStore',{selectChannel:x=>selected.push(['channel',x]),fetchChannels:async()=>{},channelsByGuild:new Map([['invited',[{id:'first-text',type:0}]]])});
+ const source=readFileSync('src/lib/invite.ts','utf8').replace('"@/lib/api"',JSON.stringify(apiUrl)).replace('"@/stores/guilds"',JSON.stringify(g.url)).replace('"@/stores/channels"',JSON.stringify(c.url));
+ const {acceptInvite}=await import(compile(source,'member-invite'));
+ globalThis.fetch=async(url,o)=>{calls.push([o.method,url]);if(o.method==='POST')return Response.json({error:{code:'ALREADY_MEMBER',message:'already a member'}},{status:409});return Response.json({data:url.endsWith('/invites/copied')?{guild_id:'invited'}:{id:'invited'}})};
+ await Promise.all([acceptInvite('copied'),acceptInvite('copied')]);
+ assert.deepEqual(calls.map(([m,u])=>[m,new URL(u,'http://fixture').pathname]),[['POST','/api/v1/invites/copied'],['GET','/api/v1/invites/copied'],['GET','/api/v1/guilds/invited']]);
+ assert.deepEqual(selected,[['guild','invited'],['select','invited'],['channel',null],['channel','first-text']]);
+ calls=[];selected=[];globalThis.fetch=async(url,o)=>{calls.push(o.method);return Response.json({error:{code:'BANNED',message:'you are banned'}},{status:403})};
+ await assert.rejects(acceptInvite('banned'),/banned/);assert.deepEqual(calls,['POST']);assert.deepEqual(selected,[]);
+});
+
+test('login submit preserves invite destination and registration never reaccepts joined membership',async()=>{
+ let destinations=[],logins=0,registers=0,selected=[];
+ const router=compile('export const Link="Link";export const useNavigate=()=>globalThis.l37Navigate;export const useSearchParams=()=>[new URLSearchParams("invite_code=copied-code")];','post-auth-router');
+ globalThis.l37Navigate=path=>destinations.push(path);
+ const a=await storeModule('useAuthStore',{login:async()=>{logins++},register:async(_u,_p,code)=>{assert.equal(code,'copied-code');registers++}});
+ const g=await storeModule('useGuildsStore',{fetchGuilds:async()=>{},guilds:new Map([['invited',{id:'invited'}]])});
+ globalThis.l37Select=async guild=>selected.push(guild.id);
+ const invite=compile('export const selectInviteGuild=g=>globalThis.l37Select(g);','post-register-select');
+ const {default:Login}=await component('LoginPage',{'@/stores/auth':a.url,'react-router':router,'@/lib/api':apiUrl});
+ hooks.reset(['user','password','','false']);await Login().props.onSubmit({preventDefault(){}});assert.equal(logins,1);assert.deepEqual(destinations,['/invite/copied-code']);
+ const {default:Register}=await component('RegisterPage',{'@/stores/auth':a.url,'react-router':router,'@/lib/api':apiUrl,'@/stores/guilds':g.url,'@/lib/invite':invite});
+ destinations=[];hooks.reset(['copied-code','new-user','password','',false]);await Register().props.onSubmit({preventDefault(){}});
+ assert.equal(registers,1);assert.deepEqual(selected,['invited']);assert.deepEqual(destinations,['/app']);
+ g.module.setState({fetchGuilds:async()=>{},guilds:new Map()});destinations=[];hooks.reset(['copied-code','open-user','password','',false]);await Register().props.onSubmit({preventDefault(){}});assert.deepEqual(destinations,['/invite/copied-code']);
+ delete globalThis.l37Navigate;delete globalThis.l37Select;
+});
+
+test('successful invite history state restores its guild after a redirect-time reload',async()=>{
+ const effectUrl=compile('export const effects=[];export function useEffect(fn){effects.push(fn)};export const useState=v=>[v,()=>{}];export const useSyncExternalStore=()=>true;','invite-effects');const effect=await import(effectUrl);
+ const a=await storeModule('useAuthStore',{isAuthenticated:true,accessToken:'fixture',serverUrl:'https://fixture'});
+ let navigation,selectedGuild,selectedChannel;
+ globalThis.l37Redirect=(...args)=>navigation=args;
+ const router=compile('export const Link="Link",Navigate="Navigate",Outlet="Outlet";export const useNavigate=()=>globalThis.l37Redirect;export const useParams=()=>({code:"copied"});export const useLocation=()=>({state:globalThis.l37History});','invite-history-router');
+ const invite=compile('export const ApiClientError=Error;export const acceptInvite=async()=>({id:"target"});','invite-history-accept');
+ const {default:Invite}=await component('InvitePage',{react:effectUrl,'@/stores/auth':a.url,'react-router':router,'@/lib/invite':invite,'@/lib/api':apiUrl});
+ Invite();effect.effects.shift()();await new Promise(setImmediate);assert.deepEqual(navigation,['/app',{replace:true,state:{inviteGuildId:'target'}}]);
+ globalThis.l37History=navigation[1].state;effect.effects.length=0;
+ const g=await storeModule('useGuildsStore',{guilds:new Map([['first',{id:'first'}],['target',{id:'target'}]]),selectedGuildId:null,fetchGuilds:async()=>{},selectGuild:id=>selectedGuild=id});
+ const c=await storeModule('useChannelsStore',{fetchChannels:async()=>{},channelsByGuild:new Map([['target',[{id:'target-text',type:0}]]]),selectChannel:id=>selectedChannel=id});
+ const d=await storeModule('useDMsStore',{fetchDMs:async()=>{}});
+ const gateway=compile('export const gateway={connect(){},disconnect(){}}','reload-gateway');const dispatcher=compile('export const initGatewayDispatcher=()=>{}','reload-dispatcher');
+ const {default:Layout}=await component('AppLayout',{react:effectUrl,'react-router':router,'@/stores/auth':a.url,'@/stores/guilds':g.url,'@/stores/channels':c.url,'@/stores/dms':d.url,'@/lib/gateway':gateway,'@/lib/gateway-dispatcher':dispatcher});
+ Layout();effect.effects[0]();await new Promise(setImmediate);assert.equal(selectedGuild,'target');assert.equal(selectedChannel,'target-text');
+ delete globalThis.l37History;delete globalThis.l37Redirect;
+});
+
 } catch (error) {
  cleanup();
  throw error;

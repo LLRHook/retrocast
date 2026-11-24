@@ -1,5 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { Navigate, Outlet } from "react-router";
+import { Navigate, Outlet, useLocation } from "react-router";
 import { useAuthStore } from "@/stores/auth";
 import { useGuildsStore } from "@/stores/guilds";
 import { useChannelsStore } from "@/stores/channels";
@@ -22,6 +22,8 @@ function useMediaQuery(query: string): boolean {
 }
 
 export default function AppLayout() {
+  // History state survives a reload that races the successful invite redirect.
+  const inviteGuildId = (useLocation().state as {inviteGuildId?: string} | null)?.inviteGuildId;
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const accessToken = useAuthStore((s) => s.accessToken);
   const serverUrl = useAuthStore((s) => s.serverUrl);
@@ -46,7 +48,7 @@ export default function AppLayout() {
           useGuildsStore.getState();
         // Auto-select first guild if none selected
         if (!selectedGuildId && guilds.size > 0) {
-          const firstGuild = guilds.values().next().value;
+          const firstGuild = (inviteGuildId ? guilds.get(inviteGuildId) : undefined) ?? guilds.values().next().value;
           if (firstGuild) {
             selectGuild(firstGuild.id);
             // Fetch channels for the first guild
@@ -73,7 +75,7 @@ export default function AppLayout() {
     return () => {
       gateway.disconnect();
     };
-  }, [isAuthenticated, accessToken, serverUrl]);
+  }, [isAuthenticated, accessToken, serverUrl, inviteGuildId]);
 
   // Close sidebar when a channel/DM is selected (mobile)
   useEffect(() => {
