@@ -158,7 +158,7 @@ func (s *AuthService) Login(ctx context.Context, username, password string) (*Au
 	// old password cannot mint a token in a newer epoch.
 	gen, err := s.redis.RefreshGeneration(ctx, user.ID)
 	if err != nil {
-		return nil, Internal("INTERNAL", "internal server error")
+		return nil, Unavailable()
 	}
 	user, err = s.users.GetByID(ctx, user.ID)
 	if err != nil || user == nil {

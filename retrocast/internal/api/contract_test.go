@@ -8,6 +8,7 @@ import (
 	"github.com/victorivanov/retrocast/internal/auth"
 	"github.com/victorivanov/retrocast/internal/gateway"
 	"github.com/victorivanov/retrocast/internal/models"
+	"github.com/victorivanov/retrocast/internal/service"
 	"go.yaml.in/yaml/v3"
 	"net/http"
 	"net/http/httptest"
@@ -383,5 +384,42 @@ func TestContractRouteInventory(t *testing.T) {
 		if !seen[key] {
 			t.Errorf("contract case is not registered: %s", key)
 		}
+	}
+}
+
+// Compare the actual error mapper to the documented session response, rather
+// than duplicating its status number in the assertion.
+func TestContractSessionUnavailable(t *testing.T) {
+	var spec map[string]any
+	data, err := os.ReadFile("../../docs/openapi.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = yaml.Unmarshal(data, &spec); err != nil {
+		t.Fatal(err)
+	}
+	c, rec := newTestContext(http.MethodPost, "/", nil)
+	if err := mapServiceError(c, service.Unavailable()); err != nil {
+		t.Fatal(err)
+	}
+	var body ErrorResponse
+	if err := decodeResponse(rec, &body); err != nil {
+		t.Fatal(err)
+	}
+	for _, route := range []struct{ path, method string }{{"/auth/register", "post"}, {"/auth/login", "post"}, {"/auth/refresh", "post"}, {"/auth/logout", "post"}, {"/users/@me/password", "put"}} {
+		t.Run(route.path, func(t *testing.T) {
+			op := spec["paths"].(map[string]any)[route.path].(map[string]any)[route.method].(map[string]any)
+			response, ok := op["responses"].(map[string]any)[strconv.Itoa(rec.Code)].(map[string]any)
+			if !ok {
+				t.Fatal("mapped session status missing from OpenAPI")
+			}
+			if !strings.Contains(response["description"].(string), body.Error.Code) {
+				t.Fatal("mapped session code missing")
+			}
+			schema := response["content"].(map[string]any)["application/json"].(map[string]any)["schema"].(map[string]any)
+			if schema["$ref"] != "#/components/schemas/ErrorResponse" {
+				t.Fatal("session error does not use shared schema")
+			}
+		})
 	}
 }

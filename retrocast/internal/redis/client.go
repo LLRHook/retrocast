@@ -140,6 +140,9 @@ func (c *Client) DeleteRefreshToken(ctx context.Context, token string) error {
 }
 func (c *Client) GetRefreshTokenUserID(ctx context.Context, token string) (int64, error) {
 	val, err := c.rdb.Get(ctx, refreshTokenPrefix+token).Result()
+	if err == goredis.Nil {
+		return 0, ErrInvalidToken
+	}
 	if err != nil {
 		return 0, err
 	}
@@ -160,7 +163,7 @@ func (c *Client) GetRefreshTokenUserID(ctx context.Context, token string) (int64
 		return 0, err
 	}
 	if gen != current {
-		return 0, fmt.Errorf("invalid token")
+		return 0, ErrInvalidToken
 	}
 	return uid, nil
 }

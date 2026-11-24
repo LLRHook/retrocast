@@ -2,13 +2,16 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/victorivanov/retrocast/internal/database"
 	"github.com/victorivanov/retrocast/internal/gateway"
+	"github.com/victorivanov/retrocast/internal/models"
 	"github.com/victorivanov/retrocast/internal/service"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -62,8 +65,8 @@ func TestModerationAtomicityLive(t *testing.T) {
 	gw := &mockGateway{}
 	perms := service.NewPermissionChecker(guilds, members, roles, database.NewChannelOverrideRepository(pool))
 	svc := service.NewBanService(guilds, members, roles, bans, gw, perms)
-	exec(`CREATE FUNCTION reject_member_delete() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'l28 commit failure'; END $$;
- CREATE CONSTRAINT TRIGGER fail_delete AFTER DELETE ON members DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION reject_member_delete()`)
+	exec(`CREATE FUNCTION reject_ban_insert() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'l28 commit failure'; END $$;
+ CREATE CONSTRAINT TRIGGER fail_insert AFTER INSERT ON bans DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION reject_ban_insert()`)
 	reason := "spam"
 	if err := svc.BanMember(ctx, 1, 100, 200, &reason); err == nil {
 		t.Fatal("commit failure accepted")
@@ -79,7 +82,7 @@ func TestModerationAtomicityLive(t *testing.T) {
 	if len(gw.events) != 0 || len(gw.unsubscriptions) != 0 {
 		t.Fatal("published before commit")
 	}
-	exec("DROP TRIGGER fail_delete ON members")
+	exec("DROP TRIGGER fail_insert ON bans")
 	if err := svc.BanMember(ctx, 1, 100, 200, &reason); err != nil {
 		t.Fatal(err)
 	}
@@ -118,4 +121,74 @@ func TestModerationAtomicityLive(t *testing.T) {
 	if !found {
 		t.Fatal("kicked user's clients not notified")
 	}
+	t.Run("guild parent lock precedes child mutations", func(t *testing.T) {
+		exec("INSERT INTO guilds(id,name,owner_id) VALUES(2,'Locked',100)")
+		exec("INSERT INTO members(guild_id,user_id) VALUES(2,100),(2,200)")
+		held, err := pool.Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = held.Rollback(ctx) }()
+		if _, err = held.Exec(ctx, "SELECT id FROM guilds WHERE id=2 FOR UPDATE"); err != nil {
+			t.Fatal(err)
+		}
+		opctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		done := make(chan error, 1)
+		go func() { done <- svc.BanMember(opctx, 2, 100, 200, &reason) }()
+		// Inspect the blocked statement: an unlocked mutant can also block later on
+		// the ban's parent FK, after deleting the member. That must not pass.
+		deadline := time.After(2 * time.Second)
+		ticker := time.NewTicker(10 * time.Millisecond)
+		defer ticker.Stop()
+		waiting := false
+		for !waiting {
+			select {
+			case err := <-done:
+				t.Fatalf("ban bypassed held parent lock: %v", err)
+			case <-deadline:
+				t.Fatal("ban did not wait on the guild FOR UPDATE lock")
+			case <-ticker.C:
+				err = pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query=$1)`, "SELECT id FROM guilds WHERE id=$1 FOR UPDATE").Scan(&waiting)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+		if err = held.Commit(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if err = <-done; err != nil {
+			t.Fatal(err)
+		}
+	})
+	t.Run("deleted guild returns unknown guild", func(t *testing.T) {
+		exec("INSERT INTO guilds(id,name,owner_id) VALUES(3,'Deleted',100)")
+		exec("INSERT INTO members(guild_id,user_id) VALUES(3,100),(3,200)")
+		raceRoles := &mockRoleRepo{GetByMemberFn: func(ctx context.Context, guildID, userID int64) ([]models.Role, error) {
+			rs, err := roles.GetByMember(ctx, guildID, userID)
+			if err == nil && userID == 200 {
+				err = guilds.Delete(ctx, guildID)
+			}
+			return rs, err
+		}}
+		raceSvc := service.NewBanService(guilds, members, raceRoles, bans, gw, perms)
+		before := len(gw.events)
+		err := raceSvc.BanMember(ctx, 3, 100, 200, &reason)
+		var se *service.ServiceError
+		if !errors.As(err, &se) || !errors.Is(err, service.ErrNotFound) || se.Code != "UNKNOWN_GUILD" {
+			t.Fatalf("want 404 UNKNOWN_GUILD, got %v", err)
+		}
+		if len(gw.events) != before {
+			t.Fatal("deleted guild published events")
+		}
+		c, rec := newTestContext("PUT", "/", strings.NewReader("{}"))
+		if err := mapServiceError(c, err); err != nil {
+			t.Fatal(err)
+		}
+		if rec.Code != 404 {
+			t.Fatal("wrong HTTP status")
+		}
+	})
+
 }

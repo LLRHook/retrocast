@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"errors"
+	"github.com/jackc/pgx/v5"
 	"strconv"
 	"time"
 
@@ -84,6 +86,9 @@ func (s *BanService) BanMember(ctx context.Context, guildID, callerID, targetUse
 
 	err = database.InTransaction(ctx, s.bans, func(ctx context.Context) error {
 		if err := database.LockGuildForModeration(ctx, s.bans, guildID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return NotFound("UNKNOWN_GUILD", "guild no longer exists")
+			}
 			return err
 		}
 		if err := s.members.Delete(ctx, guildID, targetUserID); err != nil {
@@ -92,6 +97,10 @@ func (s *BanService) BanMember(ctx context.Context, guildID, callerID, targetUse
 		return s.bans.Create(ctx, ban)
 	})
 	if err != nil {
+		var se *ServiceError
+		if errors.As(err, &se) {
+			return se
+		}
 		return Internal("INTERNAL", "internal server error")
 	}
 	s.gateway.UnsubscribeFromGuild(targetUserID, guildID)

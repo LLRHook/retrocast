@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -35,6 +36,9 @@ func TestLegacyRefreshGenerationLive(t *testing.T) {
 	}
 	if err := c.AdvanceRefreshGeneration(ctx, uid); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := c.GetRefreshTokenUserID(ctx, token); !errors.Is(err, ErrInvalidToken) {
+		t.Fatal("revoked lookup must return invalid-token sentinel")
 	}
 	for _, v := range []string{token, next} {
 		if _, err := c.RotateRefreshToken(ctx, v, v+"invalid", time.Minute); err == nil {

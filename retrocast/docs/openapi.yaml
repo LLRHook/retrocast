@@ -455,6 +455,12 @@ paths:
                   format: password
                   example: s3cret!
       responses:
+        "503":
+          description: SESSION_UNAVAILABLE - the session store is temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: INVITE_REQUIRED, INVALID_INVITE or REGISTRATION_CLOSED.
           content:
@@ -497,6 +503,12 @@ paths:
                   type: string
                   format: password
       responses:
+        "503":
+          description: SESSION_UNAVAILABLE - the session store is temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "200":
           description: Login successful
           content:
@@ -530,6 +542,12 @@ paths:
                 refresh_token:
                   type: string
       responses:
+        "503":
+          description: SESSION_UNAVAILABLE - the session store is temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "200":
           description: Tokens refreshed
           content:
@@ -565,6 +583,12 @@ paths:
                 refresh_token:
                   type: string
       responses:
+        "503":
+          description: SESSION_UNAVAILABLE - the session store is temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "204":
           description: Logged out
         "400":
@@ -597,6 +621,12 @@ paths:
                   minLength: 6
                   maxLength: 128
       responses:
+        "503":
+          description: SESSION_UNAVAILABLE - the session store is temporarily unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "200":
           description: New token pair and user
           content:

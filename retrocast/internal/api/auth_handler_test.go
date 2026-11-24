@@ -265,3 +265,15 @@ func TestLogoutRedisDeadline(t *testing.T) {
 	}
 
 }
+
+func TestLoginSessionUnavailable(t *testing.T) {
+	users := &mockUserRepo{GetByUsernameFn: func(context.Context, string) (*models.User, error) { return &models.User{ID: 25}, nil }}
+	h := NewAuthHandler(service.NewAuthService(users, auth.NewTokenService("l28-login-fixture"), newSilentRedis(t), testSnowflake()))
+	c, rec := newTestContext(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"fixture","password":"password123"}`))
+	if err := h.Login(c); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != 503 || !strings.Contains(rec.Body.String(), "SESSION_UNAVAILABLE") {
+		t.Fatalf("want session 503, got %d", rec.Code)
+	}
+}
