@@ -116,7 +116,7 @@ was retained without re-running it.
 
 ## L36 Pilot candidate — 2026-11-24
 
-Candidate `26ebe80e934be286300d7838f2f728e2eb0933e6`, Windows 11 / Docker Desktop; source l36pilot, isolated empty-volume target l36restore, identical built API/web images. Paired backups `backup_20261124_112000.sql.gz` and `minio_20261124_112000.tar.gz`; backup taken with API stopped, using documented scripts/backup.sh and scripts/restore.sh. Backup artifacts were private temporary files, removed after the drill.
+Candidate `26ebe80e934be286300d7838f2f728e2eb0933e6`, Windows 11 / Docker Desktop; source l36pilot, isolated empty-volume target l36restore, unchanged candidate application source. The target Compose invocation rebuilt its project images rather than reusing source image tags; target image IDs were API `sha256:86395706d7033065f7d9737924c148df014838313666fcd0d826addf359364c7` and web `sha256:772cf19e08c2f8d1ae146618440f06c14ea6117ae117c0c2409f1419b1cd70fb`. These differ from the source image IDs; this drill proves source-version equivalence, not reuse of identical image digests. Paired backups `backup_20261124_112000.sql.gz` and `minio_20261124_112000.tar.gz`; backup taken with API stopped, using documented scripts/backup.sh and scripts/restore.sh. Backup artifacts were private temporary files, removed after the drill.
 
 | Check | Before backup | After restore |
 |---|---|---|
