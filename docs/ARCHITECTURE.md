@@ -1,6 +1,6 @@
 # Retrocast — Architecture
 
-Status: Baselined (rev 8)
+Status: Baselined (rev 9)
 Related: [SRS](SRS.md) · [Data Contracts](DATA_CONTRACTS.md) · [Product Brief](PRODUCT_BRIEF.md)
 
 It describes the system as built at commit `6bc385e`, re-read at `origin/main` 55e50eb
@@ -367,14 +367,13 @@ they affect stay Later.
 | D-21 | Refresh rotation reads then deletes the token in two commands, so two concurrent refreshes can both succeed | retrocast/internal/redis/client.go:58, :75 | SV-FR-005, SV-NFR-002 | Pilot | [#43](https://github.com/LLRHook/retrocast/issues/43) |
 | D-22 | Fixed: Q-017 exact content-type allowlist; SVG and unknown image subtypes refused | retrocast/internal/service/upload.go; internal/service/upload_test.go | SV-FR-051 | Later | — |
 | D-23 | LiveKit tokens last 24 hours and do not reflect `SPEAK`; no webhook clears stale voice states | retrocast/internal/service/voice.go:178–197 | SV-FR-048, SV-FR-049 | — | — |
-| D-24 | Users cannot be deleted while they own a guild or have messages (foreign keys without ON DELETE) | retrocast/migrations/000002_create_guilds.up.sql; 000007_create_messages.up.sql | CAP-038 (account deletion, Later) | Later | — |
+| D-24 | Users cannot be deleted while they own a guild, have messages, or have linked/pending attachments as uploader (attachments.uploader_id REFERENCES users(id), without ON DELETE) | retrocast/migrations/000002_create_guilds.up.sql; 000007_create_messages.up.sql; 000020_dm_messages_and_pending_attachments.up.sql | CAP-038 (account deletion, Later) | Later | — |
 | D-25 | With the `.env.example` values, LiveKit rejects the `LIVEKIT_KEYS` value that compose builds (`${LIVEKIT_API_KEY}:${LIVEKIT_API_SECRET}`) as not in its key/secret format and restarts in a loop (11 restarts in the compose smoke run of 2026-11-23 on 55e50eb's tree) | retrocast/docker-compose.yml:68 | SYS-CON-001; voice (Later) | Pilot | [#35](https://github.com/LLRHook/retrocast/issues/35) |
 | D-26 | Compose publishes internal ports on every interface: the API on 8080 (including `/metrics`), MinIO on 9000 and 9001, Prometheus on 9090 and Grafana on 3000 | retrocast/docker-compose.yml:5, :51–52, :96, :104 | SV-NFR-008, SV-NFR-009, SV-NFR-012, SYS-FR-001 | Pilot | [#38](https://github.com/LLRHook/retrocast/issues/38) |
 | D-27 | Fixed in [PR #44](https://github.com/LLRHook/retrocast/pull/44). Previous defect: New guilds give `@everyone` 32771 (View, Send, Read history) instead of `DefaultEveryonePerms` (230147) | retrocast/internal/service/guild.go:68 | SV-FR-008 | Pilot | [#39](https://github.com/LLRHook/retrocast/issues/39) |
 | D-28 | Fixed in [PR #44](https://github.com/LLRHook/retrocast/pull/44). Previous defect: Kick checks `KICK_MEMBERS` and the owner only: no role-hierarchy check and no self check (ban has both) | retrocast/internal/service/member.go:226 | SV-FR-066, SV-FR-070 | Pilot | [#40](https://github.com/LLRHook/retrocast/issues/40) |
 | D-29 | The web client parses every successful response as JSON, so an empty 204 body rejects: deleting a server or channel, leaving a server and other 204 calls report failure although the server succeeded | retrocast-web/src/lib/api.ts:97–114; components/GuildSettingsModal.tsx:56–74; components/ChannelModal.tsx:56–65 | WEB-FR-006, WEB-FR-014, WEB-FR-021, WEB-FR-022, WEB-FR-024 | Pilot | [#41](https://github.com/LLRHook/retrocast/issues/41) Fixed in [PR #45](https://github.com/LLRHook/retrocast/pull/45). |
 | D-30 | Web sign-out clears the local tokens without calling API-004, so the refresh token stays valid for up to 7 days | retrocast-web/src/stores/auth.ts:68–75 | WEB-FR-024 | Pilot | [#42](https://github.com/LLRHook/retrocast/issues/42) Fixed in [PR #45](https://github.com/LLRHook/retrocast/pull/45). |
-
 | D-31 | Fixed: reaction remove/list verify that the message exists in the route channel before repository access | retrocast/internal/service/reaction.go; internal/api/reaction_handler_test.go (TestReactionRouteBinding) | SV-FR-074, SV-FR-075 | Fixed | [#47](https://github.com/LLRHook/retrocast/issues/47) |
 
 Other debt: the `refresh_tokens` and `device_tokens` tables have no code; op 4 is defined
