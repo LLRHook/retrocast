@@ -19,6 +19,14 @@ const (
 	sendBufferSize    = 256
 )
 
+// connectionTiming is immutable once pumps start. Per-connection values let
+// transport tests exercise production timing relationships without minute waits.
+type connectionTiming struct {
+	heartbeatInterval time.Duration
+	heartbeatTimeout  time.Duration
+	readWait          time.Duration
+}
+
 // Connection represents a single WebSocket client connection.
 type Connection struct {
 	UserID    int64
@@ -36,6 +44,7 @@ type Connection struct {
 	closeOnce      sync.Once
 	done           chan struct{}
 
+	timing        connectionTiming
 	lastHeartbeat atomic.Int64 // unix millis of last heartbeat ACK from client
 }
 
@@ -44,6 +53,7 @@ func newConnection(conn *websocket.Conn, manager *Manager) *Connection {
 		Conn:    conn,
 		Send:    make(chan []byte, sendBufferSize),
 		manager: manager,
+		timing:  connectionTiming{heartbeatInterval: heartbeatInterval, heartbeatTimeout: heartbeatTimeout, readWait: max(pongWait, heartbeatInterval+heartbeatTimeout)},
 		done:    make(chan struct{}),
 	}
 	c.lastHeartbeat.Store(time.Now().UnixMilli())
@@ -94,9 +104,9 @@ func (c *Connection) readPump() {
 	}()
 
 	c.Conn.SetReadLimit(maxMessageSize)
-	_ = c.Conn.SetReadDeadline(time.Now().Add(pongWait))
+	_ = c.Conn.SetReadDeadline(time.Now().Add(c.timing.readWait))
 	c.Conn.SetPongHandler(func(string) error {
-		_ = c.Conn.SetReadDeadline(time.Now().Add(pongWait))
+		_ = c.Conn.SetReadDeadline(time.Now().Add(c.timing.readWait))
 		return nil
 	})
 
@@ -108,6 +118,7 @@ func (c *Connection) readPump() {
 			}
 			return
 		}
+		_ = c.Conn.SetReadDeadline(time.Now().Add(c.timing.readWait))
 		c.handleMessage(message)
 	}
 }
@@ -115,7 +126,7 @@ func (c *Connection) readPump() {
 // writePump writes messages from the Send channel to the WebSocket,
 // and sends heartbeats on a timer.
 func (c *Connection) writePump() {
-	heartbeatTicker := time.NewTicker(heartbeatInterval)
+	heartbeatTicker := time.NewTicker(c.timing.heartbeatInterval)
 	defer func() {
 		heartbeatTicker.Stop()
 		c.Close()
@@ -136,7 +147,7 @@ func (c *Connection) writePump() {
 		case <-heartbeatTicker.C:
 			// Check if client responded to last heartbeat.
 			lastAck := c.lastHeartbeat.Load()
-			if time.Since(time.UnixMilli(lastAck)) > heartbeatInterval+heartbeatTimeout {
+			if time.Since(time.UnixMilli(lastAck)) > c.timing.heartbeatInterval+c.timing.heartbeatTimeout {
 				slog.Warn("heartbeat timeout", "userID", c.UserID)
 				return
 			}
