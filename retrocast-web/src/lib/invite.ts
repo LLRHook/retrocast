@@ -3,13 +3,22 @@ import { useGuildsStore } from "@/stores/guilds";
 import { useChannelsStore } from "@/stores/channels";
 import type { Guild } from "@/types";
 
+// All server entry points share selection and reject late channel responses.
+export async function selectGuildChannels(guildId: string | null) {
+  useGuildsStore.getState().selectGuild(guildId);
+  useChannelsStore.getState().selectChannel(null);
+  if (!guildId) return;
+  if (!useChannelsStore.getState().channelsByGuild.has(guildId)) {
+    await useChannelsStore.getState().fetchChannels(guildId);
+  }
+  if (useGuildsStore.getState().selectedGuildId !== guildId) return;
+  const channel = useChannelsStore.getState().channelsByGuild.get(guildId)?.find(c => c.type === 0);
+  useChannelsStore.getState().selectChannel(channel?.id ?? null);
+}
+
 export async function selectInviteGuild(guild: Guild) {
   useGuildsStore.getState().setGuild(guild);
-  useGuildsStore.getState().selectGuild(guild.id);
-  useChannelsStore.getState().selectChannel(null);
-  await useChannelsStore.getState().fetchChannels(guild.id);
-  const channel = useChannelsStore.getState().channelsByGuild.get(guild.id)?.find(c => c.type === 0);
-  if (channel) useChannelsStore.getState().selectChannel(channel.id);
+  await selectGuildChannels(guild.id);
   return guild;
 }
 

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useGuildsStore } from "@/stores/guilds";
-import { useChannelsStore } from "@/stores/channels";
+import { selectGuildChannels } from "@/lib/invite";
 import { useDMsStore } from "@/stores/dms";
 import { api } from "@/lib/api";
 
@@ -60,7 +60,6 @@ function CreateGuildModal({ onClose }: { onClose: () => void }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const createGuild = useGuildsStore((s) => s.createGuild);
-  const selectGuild = useGuildsStore((s) => s.selectGuild);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -69,7 +68,8 @@ function CreateGuildModal({ onClose }: { onClose: () => void }) {
     setError("");
     try {
       const guild = await createGuild(name.trim());
-      selectGuild(guild.id);
+      useDMsStore.getState().setShowDMList(false);
+      await selectGuildChannels(guild.id);
       onClose();
     } catch {
       setError("Failed to create server");
@@ -132,7 +132,6 @@ function JoinGuildModal({ onClose }: { onClose: () => void }) {
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const selectGuild = useGuildsStore((s) => s.selectGuild);
 
   async function handleJoin(e: React.FormEvent) {
     e.preventDefault();
@@ -145,8 +144,8 @@ function JoinGuildModal({ onClose }: { onClose: () => void }) {
       );
       // Refresh guild list
       await useGuildsStore.getState().fetchGuilds();
-      await useChannelsStore.getState().fetchChannels(result.id);
-      selectGuild(result.id);
+      useDMsStore.getState().setShowDMList(false);
+      await selectGuildChannels(result.id);
       onClose();
     } catch {
       setError("Invalid or expired invite code");
@@ -209,10 +208,6 @@ function JoinGuildModal({ onClose }: { onClose: () => void }) {
 export default function ServerList() {
   const guilds = useGuildsStore((s) => s.guilds);
   const selectedGuildId = useGuildsStore((s) => s.selectedGuildId);
-  const selectGuild = useGuildsStore((s) => s.selectGuild);
-  const fetchChannels = useChannelsStore((s) => s.fetchChannels);
-  const selectChannel = useChannelsStore((s) => s.selectChannel);
-  const channelsByGuild = useChannelsStore((s) => s.channelsByGuild);
   const showDMList = useDMsStore((s) => s.showDMList);
   const setShowDMList = useDMsStore((s) => s.setShowDMList);
   const [showCreate, setShowCreate] = useState(false);
@@ -220,31 +215,12 @@ export default function ServerList() {
 
   function handleDMClick() {
     setShowDMList(true);
-    selectGuild(null);
-    selectChannel(null);
+    void selectGuildChannels(null);
   }
 
   function handleSelectGuild(guildId: string) {
     setShowDMList(false);
-    selectGuild(guildId);
-    // Fetch channels if not already loaded
-    if (!channelsByGuild.has(guildId)) {
-      fetchChannels(guildId).then(() => {
-        // Auto-select first text channel
-        const channels = useChannelsStore.getState().channelsByGuild.get(guildId);
-        const firstText = channels?.find((c) => c.type === 0);
-        if (firstText) {
-          selectChannel(firstText.id);
-        }
-      });
-    } else {
-      // Auto-select first text channel if none selected
-      const channels = channelsByGuild.get(guildId);
-      const firstText = channels?.find((c) => c.type === 0);
-      if (firstText) {
-        selectChannel(firstText.id);
-      }
-    }
+    void selectGuildChannels(guildId).catch(() => {});
   }
 
   const guildList = Array.from(guilds.values());

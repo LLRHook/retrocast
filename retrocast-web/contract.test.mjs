@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import test, { after } from 'node:test';
 import ts from 'typescript';
 const require = createRequire(import.meta.url);
-const dir = mkdtempSync(join(tmpdir(), 'l40-retrocast-web-test-'));
+const dir = mkdtempSync(join(tmpdir(), 'l44-retrocast-web-test-'));
 const cleanup = () => rmSync(dir, {recursive:true,force:true});
 after(cleanup);
 process.on('exit', cleanup);
@@ -114,10 +114,11 @@ const hooks=await import(hooksUrl);
 const emptyComponentUrl=compile('export default function Component(){return null};','empty-component');
 function storeModule(name, state) {
  const url=compile('export let state;export const selected=[];export function setState(value){state=value;selected.length=0};export function '+name+'(selector){const value=selector(state);selected.push(value);return value};'+name+'.getState=()=>state;',name);
- return import(url).then(module=>{module.setState(state);return {url,module}});
+ return import(url).then(module=>{if(state.selectGuild){const select=state.selectGuild;state.selectGuild=id=>{state.selectedGuildId=id;return select(id)}};module.setState(state);return {url,module}});
 }
 let componentSequence=0;
 async function component(file, replacements, suffix='') {
+ if ((file==='ServerList'||file==='AppLayout') && !replacements['@/lib/invite']) replacements['@/lib/invite']=compile(readFileSync('src/lib/invite.ts','utf8').replaceAll('"@/lib/api"',JSON.stringify(replacements['@/lib/api']??apiUrl)).replaceAll('"@/stores/guilds"',JSON.stringify(replacements['@/stores/guilds'])).replaceAll('"@/stores/channels"',JSON.stringify(replacements['@/stores/channels'])),'selection-'+(++componentSequence));
  let source=readFileSync(resolve((file==='AppLayout'?'src/layouts/':['InvitePage','LoginPage','RegisterPage','ServerAddressPage'].includes(file)?'src/pages/':'src/components/')+file+'.tsx'),'utf8')+suffix;
  source=source.replace(/from "([^"]+)"/g,(whole,name)=>{
   const target=name==='react'?(replacements.react??hooksUrl):replacements[name]??(name.startsWith('@/components/')?emptyComponentUrl:undefined);
@@ -134,6 +135,45 @@ function nodes(tree) {
  return [tree,...nodes(tree.props?.children)];
 }
 function element(tree, predicate) {const match=nodes(tree).find(predicate);assert.ok(match,'component element missing');return match;}
+async function selectionFixture() {
+ const gs={guilds:new Map([['old',{id:'old',name:'Old'}],['new',{id:'new',name:'New'}]]),selectedGuildId:'old',selectGuild(id){gs.selectedGuildId=id},fetchGuilds:async()=>{},createGuild:async()=>({id:'new'})};
+ const cs={channelsByGuild:new Map([['old',[{id:'old-text',type:0}]]]),selectedChannelId:'old-text',selectChannel(id){cs.selectedChannelId=id},fetchChannels:async id=>cs.channelsByGuild.set(id,[{id:id+'-text',type:0}])};
+ const g=await storeModule('useGuildsStore',gs),c=await storeModule('useChannelsStore',cs),d=await storeModule('useDMsStore',{showDMList:false,setShowDMList(){}});
+ const fakeApi=compile('export class ApiClientError extends Error {} export const api={post:async()=>({id:"new"})}','selection-api-'+(++componentSequence));
+ const replacements={'@/lib/api':fakeApi,'@/stores/guilds':g.url,'@/stores/channels':c.url,'@/stores/dms':d.url};
+ const mod=await component('ServerList',replacements,'\nexport {CreateGuildModal,JoinGuildModal};');
+ return {gs,cs,mod};
+}
+
+test('L44 create server clears the previous channel before loading',async()=>{
+ const {gs,cs,mod}=await selectionFixture();let release;
+ cs.fetchChannels=()=>new Promise(r=>release=r);
+ hooks.reset(['New',false,'']);const pending=element(mod.CreateGuildModal({onClose(){}}),n=>n.type==='form').props.onSubmit({preventDefault(){}});
+ await new Promise(setImmediate);assert.equal(gs.selectedGuildId,'new');assert.equal(cs.selectedChannelId,null);
+ release();await pending;assert.equal(cs.selectedChannelId,null);
+});
+test('L44 join code selects the joined first text channel',async()=>{
+ const {gs,cs,mod}=await selectionFixture();hooks.reset(['code',false,'']);
+ await element(mod.JoinGuildModal({onClose(){}}),n=>n.type==='form').props.onSubmit({preventDefault(){}});
+ assert.equal(gs.selectedGuildId,'new');assert.equal(cs.selectedChannelId,'new-text');
+});
+test('L44 empty server clears the previous channel',async()=>{
+ const {gs,cs,mod}=await selectionFixture();cs.channelsByGuild.set('new',[{id:'voice',type:2}]);hooks.reset();
+ const tree=mod.default();await element(tree,n=>n.props?.guild?.id==='new').props.onClick();
+ assert.equal(gs.selectedGuildId,'new');assert.equal(cs.selectedChannelId,null);
+});
+test('L44 late A channels cannot replace B selection or DM view',async()=>{
+ const {gs,cs,mod}=await selectionFixture();let release;
+ cs.fetchChannels=id=>new Promise(r=>release=()=>{cs.channelsByGuild.set(id,[{id:'a-text',type:0}]);r()});
+ cs.channelsByGuild.set('old',[{id:'b-text',type:0}]);hooks.reset();const tree=mod.default();
+ element(tree,n=>n.props?.guild?.id==='new').props.onClick();
+ element(tree,n=>n.props?.guild?.id==='old').props.onClick();release();await new Promise(setImmediate);
+ assert.equal(gs.selectedGuildId,'old');assert.equal(cs.selectedChannelId,'b-text');
+ cs.channelsByGuild.delete('new');element(tree,n=>n.props?.guild?.id==='new').props.onClick();
+ element(tree,n=>n.props?.title==='Direct Messages').props.onClick();release();await new Promise(setImmediate);
+ assert.equal(gs.selectedGuildId,null);assert.equal(cs.selectedChannelId,null);
+});
+
 test('invite revoke uses the versioned API path',async()=>{
  let requested;
  const fakeApi=compile('export class ApiClientError extends Error {} export const api={get:async()=>[],delete:async(path)=>{globalThis.inviteRevokePath=path}}','invite-api');
@@ -147,8 +187,8 @@ test('invite revoke uses the versioned API path',async()=>{
 test('invite join selects the returned id and fetches its channels',async()=>{
  const selected=[],fetched=[];
  const guilds=await storeModule('useGuildsStore',{fetchGuilds:async()=>{},selectGuild:id=>selected.push(id)});
- const channels=await storeModule('useChannelsStore',{fetchChannels:async id=>fetched.push(id)});
- const dms=await storeModule('useDMsStore',{});
+ const channels=await storeModule('useChannelsStore',{channelsByGuild:new Map(),selectChannel(){},fetchChannels:async id=>fetched.push(id)});
+ const dms=await storeModule('useDMsStore',{setShowDMList(){}});
  const fakeApi=compile('export class ApiClientError extends Error {} export const api={post:async()=>({id:"joined-guild"})}','join-api');
  const {JoinGuildModal}=await component('ServerList',{'@/lib/api':fakeApi,'@/stores/guilds':guilds.url,'@/stores/channels':channels.url,'@/stores/dms':dms.url},'\nexport {JoinGuildModal};');
  hooks.reset(['fixture-code',false,'']);
@@ -461,7 +501,7 @@ test('invite acceptance coalesces replays, selects target and propagates invalid
  const {acceptInvite}=await import(compile(source,'real-invite'));
  let requests=0;globalThis.fetch=async()=>{requests++;await new Promise(setImmediate);return Response.json({data:{id:'target'}})};
  await Promise.all([acceptInvite('copied'),acceptInvite('copied')]);assert.equal(requests,1);
- assert.deepEqual(calls,[['guild','target'],['select','target'],['channel',null],['fetch','target'],['channel','text']]);
+ assert.deepEqual(calls,[['guild','target'],['select','target'],['channel',null],['channel','text']]);
  calls=[];globalThis.fetch=async()=>Response.json({error:{code:'EXPIRED',message:'invite has expired'}},{status:410});
  await assert.rejects(acceptInvite('expired'),/expired/);assert.deepEqual(calls,[]);
 });

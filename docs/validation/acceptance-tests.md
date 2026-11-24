@@ -104,3 +104,7 @@ The same five indexed tests now distinguish the caller from an existing target f
 The web tests `Typing member lookup caches 404 and 403 across twenty unrelated updates` and `Typing member without public user is fetched once across store changes` exercise actual stores and passive effect scheduling. Failed lookups are cached for at least the eight-second typing lifetime; an existing member prevents another lookup even without its optional user. A later typing entry can retry after the negative cache expires.
 
 The 60-operation contract fixture now has non-empty reactions, read states, bans, member roles and linked message attachments. Response schemas require fields whose Go JSON tags lack `omitempty`; optional fields stay optional. API Docker stop grace is 20 seconds around the 10-second HTTP bound. Delivery states are unchanged; deployed candidate checks remain run 3.
+
+## B9 server selection (#72)
+
+WEB-FR-005 clause 2 is covered by `L44 create server clears the previous channel before loading` and `L44 join code selects the joined first text channel`. Adjacent boundaries use `L44 empty server clears the previous channel` (cached voice-only server) and `L44 late A channels cannot replace B selection or DM view` (delayed channels after another server or DM selection). All run in retrocast-web/contract.test.mjs. Delivery is unchanged pending deployed validation.
