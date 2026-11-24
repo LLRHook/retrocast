@@ -51,7 +51,7 @@ export default function AppLayout() {
         if (!selectedGuildId && guilds.size > 0) {
           const firstGuild = (inviteGuildId ? guilds.get(inviteGuildId) : undefined) ?? guilds.values().next().value;
           if (firstGuild) {
-            void selectGuildChannels(firstGuild.id).catch(() => {});
+            void selectGuildChannels(firstGuild.id, { refresh: true }).catch(() => {});
           }
         }
       })
@@ -72,7 +72,7 @@ export default function AppLayout() {
     const unsubChannel = useChannelsStore.subscribe((s) => {
       if (s.selectedChannelId !== prevChannel) {
         prevChannel = s.selectedChannelId;
-        setSidebarOpen(false);
+        if (s.selectedChannelId !== null) setSidebarOpen(false);
       }
     });
     const unsubDM = useDMsStore.subscribe((s) => {

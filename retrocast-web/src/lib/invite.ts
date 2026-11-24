@@ -4,11 +4,14 @@ import { useChannelsStore } from "@/stores/channels";
 import type { Guild } from "@/types";
 
 // All server entry points share selection and reject late channel responses.
-export async function selectGuildChannels(guildId: string | null) {
+export async function selectGuildChannels(guildId: string | null, { refresh = false } = {}) {
+  const channels = useChannelsStore.getState();
+  if (!refresh && guildId !== null && useGuildsStore.getState().selectedGuildId === guildId
+    && channels.channelsByGuild.get(guildId)?.some(c => c.id === channels.selectedChannelId)) return;
   useGuildsStore.getState().selectGuild(guildId);
   useChannelsStore.getState().selectChannel(null);
   if (!guildId) return;
-  if (!useChannelsStore.getState().channelsByGuild.has(guildId)) {
+  if (refresh || !useChannelsStore.getState().channelsByGuild.has(guildId)) {
     await useChannelsStore.getState().fetchChannels(guildId);
   }
   if (useGuildsStore.getState().selectedGuildId !== guildId) return;
@@ -18,7 +21,7 @@ export async function selectGuildChannels(guildId: string | null) {
 
 export async function selectInviteGuild(guild: Guild) {
   useGuildsStore.getState().setGuild(guild);
-  await selectGuildChannels(guild.id);
+  await selectGuildChannels(guild.id, { refresh: true });
   return guild;
 }
 

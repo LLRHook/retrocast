@@ -136,7 +136,7 @@ function nodes(tree) {
 }
 function element(tree, predicate) {const match=nodes(tree).find(predicate);assert.ok(match,'component element missing');return match;}
 async function selectionFixture() {
- const gs={guilds:new Map([['old',{id:'old',name:'Old'}],['new',{id:'new',name:'New'}]]),selectedGuildId:'old',selectGuild(id){gs.selectedGuildId=id},fetchGuilds:async()=>{},createGuild:async()=>({id:'new'})};
+ const gs={guilds:new Map([['old',{id:'old',name:'Old'}],['new',{id:'new',name:'New'}]]),selectedGuildId:'old',setGuild(guild){gs.guilds.set(guild.id,guild)},selectGuild(id){gs.selectedGuildId=id},fetchGuilds:async()=>{},createGuild:async()=>({id:'new'})};
  const cs={channelsByGuild:new Map([['old',[{id:'old-text',type:0}]]]),selectedChannelId:'old-text',selectChannel(id){cs.selectedChannelId=id},fetchChannels:async id=>cs.channelsByGuild.set(id,[{id:id+'-text',type:0}])};
  const g=await storeModule('useGuildsStore',gs),c=await storeModule('useChannelsStore',cs),d=await storeModule('useDMsStore',{showDMList:false,setShowDMList(){}});
  const fakeApi=compile('export class ApiClientError extends Error {} export const api={post:async()=>({id:"new"})}','selection-api-'+(++componentSequence));
@@ -150,7 +150,7 @@ test('L44 create server clears the previous channel before loading',async()=>{
  cs.fetchChannels=()=>new Promise(r=>release=r);
  hooks.reset(['New',false,'']);const pending=element(mod.CreateGuildModal({onClose(){}}),n=>n.type==='form').props.onSubmit({preventDefault(){}});
  await new Promise(setImmediate);assert.equal(gs.selectedGuildId,'new');assert.equal(cs.selectedChannelId,null);
- release();await pending;assert.equal(cs.selectedChannelId,null);
+ if(release) release();await pending;assert.equal(cs.selectedChannelId,null);
 });
 test('L44 join code selects the joined first text channel',async()=>{
  const {gs,cs,mod}=await selectionFixture();hooks.reset(['code',false,'']);
@@ -186,7 +186,7 @@ test('invite revoke uses the versioned API path',async()=>{
 });
 test('invite join selects the returned id and fetches its channels',async()=>{
  const selected=[],fetched=[];
- const guilds=await storeModule('useGuildsStore',{fetchGuilds:async()=>{},selectGuild:id=>selected.push(id)});
+ const guilds=await storeModule('useGuildsStore',{setGuild(){},fetchGuilds:async()=>{},selectGuild:id=>selected.push(id)});
  const channels=await storeModule('useChannelsStore',{channelsByGuild:new Map(),selectChannel(){},fetchChannels:async id=>fetched.push(id)});
  const dms=await storeModule('useDMsStore',{setShowDMList(){}});
  const fakeApi=compile('export class ApiClientError extends Error {} export const api={post:async()=>({id:"joined-guild"})}','join-api');
@@ -501,7 +501,7 @@ test('invite acceptance coalesces replays, selects target and propagates invalid
  const {acceptInvite}=await import(compile(source,'real-invite'));
  let requests=0;globalThis.fetch=async()=>{requests++;await new Promise(setImmediate);return Response.json({data:{id:'target'}})};
  await Promise.all([acceptInvite('copied'),acceptInvite('copied')]);assert.equal(requests,1);
- assert.deepEqual(calls,[['guild','target'],['select','target'],['channel',null],['channel','text']]);
+ assert.deepEqual(calls,[['guild','target'],['select','target'],['channel',null],['fetch','target'],['channel','text']]);
  calls=[];globalThis.fetch=async()=>Response.json({error:{code:'EXPIRED',message:'invite has expired'}},{status:410});
  await assert.rejects(acceptInvite('expired'),/expired/);assert.deepEqual(calls,[]);
 });
@@ -696,6 +696,114 @@ async function checkTypingLookup(status) {
  } finally {active=false;unsub.forEach(fn=>fn());await flush();delete globalThis.l40R2LookupStores}
 }
 
+// L45 probes: real zustand stores, real invite.ts, real gateway dispatcher, deferred fake API.
+let l44R2Seq=0;
+async function l44R2Real(){
+ const seq=++l44R2Seq,z=JSON.stringify(pathToFileURL(require.resolve('zustand')).href);
+ const fakeApi=compile('export class ApiClientError extends Error{constructor(m,c){super(m);this.code=c}} export const api={get:p=>globalThis.l44R2Get(p),post:(p,b)=>globalThis.l44R2Post(p,b),delete:async()=>{},patch:async()=>{}}','l44R2-api-'+seq);
+ const read=(f,map={})=>{let s=readFileSync(resolve(f),'utf8').replaceAll('"zustand"',z).replaceAll('"@/lib/api"',JSON.stringify(fakeApi));for(const [k,v] of Object.entries(map))s=s.replaceAll(JSON.stringify(k),JSON.stringify(v));return s};
+ const u={};
+ u.users=compile(read('src/stores/users.ts'),'l44R2-users-'+seq);
+ u.typing=compile(read('src/stores/typing.ts'),'l44R2-typing-'+seq);
+ u.presence=compile(read('src/stores/presence.ts'),'l44R2-presence-'+seq);
+ u.roles=compile(read('src/stores/roles.ts'),'l44R2-roles-'+seq);
+ u.members=compile(read('src/stores/members.ts',{'@/stores/users':u.users}),'l44R2-members-'+seq);
+ u.messages=compile(read('src/stores/messages.ts',{'@/stores/users':u.users}),'l44R2-messages-'+seq);
+ u.channels=compile(read('src/stores/channels.ts'),'l44R2-channels-'+seq);
+ u.guilds=compile(read('src/stores/guilds.ts',{'@/stores/channels':u.channels,'@/stores/messages':u.messages,'@/stores/typing':u.typing}),'l44R2-guilds-'+seq);
+ u.dms=compile(read('src/stores/dms.ts',{'@/stores/users':u.users}),'l44R2-dms-'+seq);
+ u.invite=compile(read('src/lib/invite.ts',{'@/stores/guilds':u.guilds,'@/stores/channels':u.channels}),'l44R2-invite-'+seq);
+ const gw=compile('export const gateway={on(e,f){(globalThis.l44R2H??={})[e]=f}}','l44R2-gw-'+seq);
+ u.disp=compile(read('src/lib/gateway-dispatcher.ts',{'@/lib/gateway':gw,'@/stores/guilds':u.guilds,'@/stores/channels':u.channels,'@/stores/members':u.members,'@/stores/roles':u.roles,'@/stores/messages':u.messages,'@/stores/presence':u.presence,'@/stores/typing':u.typing,'@/stores/users':u.users}),'l44R2-disp-'+seq);
+ const wrap=(name,url)=>compile(`import {${name} as real} from ${JSON.stringify(url)};export function ${name}(sel){return sel(real.getState())};${name}.getState=()=>real.getState();${name}.setState=(...a)=>real.setState(...a);${name}.subscribe=(...a)=>real.subscribe(...a);`,'l44R2-wrap-'+name+'-'+seq);
+ const G=(await import(u.guilds)).useGuildsStore,C=(await import(u.channels)).useChannelsStore,D=(await import(u.dms)).useDMsStore;
+ const inv=await import(u.invite);
+ globalThis.l44R2H={};(await import(u.disp)).initGatewayDispatcher();
+ const mod=await component('ServerList',{'@/lib/api':fakeApi,'@/stores/guilds':wrap('useGuildsStore',u.guilds),'@/stores/channels':wrap('useChannelsStore',u.channels),'@/stores/dms':wrap('useDMsStore',u.dms),'@/lib/invite':u.invite},'\nexport {CreateGuildModal,JoinGuildModal};');
+ const pending=[];
+ globalThis.l44R2Get=p=>new Promise((res,rej)=>pending.push({p,res,rej}));
+ globalThis.l44R2Post=(p,b)=>new Promise((res,rej)=>pending.push({p:'POST '+p,b,res,rej}));
+ const take=p=>{const i=pending.findIndex(x=>x.p===p);assert.ok(i>=0,'no pending '+p+' in '+pending.map(x=>x.p));return pending.splice(i,1)[0]};
+ const flush=()=>new Promise(setImmediate);
+ const ch=(g,id,type,position)=>({id,guild_id:g,name:id,type,position});
+ const path=g=>`/api/v1/guilds/${g}/channels`;
+ const sel=()=>({g:G.getState().selectedGuildId,c:C.getState().selectedChannelId,dm:D.getState().showDMList});
+ const foreign=()=>{const {g,c}=sel();if(c===null)return null;const own=g?C.getState().channelsByGuild.get(g):undefined;return own?.some(x=>x.id===c)?null:`channel ${c} selected while guild ${g}`};
+ const icon=(tree,id)=>element(tree,n=>n.props?.guild?.id===id).props.onClick;
+ return {u,wrap,fakeApi,G,C,D,inv,mod,pending,take,flush,ch,path,sel,foreign,icon,H:globalThis.l44R2H};
+}
+
+async function r2Fixture() {
+ const r=await l44R2Real();r.G.setState({guilds:new Map([['A',{id:'A',name:'A'}],['B',{id:'B',name:'B'}]]),selectedGuildId:'A'});
+ r.C.setState({channelsByGuild:new Map([['A',[r.ch('A','a-text',0,0),r.ch('A','a-two',0,1)]]]),selectedChannelId:'a-two'});return r;
+}
+function r2Submit(r,kind,onClose=()=>{}) {hooks.reset([kind==='Create'?'New':'code',false,'']);return element(r.mod[kind+'GuildModal']({onClose}),n=>n.type==='form').props.onSubmit({preventDefault(){}})}
+test('L44 R2 create committed POST survives channel GET rejection and icon retry',async()=>{
+ const r=await r2Fixture();let posts=0,closed=0;const post=globalThis.l44R2Post;globalThis.l44R2Post=(...a)=>{posts++;return post(...a)};
+ const done=r2Submit(r,'Create',()=>closed++);r.take('POST /api/v1/guilds').res({id:'B',name:'B'});await r.flush();
+ r.take(r.path('B')).rej(new TypeError('offline'));await done;
+ assert.equal(posts,1);assert.equal(closed,1);assert.equal(hooks.values[2],'');assert.equal(r.G.getState().selectedGuildId,'B');assert.equal(r.C.getState().selectedChannelId,null);
+ hooks.reset();r.icon(r.mod.default(),'B')();r.take(r.path('B')).res([r.ch('B','b-text',0,0)]);await r.flush();assert.equal(r.C.getState().selectedChannelId,'b-text');
+});
+test('L44 R2 create selects its first text channel directly',async()=>{
+ const r=await r2Fixture();const done=r2Submit(r,'Create');r.take('POST /api/v1/guilds').res({id:'B',name:'B'});await r.flush();
+ const request=r.pending.find(x=>x.p===r.path('B'));if(request)r.take(r.path('B')).res([r.ch('B','voice',2,0),r.ch('B','b-text',0,1),r.ch('B','later',0,2)]);await done;
+ assert.equal(r.C.getState().selectedChannelId,'b-text');
+});
+test('L44 R2 DM button clears a directly selected channel',async()=>{
+ const r=await r2Fixture();hooks.reset();element(r.mod.default(),n=>n.props?.title==='Direct Messages').props.onClick();
+ assert.equal(r.G.getState().selectedGuildId,null);assert.equal(r.C.getState().selectedChannelId,null);assert.equal(r.D.getState().showDMList,true);
+});
+test('L44 R2 create and join hide the DM list',async()=>{
+ for(const kind of ['Create','Join']) {
+  const r=await r2Fixture();r.D.getState().setShowDMList(true);const done=r2Submit(r,kind);
+  r.take(kind==='Create'?'POST /api/v1/guilds':'POST /api/v1/invites/code').res({id:'B',name:'B'});await r.flush();
+  if(kind==='Join'){r.take('/api/v1/users/@me/guilds').res([{id:'A',name:'A'},{id:'B',name:'B'}]);await r.flush()}
+  r.take(r.path('B')).res([r.ch('B','b-text',0,0)]);await done;assert.equal(r.D.getState().showDMList,false,kind);
+ }
+});
+test('L44 R2 join committed POST tolerates guild and channel refresh failures',async()=>{
+ const r=await r2Fixture();let closed=0;const done=r2Submit(r,'Join',()=>closed++);r.take('POST /api/v1/invites/code').res({id:'B',name:'Joined'});await r.flush();
+ r.take('/api/v1/users/@me/guilds').rej(new TypeError('offline'));await r.flush();
+ const get=r.pending.find(x=>x.p===r.path('B'));if(get)r.take(r.path('B')).rej(new TypeError('offline'));await done;
+ assert.equal(closed,1);assert.equal(hooks.values[2],'');assert.equal(r.G.getState().guilds.get('B').name,'Joined');assert.equal(r.G.getState().selectedGuildId,'B');assert.equal(r.C.getState().selectedChannelId,null);
+});
+test('L44 R2 create refreshes a partial channel cache',async()=>{
+ const r=await r2Fixture();r.C.getState().addChannel(r.ch('B','partial',0,9));const done=r2Submit(r,'Create');r.take('POST /api/v1/guilds').res({id:'B',name:'B'});await r.flush();
+ const get=r.pending.find(x=>x.p===r.path('B'));assert.ok(get,'create must refetch partial cache');r.take(r.path('B')).res([r.ch('B','general',0,0)]);await done;assert.equal(r.C.getState().selectedChannelId,'general');
+});
+test('L44 R2 join refreshes a partial channel cache',async()=>{
+ const r=await r2Fixture();r.C.getState().addChannel(r.ch('B','partial',0,9));const done=r2Submit(r,'Join');
+ r.take('POST /api/v1/invites/code').res({id:'B',name:'B'});await r.flush();r.take('/api/v1/users/@me/guilds').res([{id:'B',name:'B'}]);await r.flush();
+ const get=r.pending.find(x=>x.p===r.path('B'));assert.ok(get,'join must refetch partial cache');r.take(r.path('B')).res([r.ch('B','general',0,0),r.ch('B','partial',0,9)]);await done;
+ assert.equal(r.C.getState().selectedChannelId,'general');
+});
+test('L44 R2 invite refreshes a partial channel cache',async()=>{
+ const r=await r2Fixture();r.C.getState().addChannel(r.ch('B','partial',0,9));const done=r.inv.selectInviteGuild({id:'B',name:'B'});
+ const get=r.pending.find(x=>x.p===r.path('B'));assert.ok(get,'invite must refetch partial cache');r.take(r.path('B')).res([r.ch('B','general',0,0)]);await done;assert.equal(r.C.getState().selectedChannelId,'general');
+});
+async function r2Layout(r,mobile) {
+ const effects=compile('export const effects=[],writes=[];export const useEffect=f=>effects.push(f);export const useState=v=>[v,x=>writes.push(x)];export const useSyncExternalStore=()=>'+!mobile+';','r2-layout-effects-'+(++componentSequence));
+ const auth=await storeModule('useAuthStore',{isAuthenticated:!mobile,accessToken:'fixture',serverUrl:'http://fixture'});
+ const router=compile('export const Navigate="Navigate",Outlet="Outlet";export const useLocation=()=>({state:null});','r2-layout-router-'+componentSequence);
+ const gw=compile('export const gateway={connect(){},disconnect(){}};export const initGatewayDispatcher=()=>{}','r2-layout-gateway-'+componentSequence);
+ const mod=await component('AppLayout',{react:effects,'react-router':router,'@/stores/auth':auth.url,'@/stores/guilds':r.wrap('useGuildsStore',r.u.guilds),'@/stores/channels':r.wrap('useChannelsStore',r.u.channels),'@/stores/dms':r.wrap('useDMsStore',r.u.dms),'@/lib/invite':r.u.invite,'@/lib/gateway':gw,'@/lib/gateway-dispatcher':gw});
+ mod.default();return import(effects);
+}
+test('L44 R2 initial selection refreshes a partial channel cache',async()=>{
+ const r=await r2Fixture();r.G.getState().selectGuild(null);r.C.getState().selectChannel(null);r.C.getState().setChannels('A',[r.ch('A','partial',0,9)]);
+ const eff=await r2Layout(r,false);const cleanup=eff.effects[0]();r.take('/api/v1/users/@me/guilds').res([{id:'A',name:'A'}]);await r.flush();
+ const get=r.pending.find(x=>x.p===r.path('A'));assert.ok(get,'initial selection must refetch partial cache');r.take(r.path('A')).res([r.ch('A','general',0,0)]);await r.flush();assert.equal(r.C.getState().selectedChannelId,'general');cleanup();
+});
+test('L44 R2 retapping selected server preserves channel with no store writes',async()=>{
+ const r=await r2Fixture();const writes=[];const off=[r.G.subscribe(()=>writes.push('guild')),r.C.subscribe(()=>writes.push('channel'))];
+ hooks.reset();r.icon(r.mod.default(),'A')();await r.flush();off.forEach(f=>f());assert.equal(r.C.getState().selectedChannelId,'a-two');assert.deepEqual(writes,[]);assert.deepEqual(r.pending,[]);
+});
+test('L44 R2 mobile sidebar ignores null channel changes and retains DM behavior',async()=>{
+ const r=await r2Fixture(),eff=await r2Layout(r,true);const cleanup=eff.effects[1]();r.C.getState().selectChannel(null);assert.deepEqual(eff.writes,[]);
+ r.C.getState().selectChannel('a-text');assert.deepEqual(eff.writes,[false]);r.C.getState().selectChannel('a-text');assert.deepEqual(eff.writes,[false]);
+ r.D.setState({selectedDMId:'dm'});r.D.setState({selectedDMId:null});assert.deepEqual(eff.writes,[false,false,false]);cleanup();
+});
 } catch (error) {
  cleanup();
  throw error;

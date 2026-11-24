@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useGuildsStore } from "@/stores/guilds";
 import { selectGuildChannels } from "@/lib/invite";
 import { useDMsStore } from "@/stores/dms";
+import type { Guild } from "@/types";
 import { api } from "@/lib/api";
 
 function GuildIcon({
@@ -69,7 +70,7 @@ function CreateGuildModal({ onClose }: { onClose: () => void }) {
     try {
       const guild = await createGuild(name.trim());
       useDMsStore.getState().setShowDMList(false);
-      await selectGuildChannels(guild.id);
+      await selectGuildChannels(guild.id, { refresh: true }).catch(() => {});
       onClose();
     } catch {
       setError("Failed to create server");
@@ -139,13 +140,14 @@ function JoinGuildModal({ onClose }: { onClose: () => void }) {
     setLoading(true);
     setError("");
     try {
-      const result = await api.post<{ id: string }>(
+      const result = await api.post<Guild>(
         `/api/v1/invites/${code.trim()}`,
       );
-      // Refresh guild list
-      await useGuildsStore.getState().fetchGuilds();
+      // Membership already committed: keep the returned guild if list refresh fails.
+      useGuildsStore.getState().setGuild(result);
+      await useGuildsStore.getState().fetchGuilds().catch(() => {});
       useDMsStore.getState().setShowDMList(false);
-      await selectGuildChannels(result.id);
+      await selectGuildChannels(result.id, { refresh: true }).catch(() => {});
       onClose();
     } catch {
       setError("Invalid or expired invite code");
