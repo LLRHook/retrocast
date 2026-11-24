@@ -116,8 +116,16 @@ func TestContractOpenAPI(t *testing.T) {
 	if err := yaml.Unmarshal(data, &spec); err != nil {
 		t.Fatal(err)
 	}
-	if spec["info"].(map[string]any)["version"] != "2.1.0" {
-		t.Fatal("wrong version")
+	contract, err := os.ReadFile("../../../docs/DATA_CONTRACTS.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	version := regexp.MustCompile("(?m)^Current REST contract version: `([0-9]+\\.[0-9]+\\.[0-9]+)`\\.\\r?$").FindAllSubmatch(contract, -1)
+	if len(version) != 1 {
+		t.Fatal("missing single current contract version")
+	}
+	if spec["info"].(map[string]any)["version"] != string(version[0][1]) {
+		t.Fatal("OpenAPI version differs from DATA_CONTRACTS current version")
 	}
 	// Shared response/schema references must resolve, including API-059 errors.
 	var checkRefs func(any)

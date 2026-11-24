@@ -4,7 +4,7 @@ info:
   description: |
     Discord-compatible chat platform API. All IDs are snowflake integers
     serialized as strings in JSON to avoid JavaScript precision loss.
-  version: "2.1.0"
+  version: "2.2.0"
   license:
     name: "Proprietary. All rights reserved."
 
