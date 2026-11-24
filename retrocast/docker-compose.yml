@@ -15,6 +15,8 @@ services:
       - REDIS_URL=redis://redis:6379
       - REGISTRATION_MODE=${REGISTRATION_MODE:-invite}
       - MINIO_ENDPOINT=minio:9000
+      - DOMAIN=${DOMAIN:-localhost}
+      - MINIO_REGION=${MINIO_REGION:-us-east-1}
       - LIVEKIT_URL=ws://livekit:7880
     depends_on:
       db:
@@ -59,6 +61,7 @@ services:
     env_file: .env
     environment:
       - MINIO_ROOT_USER=retrocast
+      - MINIO_REGION_NAME=${MINIO_REGION:-us-east-1}
     restart: unless-stopped
 
   livekit:
@@ -81,6 +84,8 @@ services:
 
   caddy:
     image: caddy:2-alpine
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
     ports:
       - "80:80"
       - "443:443"

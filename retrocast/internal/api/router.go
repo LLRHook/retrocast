@@ -158,6 +158,7 @@ func SetupRouter(e *echo.Echo, deps *Dependencies) {
 	// Roles
 	protected.POST("/guilds/:id/roles", deps.Roles.CreateRole)
 	protected.GET("/guilds/:id/roles", deps.Roles.ListRoles)
+	protected.PUT("/guilds/:id/roles/order", deps.Roles.ReorderRoles)
 	protected.PATCH("/guilds/:id/roles/:role_id", deps.Roles.UpdateRole)
 	protected.DELETE("/guilds/:id/roles/:role_id", deps.Roles.DeleteRole)
 	protected.PUT("/guilds/:id/members/:user_id/roles/:role_id", deps.Roles.AssignRole)

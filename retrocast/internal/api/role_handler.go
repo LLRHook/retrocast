@@ -218,3 +218,26 @@ func (h *RoleHandler) DeleteChannelOverride(c echo.Context) error {
 
 	return c.NoContent(http.StatusNoContent)
 }
+
+// ReorderRoles handles PUT /api/v1/guilds/:id/roles/order.
+func (h *RoleHandler) ReorderRoles(c echo.Context) error {
+	guildID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return errorJSON(c, http.StatusBadRequest, "INVALID_ID", "invalid guild id")
+	}
+	var req struct {
+		Expected []service.RolePosition `json:"expected"`
+		Order    []string               `json:"order"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return errorJSON(c, http.StatusBadRequest, "INVALID_BODY", "invalid request body")
+	}
+	if req.Expected == nil || req.Order == nil {
+		return errorJSON(c, http.StatusBadRequest, "INVALID_ORDER", "expected and order arrays are required")
+	}
+	roles, err := h.service.ReorderRoles(c.Request().Context(), guildID, auth.GetUserID(c), req.Expected, req.Order)
+	if err != nil {
+		return mapServiceError(c, err)
+	}
+	return Success(c, http.StatusOK, roles)
+}

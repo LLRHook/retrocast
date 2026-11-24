@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { useModeration } from "@/hooks/useModeration";
+import { nextRolePosition } from "@/lib/role-order";
 import { api } from "@/lib/api";
 import { useRolesStore } from "@/stores/roles";
 import type { Role } from "@/types";
@@ -71,8 +73,10 @@ function RoleForm({
   role,
   guildId,
   onCancel,
+  createPosition,
 }: {
   role: Role | null;
+  createPosition: number | null;
   guildId: string;
   onCancel: () => void;
 }) {
@@ -108,6 +112,10 @@ function RoleForm({
     setSaving(true);
     setError("");
     try {
+      if (!role && createPosition === null) {
+        setError("No free role position below your highest role. Ask the server owner to make room.");
+        return;
+      }
       const payload = {
         name: trimmed,
         color: hexColorToInt(color),
@@ -123,7 +131,7 @@ function RoleForm({
       } else {
         const created = await api.post<Role>(
           `/api/v1/guilds/${guildId}/roles`,
-          payload,
+          {...payload, position: createPosition},
         );
         setRole(created);
       }
@@ -232,7 +240,27 @@ function RoleForm({
 }
 
 export default function RoleEditor({ guildId }: RoleEditorProps) {
-  const roles = (useRolesStore((s) => s.rolesByGuild.get(guildId)) || []);
+  const roles = [...(useRolesStore((s) => s.rolesByGuild.get(guildId)) || [])].sort((a, b) => Number(a.is_default) - Number(b.is_default) || b.position - a.position || a.id.localeCompare(b.id));
+  const [moving, setMoving] = useState(false);
+  const [moveError, setMoveError] = useState("");
+
+  async function moveRole(index: number, direction: number) {
+    const order = roles.filter((r) => !r.is_default).reverse();
+    const target = order.findIndex((r) => r.id === roles[index].id);
+    const other = target + direction;
+    if (other < 0 || other >= order.length) return;
+    [order[target], order[other]] = [order[other], order[target]];
+    setMoving(true); setMoveError("");
+    try {
+      const updated = await api.put<Role[]>(`/api/v1/guilds/${guildId}/roles/order`, {expected: roles.map(({id, position}) => ({id, position})), order: order.map((r) => r.id)});
+      useRolesStore.getState().setRoles(guildId, updated);
+    } catch (err) {
+      setMoveError(err instanceof Error ? err.message : "Failed to reorder roles");
+      await fetchRoles(guildId);
+    } finally { setMoving(false); }
+  }
+  const { isOwner, highestRolePosition } = useModeration(guildId);
+  const createPosition = nextRolePosition(roles, isOwner, highestRolePosition);
   const fetchRoles = useRolesStore((s) => s.fetchRoles);
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [creating, setCreating] = useState(false);
@@ -258,6 +286,7 @@ export default function RoleEditor({ guildId }: RoleEditorProps) {
         </button>
         <RoleForm
           role={selectedRole}
+          createPosition={createPosition}
           guildId={guildId}
           onCancel={() => {
             setSelectedRole(null);
@@ -282,11 +311,13 @@ export default function RoleEditor({ guildId }: RoleEditorProps) {
         </button>
       </div>
       <div className="flex flex-col gap-1">
-        {roles.map((role) => (
+        {moveError && <div role="alert" className="text-sm text-red-400">{moveError}</div>}
+        {roles.map((role, index) => (
+          <div key={role.id} className="flex items-center">
           <button
             key={role.id}
             onClick={() => setSelectedRole(role)}
-            className="flex items-center gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-white/5"
+            className="flex flex-1 items-center gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-white/5"
           >
             <span
               className="h-3 w-3 shrink-0 rounded-full"
@@ -300,6 +331,11 @@ export default function RoleEditor({ guildId }: RoleEditorProps) {
               <span className="ml-auto text-xs text-text-muted">default</span>
             )}
           </button>
+            {!role.is_default && <>
+              <button type="button" aria-label={`Move ${role.name} up`} disabled={moving || index === 0} onClick={() => moveRole(index, 1)} className="px-2 disabled:opacity-30">Up</button>
+              <button type="button" aria-label={`Move ${role.name} down`} disabled={moving || index === roles.filter((r) => !r.is_default).length - 1} onClick={() => moveRole(index, -1)} className="px-2 disabled:opacity-30">Down</button>
+            </>}
+          </div>
         ))}
         {roles.length === 0 && (
           <div className="text-center text-sm text-text-muted">

@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/url"
+	"strings"
+	"time"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -11,16 +14,25 @@ import (
 
 // MinIOClient wraps a MinIO client with bucket-scoped operations.
 type MinIOClient struct {
-	client   *minio.Client
-	bucket   string
-	endpoint string
+	client *minio.Client
+	bucket string
+	signer *minio.Client
 }
 
 // NewMinIOClient creates a MinIO client and ensures the bucket exists.
-func NewMinIOClient(endpoint, accessKey, secretKey, bucket string) (*MinIOClient, error) {
+func NewMinIOClient(endpoint, accessKey, secretKey, bucket, domain, region string) (*MinIOClient, error) {
+	domain = strings.ToLower(domain)
+	if domain == "" || strings.ContainsAny(domain, ":/?#@ ") {
+		return nil, fmt.Errorf("DOMAIN must be a host without scheme, path or port")
+	}
+	signer, err := minio.New(domain, &minio.Options{Creds: credentials.NewStaticV4(accessKey, secretKey, ""), Secure: true, Region: region})
+	if err != nil {
+		return nil, fmt.Errorf("minio public signer: %w", err)
+	}
 	client, err := minio.New(endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
 		Secure: false,
+		Region: region,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("minio client: %w", err)
@@ -32,15 +44,15 @@ func NewMinIOClient(endpoint, accessKey, secretKey, bucket string) (*MinIOClient
 		return nil, fmt.Errorf("minio bucket check: %w", err)
 	}
 	if !exists {
-		if err := client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{}); err != nil {
+		if err := client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{Region: region}); err != nil {
 			return nil, fmt.Errorf("minio make bucket: %w", err)
 		}
 	}
 
 	return &MinIOClient{
-		client:   client,
-		bucket:   bucket,
-		endpoint: endpoint,
+		client: client,
+		bucket: bucket,
+		signer: signer,
 	}, nil
 }
 
@@ -52,9 +64,19 @@ func (m *MinIOClient) Upload(ctx context.Context, key string, reader io.Reader, 
 	return err
 }
 
-// GetURL returns the public URL for an object.
-func (m *MinIOClient) GetURL(key string) string {
-	return fmt.Sprintf("http://%s/%s/%s", m.endpoint, m.bucket, key)
+// GetURL mints a fresh 15-minute URL locally: the fixed region avoids bucket lookup.
+func (m *MinIOClient) GetURL(key, contentType string) (string, error) {
+	params := make(url.Values)
+	params.Set("response-content-disposition", "attachment")
+	switch contentType {
+	case "image/png", "image/jpeg", "image/gif", "image/webp":
+		params.Set("response-content-disposition", "inline")
+	}
+	signed, err := m.signer.PresignedGetObject(context.Background(), m.bucket, key, 15*time.Minute, params)
+	if err != nil {
+		return "", err
+	}
+	return signed.String(), nil
 }
 
 // Delete removes an object from the bucket.

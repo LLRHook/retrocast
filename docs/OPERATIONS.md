@@ -81,9 +81,9 @@ Before each release record date, paired backup names, users/guilds/messages row
 counts before and after, health and an attachment download in
 `docs/operations/restore-drills.md` (SYS-NFR-006). Use
 `SELECT (SELECT count(*) FROM users), (SELECT count(*) FROM guilds), (SELECT count(*) FROM messages);`.
-The current attachment URL limitation D-10 remains: an operator can verify stored
-bytes with authenticated MinIO `mc cat`, but client-facing downloads remain a
-separate requirement.
+Verify restored stored bytes with authenticated MinIO `mc cat`, and verify client-facing
+downloads through fresh 15-minute HTTPS signed GET URLs from message history.
+D-10 is fixed by B6; expired pre-restore links should be renewed by fetching history.
 
 Repeat script regressions with `bash scripts/test-operations.sh` and
 `python scripts/test-monitoring.py` from `retrocast/`.

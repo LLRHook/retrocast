@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"errors"
+	"github.com/jackc/pgx/v5"
 	"github.com/victorivanov/retrocast/internal/permissions"
 	"strconv"
 
@@ -47,7 +49,7 @@ func NewRoleService(
 }
 
 // CreateRole creates a new role in a guild with role hierarchy enforcement.
-func (s *RoleService) CreateRole(ctx context.Context, guildID, actorID int64, name string, color int, permBits int64, position int) (*models.Role, error) {
+func (s *RoleService) createRole(ctx context.Context, guildID, actorID int64, name string, color int, permBits int64, position int) (*models.Role, error) {
 	if err := s.perms.RequireGuildPermissionByPerm(ctx, guildID, actorID, permissions.PermManageRoles); err != nil {
 		return nil, err
 	}
@@ -89,7 +91,6 @@ func (s *RoleService) CreateRole(ctx context.Context, guildID, actorID int64, na
 		return nil, Internal("INTERNAL", "internal server error")
 	}
 
-	s.gateway.DispatchToGuild(guildID, gateway.EventGuildRoleCreate, map[string]any{"guild_id": strconv.FormatInt(guildID, 10), "role": role})
 	return role, nil
 }
 
@@ -114,7 +115,7 @@ func (s *RoleService) ListRoles(ctx context.Context, guildID, actorID int64) ([]
 }
 
 // UpdateRole updates a role with hierarchy enforcement.
-func (s *RoleService) UpdateRole(ctx context.Context, guildID, actorID, roleID int64, name *string, color *int, permBits *int64, position *int) (*models.Role, error) {
+func (s *RoleService) updateRole(ctx context.Context, guildID, actorID, roleID int64, name *string, color *int, permBits *int64, position *int) (*models.Role, error) {
 	if err := s.perms.RequireGuildPermissionByPerm(ctx, guildID, actorID, permissions.PermManageRoles); err != nil {
 		return nil, err
 	}
@@ -174,12 +175,11 @@ func (s *RoleService) UpdateRole(ctx context.Context, guildID, actorID, roleID i
 		return nil, Internal("INTERNAL", "internal server error")
 	}
 
-	s.gateway.DispatchToGuild(guildID, gateway.EventGuildRoleUpdate, map[string]any{"guild_id": strconv.FormatInt(guildID, 10), "role": role})
 	return role, nil
 }
 
 // DeleteRole deletes a role with hierarchy enforcement.
-func (s *RoleService) DeleteRole(ctx context.Context, guildID, actorID, roleID int64) error {
+func (s *RoleService) deleteRole(ctx context.Context, guildID, actorID, roleID int64) error {
 	if err := s.perms.RequireGuildPermissionByPerm(ctx, guildID, actorID, permissions.PermManageRoles); err != nil {
 		return err
 	}
@@ -216,7 +216,6 @@ func (s *RoleService) DeleteRole(ctx context.Context, guildID, actorID, roleID i
 		return Internal("INTERNAL", "internal server error")
 	}
 
-	s.gateway.DispatchToGuild(guildID, gateway.EventGuildRoleDelete, map[string]any{"guild_id": strconv.FormatInt(guildID, 10), "role_id": strconv.FormatInt(roleID, 10)})
 	return nil
 }
 
@@ -383,4 +382,183 @@ func (s *RoleService) invalidateGateway(guildID int64) {
 	if g, ok := s.gateway.(interface{ InvalidateGuildPermissions(int64) }); ok {
 		g.InvalidateGuildPermissions(guildID)
 	}
+}
+
+// RolePosition is the complete optimistic snapshot sent by a reorder client.
+type RolePosition struct {
+	ID       int64 `json:"id,string"`
+	Position int   `json:"position"`
+}
+
+// ReorderRoles serializes role writes and checks the snapshot before any update.
+func (s *RoleService) ReorderRoles(ctx context.Context, guildID, actorID int64, expected []RolePosition, order []string) ([]models.Role, error) {
+	if err := s.perms.RequireGuildPermissionByPerm(ctx, guildID, actorID, permissions.PermManageRoles); err != nil {
+		return nil, err
+	}
+	var result []models.Role
+	var changed []models.Role
+	err := database.InTransaction(ctx, s.roles, func(ctx context.Context) error {
+		if err := s.lockRoleGuild(ctx, guildID); err != nil {
+			return err
+		}
+		if err := s.perms.RequireGuildPermissionByPerm(ctx, guildID, actorID, permissions.PermManageRoles); err != nil {
+			return err
+		}
+		roles, err := s.roles.GetByGuildID(ctx, guildID)
+		if err != nil {
+			return err
+		}
+		snapshot := make(map[int64]int, len(expected))
+		for _, r := range expected {
+			if _, ok := snapshot[r.ID]; ok {
+				return BadRequest("INVALID_ORDER", "duplicate snapshot role")
+			}
+			snapshot[r.ID] = r.Position
+		}
+		if len(snapshot) != len(roles) {
+			return Conflict("STALE_ROLES", "Roles changed; reload and try again")
+		}
+		byID := make(map[int64]models.Role, len(roles))
+		movable := 0
+		for _, r := range roles {
+			if pos, ok := snapshot[r.ID]; !ok || pos != r.Position {
+				return Conflict("STALE_ROLES", "Roles changed; reload and try again")
+			}
+			byID[r.ID] = r
+			if !r.IsDefault {
+				movable++
+			}
+		}
+		if len(order) != movable {
+			return BadRequest("INVALID_ORDER", "include every non-default role exactly once")
+		}
+		owner, err := s.perms.IsGuildOwner(ctx, guildID, actorID)
+		if err != nil {
+			return err
+		}
+		highest, err := s.perms.HighestRolePosition(ctx, guildID, actorID)
+		if err != nil {
+			return err
+		}
+		seen := make(map[int64]bool)
+		next := 1
+		last := 0
+		for _, raw := range order {
+			id, err := strconv.ParseInt(raw, 10, 64)
+			if err != nil {
+				return BadRequest("INVALID_ORDER", "invalid role id")
+			}
+			r, ok := byID[id]
+			if !ok || seen[id] || r.IsDefault {
+				return BadRequest("INVALID_ORDER", "unknown, duplicate or default role")
+			}
+			seen[id] = true
+			position := next
+			if !owner && r.Position >= highest {
+				position = r.Position
+			}
+			if !owner && r.Position < highest && position >= highest {
+				if last < highest {
+					return Conflict("ROLE_ORDER_NO_ROOM", "No free role position below your highest role. Ask the server owner to make room.")
+				}
+				return RoleHierarchyError("cannot move a role at or above your highest role position")
+			}
+			if position < last {
+				return RoleHierarchyError("cannot reorder roles at or above your highest role position")
+			}
+			if position != r.Position {
+				if !owner && r.Position >= highest {
+					return RoleHierarchyError("cannot modify a role at or above your highest role position")
+				}
+				if err := s.perms.RequireGrantPermissions(ctx, guildID, actorID, r.Permissions); err != nil {
+					return err
+				}
+				r.Position = position
+				changed = append(changed, r)
+			}
+			last = position
+			next = position + 1
+		}
+		// Validate the entire operation before writing; the transaction rolls back failures.
+		for i := range changed {
+			if err := s.roles.Update(ctx, &changed[i]); err != nil {
+				return err
+			}
+			byID[changed[i].ID] = changed[i]
+		}
+		for _, r := range roles {
+			result = append(result, byID[r.ID])
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range changed {
+		s.gateway.DispatchToGuild(guildID, gateway.EventGuildRoleUpdate, map[string]any{"guild_id": strconv.FormatInt(guildID, 10), "role": r})
+	}
+	return result, nil
+}
+
+func (s *RoleService) CreateRole(ctx context.Context, guildID, actorID int64, name string, color int, permBits int64, position int) (*models.Role, error) {
+	if err := s.perms.RequireGuildPermissionByPerm(ctx, guildID, actorID, permissions.PermManageRoles); err != nil {
+		return nil, err
+	}
+	var result *models.Role
+	err := database.InTransaction(ctx, s.roles, func(ctx context.Context) error {
+		if err := s.lockRoleGuild(ctx, guildID); err != nil {
+			return err
+		}
+		var err error
+		result, err = s.createRole(ctx, guildID, actorID, name, color, permBits, position)
+		return err
+	})
+	if err == nil {
+		s.gateway.DispatchToGuild(guildID, gateway.EventGuildRoleCreate, map[string]any{"guild_id": strconv.FormatInt(guildID, 10), "role": result})
+	}
+	return result, err
+}
+
+func (s *RoleService) UpdateRole(ctx context.Context, guildID, actorID, roleID int64, name *string, color *int, permBits *int64, position *int) (*models.Role, error) {
+	if err := s.perms.RequireGuildPermissionByPerm(ctx, guildID, actorID, permissions.PermManageRoles); err != nil {
+		return nil, err
+	}
+	var result *models.Role
+	err := database.InTransaction(ctx, s.roles, func(ctx context.Context) error {
+		if err := s.lockRoleGuild(ctx, guildID); err != nil {
+			return err
+		}
+		var err error
+		result, err = s.updateRole(ctx, guildID, actorID, roleID, name, color, permBits, position)
+		return err
+	})
+	if err == nil {
+		s.gateway.DispatchToGuild(guildID, gateway.EventGuildRoleUpdate, map[string]any{"guild_id": strconv.FormatInt(guildID, 10), "role": result})
+	}
+	return result, err
+}
+
+func (s *RoleService) DeleteRole(ctx context.Context, guildID, actorID, roleID int64) error {
+	if err := s.perms.RequireGuildPermissionByPerm(ctx, guildID, actorID, permissions.PermManageRoles); err != nil {
+		return err
+	}
+	err := database.InTransaction(ctx, s.roles, func(ctx context.Context) error {
+		if err := s.lockRoleGuild(ctx, guildID); err != nil {
+			return err
+		}
+		return s.deleteRole(ctx, guildID, actorID, roleID)
+	})
+	if err == nil {
+		s.gateway.DispatchToGuild(guildID, gateway.EventGuildRoleDelete, map[string]any{"guild_id": strconv.FormatInt(guildID, 10), "role_id": strconv.FormatInt(roleID, 10)})
+	}
+	return err
+}
+
+// lockRoleGuild maps a deletion racing the preflight permission check to the REST contract.
+func (s *RoleService) lockRoleGuild(ctx context.Context, guildID int64) error {
+	err := database.LockGuildForModeration(ctx, s.roles, guildID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return NotFound("NOT_FOUND", "guild not found")
+	}
+	return err
 }
