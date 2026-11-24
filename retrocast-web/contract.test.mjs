@@ -564,7 +564,7 @@ test('Pilot member names resolve nickname then display name then username',async
 test('Pilot member responses and events hydrate the shared users cache',async()=>{
  const zustand=JSON.stringify(pathToFileURL(require.resolve('zustand')).href),usersUrl=compile(readFileSync('src/stores/users.ts','utf8').replace('"zustand"',zustand),'pilot-users');const {useUsersStore:u}=await import(usersUrl);
  const source=readFileSync('src/stores/members.ts','utf8').replace('"zustand"',zustand).replace('"@/lib/api"',JSON.stringify(apiUrl)).replace('"@/stores/users"',JSON.stringify(usersUrl));const {useMembersStore:m}=await import(compile(source,'pilot-members'));
- const member={guild_id:'g',user_id:'200',roles:[],user:{id:'200',username:'bob',display_name:null}};globalThis.fetch=async()=>Response.json({data:[member]});await m.getState().fetchMembers('g');assert.equal(u.getState().users.get('200').username,'bob');m.getState().setMember({...member,user:{...member.user,display_name:'Bobby'}});assert.equal(u.getState().users.get('200').display_name,'Bobby');
+ const member={guild_id:'g',user_id:'200',roles:[],user:{id:'200',username:'bob',display_name:null}};globalThis.fetch=async()=>Response.json({data:[member]});await m.getState().fetchMembers('g');assert.equal(u.getState().users.get('200').username,'bob');m.getState().setMember({...member,user:{...member.user,display_name:'Bobby'}});assert.equal(u.getState().users.get('200').display_name,'Bobby');let requests=0;globalThis.fetch=async url=>{requests++;assert.ok(url.endsWith('/guilds/g/members/300'));await new Promise(setImmediate);return Response.json({data:{...member,user_id:'300',user:{...member.user,id:'300',username:'carol'}}})};await Promise.all([m.getState().fetchMember('g','300'),m.getState().fetchMember('g','300')]);assert.equal(requests,1);assert.equal(u.getState().users.get('300').username,'carol');
 });
 
 
@@ -614,6 +614,14 @@ test('Pilot channel deletion accepts 204 and closes without an error',async()=>{
  const c=await storeModule('useChannelsStore',{removeChannel:(id,guild)=>assert.deepEqual([id,guild],['c','g'])});let closed=false,path;
  const {default:Modal}=await component('ChannelModal',{'@/stores/channels':c.url,'@/lib/api':apiUrl});globalThis.fetch=async url=>{path=url;return new Response(null,{status:204})};const confirm=globalThis.confirm;
  try{globalThis.confirm=()=>true;hooks.reset();const tree=Modal({guildId:'g',channel:{id:'c'},onClose(){closed=true}});await element(tree,n=>n.type==='button'&&n.props.children==='Delete Channel').props.onClick();assert.ok(path.endsWith('/api/v1/channels/c'));assert.equal(closed,true);assert.equal(hooks.values[4],'');}finally{globalThis.confirm=confirm}
+});
+
+
+test('Pilot uncached typing member fetches the public member endpoint',async()=>{
+ const effects=compile('export let effect;export const useEffect=fn=>effect=fn;','pilot-typing-effect');const calls=[];
+ const m=await storeModule('useMembersStore',{membersByGuild:new Map(),fetchMember:async(...args)=>calls.push(args)}),u=await storeModule('useUsersStore',{users:new Map()}),t=await storeModule('useTypingStore',{typingByChannel:new Map([['c',new Map([['300',{}]])]])}),a=await storeModule('useAuthStore',{user:{id:'100'}}),g=await storeModule('useGuildsStore',{selectedGuildId:'g'});
+ const {default:Indicator}=await component('TypingIndicator',{react:effects,'@/stores/members':m.url,'@/stores/users':u.url,'@/stores/typing':t.url,'@/stores/auth':a.url,'@/stores/guilds':g.url});Indicator({channelId:'c'});(await import(effects)).effect();assert.deepEqual(calls,[['g','300']]);
+ u.module.setState({users:new Map([['300',{username:'carol',display_name:null}]])});calls.length=0;const tree=Indicator({channelId:'c'});(await import(effects)).effect();assert.deepEqual(calls,[]);assert.ok(nodes(tree).some(n=>Array.isArray(n.props?.children)&&n.props.children.includes('carol is typing...')));
 });
 
 } catch (error) {

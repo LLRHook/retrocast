@@ -8,9 +8,12 @@ interface MembersState {
   setMember: (member: Member) => void;
   removeMember: (guildId: string, userId: string) => void;
   fetchMembers: (guildId: string) => Promise<void>;
+  fetchMember: (guildId: string, userId: string) => Promise<void>;
 }
 
-export const useMembersStore = create<MembersState>()((set) => ({
+const memberFlights = new Map<string, Promise<void>>();
+
+export const useMembersStore = create<MembersState>()((set, get) => ({
   membersByGuild: new Map(),
 
   setMember: (member) => {
@@ -39,6 +42,17 @@ export const useMembersStore = create<MembersState>()((set) => ({
       membersByGuild.set(guildId, guildMembers);
       return { membersByGuild };
     });
+  },
+
+  fetchMember: (guildId, userId) => {
+    const key = `${guildId}/${userId}`;
+    const pending = memberFlights.get(key);
+    if (pending) return pending;
+    const flight = api.get<Member>(`/api/v1/guilds/${guildId}/members/${userId}`)
+      .then(member => get().setMember(member))
+      .finally(() => memberFlights.delete(key));
+    memberFlights.set(key, flight);
+    return flight;
   },
 
   fetchMembers: async (guildId) => {

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useUsersStore } from "@/stores/users";
 import { useTypingStore } from "@/stores/typing";
 import { useAuthStore } from "@/stores/auth";
@@ -16,6 +17,17 @@ export default function TypingIndicator({
   const selectedGuildId = useGuildsStore((s) => s.selectedGuildId);
   const membersByGuild = useMembersStore((s) => s.membersByGuild);
   const users = useUsersStore((s) => s.users);
+
+  const fetchMember = useMembersStore((s) => s.fetchMember);
+  useEffect(() => {
+    if (!selectedGuildId || !typingMap) return;
+    for (const userId of typingMap.keys()) {
+      const member = membersByGuild.get(selectedGuildId)?.get(userId);
+      if (userId !== currentUserId && !member?.nickname && !member?.user && !users.has(userId)) {
+        void fetchMember(selectedGuildId, userId).catch(() => {});
+      }
+    }
+  }, [selectedGuildId, typingMap, currentUserId, membersByGuild, users, fetchMember]);
 
   if (!typingMap || typingMap.size === 0) {
     return <div className="h-6" />;
