@@ -70,6 +70,12 @@ func TestPermissionRegressionRoleOperations(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				if op == "list" && actor == 500 && rec.Code != 404 {
+					t.Fatalf("non-member list = %d", rec.Code)
+				}
+				if op == "update" && actor == 400 && rec.Code != 403 {
+					t.Fatalf("unprivileged update = %d", rec.Code)
+				}
 				allowed := actor <= 300 || (op == "list" && actor == 400)
 				if allowed && rec.Code >= 400 {
 					t.Fatalf("allowed actor %d: %d %s", actor, rec.Code, rec.Body.String())
@@ -143,6 +149,9 @@ func TestPermissionRegressionRoleBoundaries(t *testing.T) {
 					_ = h.SetChannelOverride(c)
 				case "deleteOverride":
 					_ = h.DeleteChannelOverride(c)
+				}
+				if op == "update" && boundary == "foreign" && rec.Code != 404 {
+					t.Fatalf("foreign role update = %d", rec.Code)
 				}
 				refused := (boundary == "foreign" && op != "create") || ((boundary == "equal" || boundary == "negative") && (op == "create" || op == "update"))
 				if (rec.Code >= 400) != refused {

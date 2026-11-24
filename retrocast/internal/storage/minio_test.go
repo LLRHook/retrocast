@@ -83,7 +83,7 @@ func TestConstructorDomainAndOfflinePresign(t *testing.T) {
 		raw, err := m.GetURL("attachments/test", "image/png")
 		if err == nil {
 			u, _ := url.Parse(raw)
-			if u.Host != "unreachable.invalid" || u.Query().Get("X-Amz-Expires") != "900" {
+			if u.Scheme != "https" || u.Host != "unreachable.invalid" || u.Query().Get("X-Amz-Expires") != "900" {
 				err = fmt.Errorf("incorrect production signer host or expiry")
 			}
 		}

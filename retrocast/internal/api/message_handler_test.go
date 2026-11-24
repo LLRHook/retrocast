@@ -90,12 +90,13 @@ func TestSendMessage_Success(t *testing.T) {
 	channels := channelMock()
 	gw := &mockGateway{}
 
+	avatar := "author-avatar"
 	created := &models.MessageWithAuthor{
 		Message: models.Message{
 			ID: testMsgID, ChannelID: testChannelID, AuthorID: testUserID,
 			Content: "hello", CreatedAt: time.Now(),
 		},
-		AuthorUsername: "testuser",
+		AuthorUsername: "testuser", AuthorDisplayName: "Test User", AuthorAvatarHash: &avatar,
 	}
 	msgs := &mockMessageRepo{
 		GetByIDFn: func(_ context.Context, _ int64) (*models.MessageWithAuthor, error) {
@@ -120,6 +121,15 @@ func TestSendMessage_Success(t *testing.T) {
 	if len(gw.events) != 1 || gw.events[0].Event != gateway.EventMessageCreate {
 		t.Fatalf("expected MESSAGE_CREATE event, got %+v", gw.events)
 	}
+
+	var message models.MessageWithAuthor
+	if err := decodeResponse(rec, &message); err != nil {
+		t.Fatal(err)
+	}
+	if message.Content != "hello" || message.AuthorID != testUserID || message.AuthorUsername != "testuser" || message.AuthorDisplayName != "Test User" || message.AuthorAvatarHash == nil || *message.AuthorAvatarHash != avatar {
+		t.Fatal(message)
+	}
+
 }
 
 func TestSendMessage_EmptyContent(t *testing.T) {

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { api } from "@/lib/api";
+import { useUsersStore } from "@/stores/users";
 import type { Member } from "@/types";
 
 interface MembersState {
@@ -7,12 +8,21 @@ interface MembersState {
   setMember: (member: Member) => void;
   removeMember: (guildId: string, userId: string) => void;
   fetchMembers: (guildId: string) => Promise<void>;
+  fetchMember: (guildId: string, userId: string) => Promise<void>;
 }
 
-export const useMembersStore = create<MembersState>()((set) => ({
+const memberFlights = new Map<string, Promise<void>>();
+const failedMemberLookups = new Map<string, number>();
+const LOOKUP_RETRY_DELAY = 8000;
+
+export const useMembersStore = create<MembersState>()((set, get) => ({
   membersByGuild: new Map(),
 
   setMember: (member) => {
+    if (member.user) useUsersStore.getState().cacheUser(member.user.id, {
+      username: member.user.username, display_name: member.user.display_name,
+      avatar_hash: member.user.avatar_hash ?? null,
+    });
     set((state) => {
       const membersByGuild = new Map(state.membersByGuild);
       const guildMembers = new Map(
@@ -36,6 +46,24 @@ export const useMembersStore = create<MembersState>()((set) => ({
     });
   },
 
+  fetchMember: (guildId, userId) => {
+    const key = `${guildId}/${userId}`;
+    const failedUntil = failedMemberLookups.get(key);
+    if (failedUntil && failedUntil > Date.now()) return Promise.resolve();
+    failedMemberLookups.delete(key);
+    const pending = memberFlights.get(key);
+    if (pending) return pending;
+    const flight = api.get<Member>(`/api/v1/guilds/${guildId}/members/${userId}`)
+      .then(member => get().setMember(member))
+      .catch((error: unknown) => {
+        failedMemberLookups.set(key, Date.now() + LOOKUP_RETRY_DELAY);
+        throw error;
+      })
+      .finally(() => memberFlights.delete(key));
+    memberFlights.set(key, flight);
+    return flight;
+  },
+
   fetchMembers: async (guildId) => {
     const members = await api.get<Member[]>(
       `/api/v1/guilds/${guildId}/members`,
@@ -44,6 +72,10 @@ export const useMembersStore = create<MembersState>()((set) => ({
       const membersByGuild = new Map(state.membersByGuild);
       const guildMembers = new Map<string, Member>();
       for (const member of members) {
+        if (member.user) useUsersStore.getState().cacheUser(member.user.id, {
+          username: member.user.username, display_name: member.user.display_name,
+          avatar_hash: member.user.avatar_hash ?? null,
+        });
         guildMembers.set(member.user_id, member);
       }
       membersByGuild.set(guildId, guildMembers);

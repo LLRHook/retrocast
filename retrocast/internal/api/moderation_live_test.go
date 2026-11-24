@@ -91,6 +91,25 @@ func TestModerationAtomicityLive(t *testing.T) {
 	if member != nil || ban == nil || ban.Reason == nil || *ban.Reason != reason {
 		t.Fatal("ban not committed")
 	}
+
+	inviteRepo := database.NewInviteRepository(pool)
+	if err := inviteRepo.Create(ctx, &models.Invite{Code: "l40join1", GuildID: 1, CreatorID: 100, CreatedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	inviteSvc := service.NewInviteService(inviteRepo, guilds, members, bans, gw, perms)
+	if _, err := inviteSvc.AcceptInvite(ctx, "l40join1", 200); err == nil {
+		t.Fatal("banned member rejoined")
+	} else {
+		c, rec := newTestContext("POST", "/", nil)
+		_ = mapServiceError(c, err)
+		var detail ErrorResponse
+		if err := decodeResponse(rec, &detail); err != nil {
+			t.Fatal(err)
+		}
+		if rec.Code != 403 || detail.Error.Code != "BANNED" {
+			t.Fatal(rec.Code, detail)
+		}
+	}
 	found := false
 	for _, e := range gw.events {
 		if e.UserID == 200 && e.Event == gateway.EventGuildDelete {
@@ -106,7 +125,14 @@ func TestModerationAtomicityLive(t *testing.T) {
 	if err := svc.UnbanMember(ctx, 1, 100, 200); err != nil {
 		t.Fatal("unban not idempotent")
 	}
-	exec("INSERT INTO members(guild_id,user_id) VALUES(1,200)")
+	if _, err := inviteSvc.AcceptInvite(ctx, "l40join1", 200); err != nil {
+		t.Fatal("unbanned member cannot rejoin", err)
+	}
+	added := assertGatewayPayload(t, gw, "GUILD_MEMBER_ADD", map[string]any{"guild_id": "1", "user_id": "200"}).(*models.Member)
+	if added.User == nil || added.User.Username != "target" {
+		t.Fatal("add event identity absent")
+	}
+
 	gw.events = nil
 	ms := service.NewMemberService(members, guilds, roles, gw, perms)
 	if err := ms.KickMember(ctx, 1, 100, 200); err != nil {
@@ -120,6 +146,19 @@ func TestModerationAtomicityLive(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("kicked user's clients not notified")
+	}
+
+	page, err := members.GetByGuildID(ctx, 1, 100, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range page {
+		if m.UserID == 200 {
+			t.Fatal("kicked member remains in list")
+		}
+	}
+	if _, err := inviteSvc.AcceptInvite(ctx, "l40join1", 200); err != nil {
+		t.Fatal("kicked member cannot rejoin", err)
 	}
 	t.Run("guild parent lock precedes child mutations", func(t *testing.T) {
 		exec("INSERT INTO guilds(id,name,owner_id) VALUES(2,'Locked',100)")

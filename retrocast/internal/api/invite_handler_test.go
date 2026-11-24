@@ -130,6 +130,10 @@ func TestGetInvite_Public(t *testing.T) {
 	if resp.MemberCount != 2 {
 		t.Errorf("expected member count 2, got %d", resp.MemberCount)
 	}
+
+	if preview["creator_id"] != "100" {
+		t.Fatalf("creator_id: %v", preview["creator_id"])
+	}
 }
 
 func TestGetInvite_Expired(t *testing.T) {
@@ -157,6 +161,14 @@ func TestGetInvite_Expired(t *testing.T) {
 	}
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var detail ErrorResponse
+	if err := decodeResponse(rec, &detail); err != nil {
+		t.Fatal(err)
+	}
+	if detail.Error.Code != "EXPIRED" {
+		t.Fatal(detail)
 	}
 }
 
@@ -221,6 +233,19 @@ func TestAcceptInvite_Success(t *testing.T) {
 	if !usesIncremented {
 		t.Error("expected uses to be incremented")
 	}
+
+	var guild models.Guild
+	if err := decodeResponse(rec, &guild); err != nil {
+		t.Fatal(err)
+	}
+	if guild.ID != 1 {
+		t.Fatal(guild)
+	}
+	assertGatewayPayload(t, gw, "GUILD_MEMBER_ADD", map[string]any{"guild_id": "1", "user_id": "200"})
+	if gw.events[0].GuildID != 1 {
+		t.Fatal("wrong guild recipient")
+	}
+
 }
 
 func TestAcceptInvite_AlreadyMember(t *testing.T) {

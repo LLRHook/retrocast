@@ -285,7 +285,7 @@ func TestListBans(t *testing.T) {
 		GetByGuildIDFn: func(ctx context.Context, guildID int64) ([]models.Ban, error) {
 			return []models.Ban{
 				{GuildID: 1, UserID: 200, Reason: &reason, CreatedBy: 100, CreatedAt: now},
-				{GuildID: 1, UserID: 300, CreatedBy: 100, CreatedAt: now},
+				{GuildID: 1, UserID: 300, Reason: &reason, CreatedBy: 100, CreatedAt: now},
 			}, nil
 		},
 	}
@@ -311,5 +311,11 @@ func TestListBans(t *testing.T) {
 	}
 	if len(banList) != 2 {
 		t.Errorf("expected 2 bans, got %d", len(banList))
+	}
+
+	for _, ban := range banList {
+		if ban.Reason == nil || *ban.Reason != "spam" {
+			t.Fatal("missing reason")
+		}
 	}
 }

@@ -278,6 +278,7 @@ func (m *mockRoleRepo) GetByMember(ctx context.Context, guildID, userID int64) (
 
 // mockMemberRepo implements database.MemberRepository.
 type mockMemberRepo struct {
+	HydrateUsersFn      func(context.Context, []*models.Member) error
 	CreateFn            func(ctx context.Context, member *models.Member) error
 	GetByGuildAndUserFn func(ctx context.Context, guildID, userID int64) (*models.Member, error)
 	GetByGuildIDFn      func(ctx context.Context, guildID int64, limit, offset int) ([]models.Member, error)
@@ -737,4 +738,11 @@ func (m *mockGateway) InvalidateGuildPermissions(guildID int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.invalidations = append(m.invalidations, guildID)
+}
+
+func (m *mockMemberRepo) HydrateUsers(ctx context.Context, members []*models.Member) error {
+	if m.HydrateUsersFn != nil {
+		return m.HydrateUsersFn(ctx, members)
+	}
+	return nil
 }

@@ -43,6 +43,17 @@ func TestSessionTransportLive(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				var detail ErrorResponse
+				if err := decodeResponse(rec, &detail); err != nil {
+					t.Fatal(err)
+				}
+				expected := "INVALID_TOKEN"
+				if rec.Code == 503 {
+					expected = "SESSION_UNAVAILABLE"
+				}
+				if detail.Error.Code != expected {
+					t.Fatalf("code %s want %s", detail.Error.Code, expected)
+				}
 				return rec.Code
 			}
 			if status := invoke(); status != 401 {

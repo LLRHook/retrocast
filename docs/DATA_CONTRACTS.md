@@ -83,7 +83,7 @@ strings (SV-IR-004; D-11 fixed in B2).
 | ENT-001 | User | PostgreSQL `users` | id PK; username VARCHAR(32) unique (case-sensitive); display_name VARCHAR(32); avatar_hash VARCHAR(64) null; password_hash TEXT (never serialised); created_at | Referenced by guilds.owner_id, messages.author_id, invites.creator_id and bans.created_by without ON DELETE, so a user who owns a guild or wrote a message cannot be deleted (account deletion is Later, CAP-038) | Personal (username, display name); Secret (password hash) | SV-FR-001–SV-FR-004, SV-FR-053, SV-FR-060, SV-FR-062–SV-FR-065, SV-NFR-001 | v1.0.0 |
 | ENT-002 | Guild | PostgreSQL `guilds` | id PK; name VARCHAR(100) (2–100 in service); icon_hash VARCHAR(64) null; owner_id FK users; created_at | Deleting a guild cascades to channels, roles, members, invites and bans | Internal | SV-FR-007–SV-FR-013 | v1.0.0 |
 | ENT-003 | Channel | PostgreSQL `channels` | id PK; guild_id FK cascade; name VARCHAR(100); type SMALLINT (0 text, 2 voice, 4 category); position INT; topic VARCHAR(1024) null; parent_id FK channels null | UNIQUE(guild_id, name); parent_id has no ON DELETE | Internal | SV-FR-009, SV-FR-014–SV-FR-017 | v1.0.0 |
-| ENT-004 | Member | PostgreSQL `members` | PK (guild_id, user_id), both FK cascade; nickname VARCHAR(32) null; joined_at; JSON adds `roles` (role ids as decimal strings) | Cascades to member_roles | Personal (nickname) | SV-FR-020, SV-FR-022–SV-FR-024, SV-FR-063, SV-FR-066, SV-FR-067, SV-FR-071, SV-FR-077 | v1.0.0 |
+| ENT-004 | Member | PostgreSQL `members` | PK (guild_id, user_id), both FK cascade; nickname VARCHAR(32) null; joined_at; JSON adds `roles` (role ids as decimal strings) and optional `user` public identity {id decimal string, username, display_name nullable, avatar_hash optional}; absent for unknown users | Cascades to member_roles | Personal (nickname) | SV-FR-020, SV-FR-022–SV-FR-024, SV-FR-063, SV-FR-066, SV-FR-067, SV-FR-071, SV-FR-077 | v1.1.0 |
 | ENT-005 | MemberRole | PostgreSQL `member_roles` | PK (guild_id, user_id, role_id); role_id FK roles cascade; (guild_id, user_id) FK members cascade | No check that the role belongs to the same guild at the database level | Internal | SV-FR-008, SV-FR-043, SV-FR-045 | v1.0.0 |
 | ENT-006 | Role | PostgreSQL `roles` | id PK; guild_id FK cascade; name VARCHAR(100); color INT; permissions BIGINT bitfield (§3.1); position INT; is_default BOOL (`@everyone`) | — | Internal | SV-FR-008, SV-FR-040–SV-FR-046 | v1.0.0 |
 | ENT-007 | ChannelOverride | PostgreSQL `channel_overrides` | PK (channel_id, role_id), both FK cascade; allow_perms BIGINT; deny_perms BIGINT | No check that the role and channel share a guild | Internal | SV-FR-045, SV-FR-047 | v1.0.0 |
@@ -193,11 +193,11 @@ are as documented in OpenAPI; where the code differs, the Notes column says so.
 | API-030 | addReaction | PUT /channels/{channelId}/messages/{messageId}/reactions/{emoji}/@me | 204 | — | | SV-FR-074 |
 | API-031 | removeReaction | DELETE /channels/{channelId}/messages/{messageId}/reactions/{emoji}/@me | 204 | — | | SV-FR-074 |
 | API-032 | getReactions | GET /channels/{channelId}/messages/{messageId}/reactions/{emoji} | 200 users | yes | user ids as decimal strings (D-11 fixed in PR #45) | SV-FR-075 |
-| API-033 | listMembers | GET /guilds/{guildId}/members | 200 members | yes | `limit` 1–100 (50), `offset` | SV-FR-023 |
-| API-034 | updateSelf | PATCH /guilds/{guildId}/members/@me | 200 member | yes | nickname; no `CHANGE_NICKNAME` check | SV-FR-077 |
+| API-033 | listMembers | GET /guilds/{guildId}/members | 200 members with optional public ENT-004.user | yes | `limit` 1–100 (50), `offset` | SV-FR-023 |
+| API-034 | updateSelf | PATCH /guilds/{guildId}/members/@me | 200 member with optional public ENT-004.user | yes | nickname; no `CHANGE_NICKNAME` check | SV-FR-077 |
 | API-035 | leaveGuild | DELETE /guilds/{guildId}/members/@me | 204 | — | owner gets 403 | SV-FR-022 |
-| API-036 | getMember | GET /guilds/{guildId}/members/{userId} | 200 member | yes | | SV-FR-024 |
-| API-037 | updateMember | PATCH /guilds/{guildId}/members/{userId} | 200 member | yes | nickname, roles; validate role changes before writes; unchanged roles preserved | SV-FR-043, SV-FR-077 |
+| API-036 | getMember | GET /guilds/{guildId}/members/{userId} | 200 member with optional public ENT-004.user | yes | | SV-FR-024 |
+| API-037 | updateMember | PATCH /guilds/{guildId}/members/{userId} | 200 member with optional public ENT-004.user | yes | nickname, roles; validate role changes before writes; unchanged roles preserved | SV-FR-043, SV-FR-077 |
 | API-038 | kickMember | DELETE /guilds/{guildId}/members/{userId} | 204 | — | KICK_MEMBERS, strict hierarchy and owner protection; self kick returns 400 CANNOT_KICK_SELF | SV-FR-066, SV-FR-070 |
 | API-039 | createRole | POST /guilds/{guildId}/roles | 201 role | yes | | SV-FR-040 |
 | API-040 | listRoles | GET /guilds/{guildId}/roles | 200 roles | yes | membership required; non-members receive 404 | SV-FR-044 |
@@ -313,9 +313,9 @@ rev 2 a user may hold several connections, each receiving every event for that u
 | EVT-015 | 0 | CHANNEL_CREATE | server → client | channel (guild members) or DM channel (each recipient) | SV-FR-014, SV-FR-054 |
 | EVT-016 | 0 | CHANNEL_UPDATE | server → client | channel | SV-FR-015 |
 | EVT-017 | 0 | CHANNEL_DELETE | server → client | `id`, `guild_id` (guild-wide metadata, regardless of VIEW_CHANNEL) or DM channel (participants only) | SV-FR-015 |
-| EVT-018 | 0 | GUILD_MEMBER_ADD | server → client | member | SV-FR-020 |
+| EVT-018 | 0 | GUILD_MEMBER_ADD | server → client | member with optional public ENT-004.user | SV-FR-020 |
 | EVT-019 | 0 | GUILD_MEMBER_REMOVE | server → client | `guild_id`, `user_id` | SV-FR-022, SV-FR-066, SV-FR-067, SV-FR-071 |
-| EVT-020 | 0 | GUILD_MEMBER_UPDATE | server → client | member | SV-FR-043 |
+| EVT-020 | 0 | GUILD_MEMBER_UPDATE | server → client | member with optional public ENT-004.user | SV-FR-043 |
 | EVT-021 | 0 | GUILD_ROLE_CREATE | server → client | `guild_id`, `role` | SV-FR-040 |
 | EVT-022 | 0 | GUILD_ROLE_UPDATE | server → client | `guild_id`, `role` | SV-FR-041 |
 | EVT-023 | 0 | GUILD_ROLE_DELETE | server → client | `guild_id`, `role_id` | SV-FR-042 |
@@ -390,7 +390,8 @@ together with the iOS client (Q-025); APNs is the one optional outside service G
 | 2 | EVT-007 RECONNECT | v1.0.0 | v1.0.0 (frame unchanged) | Sent in fewer cases: not for a second IDENTIFY | A client that reads op 7 as "signed in elsewhere" must not | Q-009; ADR-017 |
 | 9 | API-022 / API-027, ENT-008/009/012/013/022 | REST v2.0.0 | REST v2.1.0 |Migration 000020: DM parent validation/delete triggers; nullable pending upload link with ownership backfill; attachment_ids atomic claim and batched hydration. After a refused down, the schema remains at 20 while golang-migrate marks version 19 dirty: run `migrate force 20` to recover; `force 19` then `up` fails. | Web sends uploaded ids with nonempty text; pending message_id is null; existing linked ids stay strings; down refuses while DM messages or pending attachments exist | Driver E116; Q-017; D-08/D-09/D-22 |
 | 11 | EVT-003 / EVT-006 gateway | v1.0.0 | v1.1.0 (compatible) | READY gains optional presences. RESUME frames unchanged; fresh READY with a new session id signals unavailable replay, sequences restart at 1. Last 100 events per session, retained 5 minutes after disconnect; authorization changes invalidate old history | Web refetches open-channel recent messages after fallback READY. iOS already accepts READY; reconnect catch-up refresh is a follow-up | Driver B3 decision; PR #50 |
-| 24 | API-060 role ordering | REST v2.1.0 | REST v2.2.0 | Additive atomic role-order operation from B6 and public API-049 guild_id preview field from B7 round 2; folded into unreleased 2.2.0 per driver E339 | No envelope or route prefix change; no iOS implementation change | SV-IR-008; issues #64/#66 |
+| 24 | API-060 role ordering | REST v2.1.0 | REST v2.2.0 | Additive atomic role-order operation from B6 and public API-049 guild_id preview field from B7 round 2; and optional public identity on member responses API-033/036/037, folded into unreleased 2.2.0 per driver E339; response required lists clarify existing non-omitempty fields (no wire change), per E359 | No envelope or route prefix change; no iOS implementation change | SV-IR-008; issues #64/#66 |
+| 26 | EVT-018 / EVT-020 member events | v1.0.0 | v1.1.0 (compatible) | Optional public user identity; READY contains guild ids, not members, and is unchanged | Older clients ignore the optional object; iOS unchanged | Driver E347; issue #69 |
 
 ## Revision history
 | Rev | Date | Commit | Mode | Summary |
@@ -419,3 +420,5 @@ together with the iOS client (Q-025); APNs is the one optional outside service G
 | 23 | 2026-11-24T09:13:39-05:00 | 0edca0aaeafa | REVISION | PR #62 round 2: missing/deleted guild status and permission-before-lock; GET-only downloads and lowercase host; manager create positioning and no-room guidance; contract, operational and D-10 drift repaired |
 | 24 | 2026-11-24T12:07:01-05:00 | 6e9507a02345 | REVISION | B7: copied invite routing and server selection; REST contract 2.2.0 and SV-IR-008 version equality through API-060 |
 | 25 | 2026-11-24T12:48:31-05:00 | dcb540ca8410 | REVISION | B7 round 2 (E339): API-049 preview guild_id in unreleased 2.2.0; API-050 unchanged; SV-IR-001/005/007 trace API-060 |
+| 26 | 2026-11-24T13:22:47-05:00 | 2b64e5b68b82 | REVISION | B8 L40: Pilot clause test index; SV-IR-001 documented success criterion; WEB-FR-009 name wording; optional public member identity per E347 |
+| 27 | 2026-11-24T14:31:40-05:00 | 23ec2de281ea | REVISION | B8 round 2: required response fields document existing non-omitempty emission within REST 2.2.0 |

@@ -8,6 +8,7 @@ services:
       - minio-data:/data
 
   api:
+    stop_grace_period: 20s
     build: .
     env_file: .env
     environment:
