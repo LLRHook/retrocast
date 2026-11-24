@@ -24,3 +24,9 @@ func TestP95NearestRank(t *testing.T) {
 		t.Fatal("p95 rank")
 	}
 }
+
+func TestMissingLatencyIsUnavailable(t *testing.T) {
+	if quantile(nil) != nil {
+		t.Fatal("missing samples must not be reported as zero milliseconds")
+	}
+}
