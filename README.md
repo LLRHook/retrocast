@@ -66,10 +66,13 @@ docker compose up --build
 
 This starts the API server and the web client behind Caddy on ports 80 and 443, along with
 PostgreSQL, Redis, MinIO, LiveKit, Prometheus and Grafana. Only Caddy 80/443 and
-LiveKit 7880/7881 plus UDP 50000?50100 are public. Grafana binds to
+LiveKit 7880/7881 plus UDP 50000-50100 are public. Grafana binds to
 `127.0.0.1:3000`; on a remote host use `ssh -L 3000:127.0.0.1:3000 <host>`.
 Set `SERVER_URL=https://<host>` for `retrocast-cli health` and
-`RETROCAST_URL=https://<host>` for `scripts/demo.sh`.
+`RETROCAST_URL=https://<host>` for `scripts/demo.sh`. The demo trusts the exact
+local development hosts `localhost` and `127.0.0.1` without certificate verification
+and prints a warning; every other host retains TLS verification (use
+`CURL_CA_BUNDLE` for a private CA).
 
 MinIO, PostgreSQL, Redis, Prometheus and API 8080 have no host bindings. For
 operator access use `docker compose exec api curl http://minio:9000/minio/health/live`
@@ -89,6 +92,7 @@ and accepts Caddy's local certificate. Set `RETROCAST_PROXY_URL` to change that
 target. Add `http://localhost:5173` to the API's `ALLOWED_ORIGINS` in `.env`
 (and recreate the API container) for the Vite browser origin. Extra browser
 origins are opt-in; separate entries with commas and include scheme and port.
+Use origins without a trailing slash or path.
 The instance's own external origin and native clients without Origin are always
 served. Direct Go development requires an explicitly configured local dependency
 stack; the default compose deliberately keeps dependency ports internal.

@@ -22,6 +22,14 @@ set -euo pipefail
 BASE_URL="${RETROCAST_URL:-https://localhost}"
 API="$BASE_URL/api/v1"
 
+# Caddy uses a private development CA for these exact local hosts. Remote hosts
+# always retain curl's certificate verification (or an operator CURL_CA_BUNDLE).
+CURL_TLS_ARGS=()
+if [[ "$BASE_URL" =~ ^https://(localhost|127\.0\.0\.1)(:[0-9]+)?/?$ ]]; then
+    echo "WARNING: trusting the local development TLS endpoint at $BASE_URL without certificate verification." >&2
+    CURL_TLS_ARGS+=(--insecure)
+fi
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -54,7 +62,7 @@ api_call() {
     fi
 
     local response
-    response=$(curl "${curl_args[@]}" "$url") || die "curl failed for $method $path"
+    response=$(curl "${CURL_TLS_ARGS[@]}" "${curl_args[@]}" "$url") || die "curl failed for $method $path"
 
     http_code=$(echo "$response" | tail -n1)
     BODY=$(echo "$response" | sed '$d')
@@ -78,7 +86,7 @@ json_field() {
 
 echo "=> Waiting for server at $BASE_URL ..."
 for i in $(seq 1 30); do
-    if curl -sf "$BASE_URL/health" > /dev/null 2>&1; then
+    if curl "${CURL_TLS_ARGS[@]}" -sf "$BASE_URL/health" > /dev/null 2>&1; then
         echo "   Server is ready."
         break
     fi
@@ -94,27 +102,27 @@ done
 
 echo "=> Registering user alice ..."
 if api_call POST "/auth/register" '{"username":"alice","password":"password123"}'; then
-    ALICE_TOKEN=$(json_field '.access_token')
-    ALICE_ID=$(json_field '.user.id')
+    ALICE_TOKEN=$(json_field '.data.access_token')
+    ALICE_ID=$(json_field '.data.user.id')
     echo "   Created alice (id=$ALICE_ID)"
 else
     echo "   alice may already exist, logging in ..."
     api_call POST "/auth/login" '{"username":"alice","password":"password123"}' || die "Cannot register or log in as alice"
-    ALICE_TOKEN=$(json_field '.access_token')
-    ALICE_ID=$(json_field '.user.id')
+    ALICE_TOKEN=$(json_field '.data.access_token')
+    ALICE_ID=$(json_field '.data.user.id')
     echo "   Logged in as alice (id=$ALICE_ID)"
 fi
 
 echo "=> Registering user bob ..."
 if api_call POST "/auth/register" '{"username":"bob","password":"password123"}'; then
-    BOB_TOKEN=$(json_field '.access_token')
-    BOB_ID=$(json_field '.user.id')
+    BOB_TOKEN=$(json_field '.data.access_token')
+    BOB_ID=$(json_field '.data.user.id')
     echo "   Created bob (id=$BOB_ID)"
 else
     echo "   bob may already exist, logging in ..."
     api_call POST "/auth/login" '{"username":"bob","password":"password123"}' || die "Cannot register or log in as bob"
-    BOB_TOKEN=$(json_field '.access_token')
-    BOB_ID=$(json_field '.user.id')
+    BOB_TOKEN=$(json_field '.data.access_token')
+    BOB_ID=$(json_field '.data.user.id')
     echo "   Logged in as bob (id=$BOB_ID)"
 fi
 
@@ -178,7 +186,7 @@ ANNOUNCEMENTS_ID=$(create_channel "announcements" | tail -1)
 
 echo "=> Creating invite for guild ..."
 if api_call POST "/guilds/$GUILD_ID/invites" '{"max_uses":10,"max_age_seconds":86400}' "$ALICE_TOKEN"; then
-    INVITE_CODE=$(json_field '.code')
+    INVITE_CODE=$(json_field '.data.code')
     echo "   Invite code: $INVITE_CODE"
 else
     die "Failed to create invite."
@@ -203,12 +211,12 @@ echo "=> Creating 'Moderator' role ..."
 if api_call POST "/guilds/$GUILD_ID/roles" \
     "{\"name\":\"Moderator\",\"color\":3447003,\"permissions\":\"$MOD_PERMS\",\"position\":1}" \
     "$ALICE_TOKEN"; then
-    ROLE_ID=$(json_field '.id')
+    ROLE_ID=$(json_field '.data.id')
     echo "   Created Moderator role (id=$ROLE_ID)"
 else
     echo "   Role creation failed, checking existing roles ..."
     api_call GET "/guilds/$GUILD_ID/roles" "" "$ALICE_TOKEN" || die "Cannot list roles"
-    ROLE_ID=$(echo "$BODY" | jq -r '.[] | select(.name == "Moderator") | .id' | head -1)
+    ROLE_ID=$(echo "$BODY" | jq -r '.data[] | select(.name == "Moderator") | .id' | head -1)
     if [[ -z "$ROLE_ID" || "$ROLE_ID" == "null" ]]; then
         die "Failed to create or find Moderator role."
     fi
@@ -219,7 +227,7 @@ echo "=> Assigning Moderator role to alice ..."
 if api_call PUT "/guilds/$GUILD_ID/members/$ALICE_ID/roles/$ROLE_ID" '' "$ALICE_TOKEN"; then
     echo "   Alice now has the Moderator role."
 else
-    echo "   Role assignment may already exist (skipping)."
+    die "Failed to assign Moderator role."
 fi
 
 # ---------------------------------------------------------------------------
@@ -229,7 +237,7 @@ fi
 send_msg() {
     local channel_id="$1" token="$2" content="$3"
     api_call POST "/channels/$channel_id/messages" \
-        "{\"content\":\"$content\"}" "$token" || true
+        "{\"content\":\"$content\"}" "$token" || die "Failed to send demo message."
 }
 
 echo "=> Sending sample messages in #general ..."
@@ -257,8 +265,8 @@ echo ""
 echo "=== Demo data seeded successfully ==="
 echo ""
 echo "Users:"
-echo "  alice / password123  (id=$ALICE_ID) — guild owner, Moderator"
-echo "  bob   / password123  (id=$BOB_ID)"
+echo "  alice (id=$ALICE_ID) — guild owner, Moderator"
+echo "  bob (id=$BOB_ID)"
 echo ""
 echo "Guild: Retrocast Demo Server (id=$GUILD_ID)"
 echo ""
