@@ -1,6 +1,6 @@
 # Restore drills
 
-## B5c candidate â€” 2026-11-24 (Windows 11, Docker Desktop)
+## B5c candidate — 2026-11-24 (Windows 11, Docker Desktop)
 
 Source baseline: `140c236b08b311b382ac4489771b84ef16fd0aca`; procedure implemented
 in `eb4b921`. Owned compose project: `l30drill`. This is a development drill,
@@ -131,3 +131,11 @@ Restore script exit 0. A newly invited test member registered after these counts
 ## Pilot run 3 — 2026-11-24
 
 Candidate 0f7ee554a0b51d79252ace01ebcb213f5d2b5501, Windows11 Docker Desktop DESKTOP-JRJNV5B. Source l42pilot, fresh target l42restore. Both reused API image sha256:40f45ef0609ccd57988649a333fa76091565a07316b3df51c0fd4652959ad58c and web sha256:8d658ac5fdb4e931ea4ba8fa5d5579377a2f5d06b87554fc673911001554efe6. Documented scheduled wrapper and restore exited0. Paired backup_20261124_145041.sql.gz / minio_20261124_145041.tar.gz; before/after 2 users, 1 guild, 1 message; health200. Fresh invited browser downloaded restored PNG over HTTPS200, 68 bytes. A source message inserted after backup is absent from the target; the prebackup attachment message/file is present. Manual drill proves recovery to the backup point; no installed daily host schedule is claimed. Private scripts/output: evidence/L42/l42-drill.sh, restore.log, restore-counts-before/after.txt, rpo-source/restored.txt and restored-download.txt. See [full validation](../validation/pilot-2026-11-24.md).
+
+## Pilot run 3 round 2 — 2026-11-24
+
+Candidate `511b8cd241fc7fab6a15f9d62364ac8000378104`, DESKTOP-JRJNV5B, Windows 11 / Docker Desktop. The original 0f7ee55 restore/RPO drill is carried by identical Go, storage, migration, compose, Caddy and Dockerfile object ids recorded in `evidence/L42/round2/carry.txt`; it was not rerun on the new candidate.
+
+The documented cron entry itself was installed in an owned sidecar, changing only time fields to two minutes ahead and the documented project placeholder to l42r2open. Captured `crontab -l` uses BACKUP_DIR=/srv/backups/retrocast, the documented scheduled-backup.sh path and append redirection, with no wrapper job or added PATH/COMPOSE_FILE export. It fired at 21:44 UTC. Pair `backup_20261124_214403.sql.gz` / `minio_20261124_214403.tar.gz` passed gzip/tar integrity; the actual cron shell exited 0, observed without altering the job and recorded in backup.log. Private crontab/firing/exit/integrity evidence is under `evidence/L42/round2/`.
+
+This establishes the operator line’s mechanism under cron’s minimal environment, not installation on the actual operator host or 24 elapsed hours. SYS-FR-002 remains Implemented; owner action is the actual daily host schedule and the first two paired backups observed over 24 hours. See [validation record](../validation/pilot-2026-11-24.md).
