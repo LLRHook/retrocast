@@ -1842,6 +1842,43 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /guilds/{guildId}/roles/order:
+    put:
+      summary: Atomically reorder roles (API-060)
+      operationId: reorderRoles
+      parameters:
+        - {name: guildId, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expected, order]
+              properties:
+                expected:
+                  type: array
+                  items:
+                    type: object
+                    required: [id, position]
+                    properties:
+                      id: {type: string}
+                      position: {type: integer}
+                order: {type: array, items: {type: string}}
+      responses:
+        '200':
+          description: Roles after commit
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: {type: array, items: {$ref: '#/components/schemas/Role'}}
+        '409': {description: Snapshot changed; refetch roles}
+        '403': {description: Permission or hierarchy refusal}
+        '400': {description: Invalid role order}
+
   /guilds/{guildId}/roles/{roleId}:
     parameters:
       - name: guildId

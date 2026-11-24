@@ -193,8 +193,8 @@ func TestContractOpenAPI(t *testing.T) {
 			}
 		}
 	}
-	if count != 59 {
-		t.Fatalf("expected 59 operations, got %d", count)
+	if count != 60 {
+		t.Fatalf("expected 60 operations, got %d", count)
 	}
 }
 
@@ -257,6 +257,7 @@ func TestContractRouteInventory(t *testing.T) {
 	// Independent, explicit cases prevent a newly registered route from silently
 	// bypassing contract coverage. Parameter names can differ in router and spec.
 	cases := map[string]int{
+		"PUT /api/v1/guilds/:param/roles/order":                               200,
 		"PUT /api/v1/users/@me/password":                                      200,
 		"POST /api/v1/auth/register":                                          200,
 		"POST /api/v1/auth/login":                                             200,
