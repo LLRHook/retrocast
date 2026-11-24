@@ -6,6 +6,8 @@ import (
 	"github.com/victorivanov/retrocast/internal/models"
 	"github.com/victorivanov/retrocast/internal/permissions"
 	"github.com/victorivanov/retrocast/internal/service"
+	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -17,6 +19,7 @@ func TestRoleReorder(t *testing.T) {
 		stale bool
 		want  error
 	}{
+		{"no room", 200, []string{"2", "1", "4", "3"}, false, service.ErrConflict},
 		{"tied", 200, []string{"2", "1", "3"}, false, nil},
 		{"target highest", 200, []string{"1", "3", "2"}, false, service.ErrRoleHierarchy},
 		{"grant", 200, []string{"2", "1", "3"}, false, service.ErrForbidden},
@@ -30,6 +33,9 @@ func TestRoleReorder(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			current := []models.Role{{ID: 0, GuildID: 1000, IsDefault: true}, {ID: 1, GuildID: 1000, Position: 1}, {ID: 2, GuildID: 1000, Position: 2}, {ID: 3, GuildID: 1000, Position: 3}}
+			if tc.name == "no room" {
+				current = append(current, models.Role{ID: 4, GuildID: 1000, Position: 1})
+			}
 			if tc.name == "tied" {
 				current[2].Position = 1
 			}
@@ -59,6 +65,12 @@ func TestRoleReorder(t *testing.T) {
 				expected[1].Position = 9
 			}
 			_, err := svc.ReorderRoles(context.Background(), 1000, tc.actor, expected, tc.order)
+			if tc.name == "no room" {
+				var se *service.ServiceError
+				if !errors.As(err, &se) || se.Code != "ROLE_ORDER_NO_ROOM" || !strings.Contains(se.Message, "owner") {
+					t.Fatalf("want owner room message, got %v", err)
+				}
+			}
 			if !errors.Is(err, tc.want) {
 				t.Fatalf("got %v want %v", err, tc.want)
 			}
@@ -71,6 +83,28 @@ func TestRoleReorder(t *testing.T) {
 			}
 			if tc.want == nil && writes != wantWrites {
 				t.Fatalf("writes %d", writes)
+			}
+		})
+	}
+}
+
+func TestReorderRolesMissingBodyFields(t *testing.T) {
+	for _, body := range []string{"", "{}", `{"expected":[]}`, `{"order":[]}`, `{"expected":null,"order":[]}`} {
+		t.Run(body, func(t *testing.T) {
+			guilds := &mockGuildRepo{GetByIDFn: func(context.Context, int64) (*models.Guild, error) { return &models.Guild{ID: 1, OwnerID: 100}, nil }}
+			roles := &mockRoleRepo{GetByGuildIDFn: func(context.Context, int64) ([]models.Role, error) {
+				return []models.Role{{ID: 1, GuildID: 1, IsDefault: true}}, nil
+			}}
+			h := newRoleHandler(guilds, roles, &mockMemberRepo{}, &mockChannelRepo{}, &mockChannelOverrideRepo{}, &mockGateway{})
+			c, rec := newTestContext(http.MethodPut, "/api/v1/guilds/1/roles/order", strings.NewReader(body))
+			c.SetParamNames("id")
+			c.SetParamValues("1")
+			setAuthUser(c, 100)
+			if err := h.ReorderRoles(c); err != nil {
+				t.Fatal(err)
+			}
+			if rec.Code != 400 || !strings.Contains(rec.Body.String(), "INVALID_ORDER") {
+				t.Fatalf("want 400 INVALID_ORDER got %d %s", rec.Code, rec.Body.String())
 			}
 		})
 	}

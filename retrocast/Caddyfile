@@ -3,7 +3,7 @@
     handle /retrocast/* {
         header X-Content-Type-Options nosniff
         header Content-Security-Policy "sandbox allow-downloads"
-        @download method GET HEAD
+        @download method GET
         handle @download {
             reverse_proxy minio:9000 {
                 header_up Host {http.request.host}

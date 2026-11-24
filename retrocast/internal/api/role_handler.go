@@ -232,6 +232,9 @@ func (h *RoleHandler) ReorderRoles(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return errorJSON(c, http.StatusBadRequest, "INVALID_BODY", "invalid request body")
 	}
+	if req.Expected == nil || req.Order == nil {
+		return errorJSON(c, http.StatusBadRequest, "INVALID_ORDER", "expected and order arrays are required")
+	}
 	roles, err := h.service.ReorderRoles(c.Request().Context(), guildID, auth.GetUserID(c), req.Expected, req.Order)
 	if err != nil {
 		return mapServiceError(c, err)

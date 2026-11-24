@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { useModeration } from "@/hooks/useModeration";
+import { nextRolePosition } from "@/lib/role-order";
 import { api } from "@/lib/api";
 import { useRolesStore } from "@/stores/roles";
 import type { Role } from "@/types";
@@ -71,8 +73,10 @@ function RoleForm({
   role,
   guildId,
   onCancel,
+  createPosition,
 }: {
   role: Role | null;
+  createPosition: number | null;
   guildId: string;
   onCancel: () => void;
 }) {
@@ -108,6 +112,10 @@ function RoleForm({
     setSaving(true);
     setError("");
     try {
+      if (!role && createPosition === null) {
+        setError("No free role position below your highest role. Ask the server owner to make room.");
+        return;
+      }
       const payload = {
         name: trimmed,
         color: hexColorToInt(color),
@@ -123,7 +131,7 @@ function RoleForm({
       } else {
         const created = await api.post<Role>(
           `/api/v1/guilds/${guildId}/roles`,
-          payload,
+          {...payload, position: createPosition},
         );
         setRole(created);
       }
@@ -251,6 +259,8 @@ export default function RoleEditor({ guildId }: RoleEditorProps) {
       await fetchRoles(guildId);
     } finally { setMoving(false); }
   }
+  const { isOwner, highestRolePosition } = useModeration(guildId);
+  const createPosition = nextRolePosition(roles, isOwner, highestRolePosition);
   const fetchRoles = useRolesStore((s) => s.fetchRoles);
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [creating, setCreating] = useState(false);
@@ -276,6 +286,7 @@ export default function RoleEditor({ guildId }: RoleEditorProps) {
         </button>
         <RoleForm
           role={selectedRole}
+          createPosition={createPosition}
           guildId={guildId}
           onCancel={() => {
             setSelectedRole(null);

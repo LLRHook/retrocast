@@ -48,8 +48,9 @@ returned HTTP 200 with `{"status":"ok"}`. Counts matched as above.
 The restored PDF downloaded using authenticated MinIO `mc cat` from the restored
 object path and matched the original 38 bytes exactly. Its SHA-256 is
 `10afbab7fb3a602c939a27f262f731646584016521885a9eefee4d88e5339a0c`. This verifies stored file
-recovery; D-10 (compose-internal client attachment URLs) remains outside B5c.
-No client-facing download claim is made.
+recovery. That B5c drill used direct storage access; B6 subsequently fixed D-10
+with public HTTPS signed GET URLs. Its browser PNG/PDF evidence is recorded separately
+in PR #62; this historical restore drill does not itself claim a browser download.
 
 The exact scheduled wrapper command ran successfully, producing both archives.
 Retention fixture: both archive types with mtimes 31 days old were removed;

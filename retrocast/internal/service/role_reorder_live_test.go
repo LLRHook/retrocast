@@ -116,4 +116,15 @@ func TestRoleReorderConcurrentAndRollback(t *testing.T) {
 		t.Fatalf("legacy update dispatched before commit: err=%v events=%d", err, len(gw.events))
 	}
 
+	_, err = svc.ReorderRoles(ctx, guild, owner, []RolePosition{{ID: managerRole, Position: 10}, {ID: a, Position: 2}, {ID: b, Position: 1}, {ID: def, Position: 0}}, []string{strconv.FormatInt(a, 10), strconv.FormatInt(b, 10), strconv.FormatInt(managerRole, 10)})
+	if err == nil || !strings.Contains(err.Error(), "fixture failure") || len(gw.events) != 2 {
+		t.Fatalf("reorder dispatched before commit: err=%v events=%d", err, len(gw.events))
+	}
+	exec(`DROP TRIGGER l34_reorder_fail ON roles`)
+	exec(fmt.Sprintf(`CREATE CONSTRAINT TRIGGER l34_reorder_fail AFTER INSERT ON roles DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (NEW.guild_id=%d) EXECUTE FUNCTION l34_reorder_fail()`, guild))
+	_, err = svc.CreateRole(ctx, guild, owner, "b", 0, 0, 3)
+	if err == nil || !strings.Contains(err.Error(), "fixture failure") || len(gw.events) != 2 {
+		t.Fatalf("create dispatched before commit: err=%v events=%d", err, len(gw.events))
+	}
+
 }

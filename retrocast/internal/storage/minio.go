@@ -21,6 +21,7 @@ type MinIOClient struct {
 
 // NewMinIOClient creates a MinIO client and ensures the bucket exists.
 func NewMinIOClient(endpoint, accessKey, secretKey, bucket, domain, region string) (*MinIOClient, error) {
+	domain = strings.ToLower(domain)
 	if domain == "" || strings.ContainsAny(domain, ":/?#@ ") {
 		return nil, fmt.Errorf("DOMAIN must be a host without scheme, path or port")
 	}

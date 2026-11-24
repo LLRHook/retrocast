@@ -1875,7 +1875,9 @@ paths:
                 required: [data]
                 properties:
                   data: {type: array, items: {$ref: '#/components/schemas/Role'}}
-        '409': {description: Snapshot changed; refetch roles}
+        '401': {description: Authentication required}
+        '404': {description: Missing or deleted guild}
+        '409': {description: Snapshot changed or owner must make room below actor boundary}
         '403': {description: Permission or hierarchy refusal}
         '400': {description: Invalid role order}
 

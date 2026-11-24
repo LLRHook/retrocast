@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"errors"
+	"github.com/jackc/pgx/v5"
 	"github.com/victorivanov/retrocast/internal/permissions"
 	"strconv"
 
@@ -390,10 +392,13 @@ type RolePosition struct {
 
 // ReorderRoles serializes role writes and checks the snapshot before any update.
 func (s *RoleService) ReorderRoles(ctx context.Context, guildID, actorID int64, expected []RolePosition, order []string) ([]models.Role, error) {
+	if err := s.perms.RequireGuildPermissionByPerm(ctx, guildID, actorID, permissions.PermManageRoles); err != nil {
+		return nil, err
+	}
 	var result []models.Role
 	var changed []models.Role
 	err := database.InTransaction(ctx, s.roles, func(ctx context.Context) error {
-		if err := database.LockGuildForModeration(ctx, s.roles, guildID); err != nil {
+		if err := s.lockRoleGuild(ctx, guildID); err != nil {
 			return err
 		}
 		if err := s.perms.RequireGuildPermissionByPerm(ctx, guildID, actorID, permissions.PermManageRoles); err != nil {
@@ -453,6 +458,9 @@ func (s *RoleService) ReorderRoles(ctx context.Context, guildID, actorID int64, 
 				position = r.Position
 			}
 			if !owner && r.Position < highest && position >= highest {
+				if last < highest {
+					return Conflict("ROLE_ORDER_NO_ROOM", "No free role position below your highest role. Ask the server owner to make room.")
+				}
 				return RoleHierarchyError("cannot move a role at or above your highest role position")
 			}
 			if position < last {
@@ -493,9 +501,12 @@ func (s *RoleService) ReorderRoles(ctx context.Context, guildID, actorID int64, 
 }
 
 func (s *RoleService) CreateRole(ctx context.Context, guildID, actorID int64, name string, color int, permBits int64, position int) (*models.Role, error) {
+	if err := s.perms.RequireGuildPermissionByPerm(ctx, guildID, actorID, permissions.PermManageRoles); err != nil {
+		return nil, err
+	}
 	var result *models.Role
 	err := database.InTransaction(ctx, s.roles, func(ctx context.Context) error {
-		if err := database.LockGuildForModeration(ctx, s.roles, guildID); err != nil {
+		if err := s.lockRoleGuild(ctx, guildID); err != nil {
 			return err
 		}
 		var err error
@@ -509,9 +520,12 @@ func (s *RoleService) CreateRole(ctx context.Context, guildID, actorID int64, na
 }
 
 func (s *RoleService) UpdateRole(ctx context.Context, guildID, actorID, roleID int64, name *string, color *int, permBits *int64, position *int) (*models.Role, error) {
+	if err := s.perms.RequireGuildPermissionByPerm(ctx, guildID, actorID, permissions.PermManageRoles); err != nil {
+		return nil, err
+	}
 	var result *models.Role
 	err := database.InTransaction(ctx, s.roles, func(ctx context.Context) error {
-		if err := database.LockGuildForModeration(ctx, s.roles, guildID); err != nil {
+		if err := s.lockRoleGuild(ctx, guildID); err != nil {
 			return err
 		}
 		var err error
@@ -525,14 +539,26 @@ func (s *RoleService) UpdateRole(ctx context.Context, guildID, actorID, roleID i
 }
 
 func (s *RoleService) DeleteRole(ctx context.Context, guildID, actorID, roleID int64) error {
+	if err := s.perms.RequireGuildPermissionByPerm(ctx, guildID, actorID, permissions.PermManageRoles); err != nil {
+		return err
+	}
 	err := database.InTransaction(ctx, s.roles, func(ctx context.Context) error {
-		if err := database.LockGuildForModeration(ctx, s.roles, guildID); err != nil {
+		if err := s.lockRoleGuild(ctx, guildID); err != nil {
 			return err
 		}
 		return s.deleteRole(ctx, guildID, actorID, roleID)
 	})
 	if err == nil {
 		s.gateway.DispatchToGuild(guildID, gateway.EventGuildRoleDelete, map[string]any{"guild_id": strconv.FormatInt(guildID, 10), "role_id": strconv.FormatInt(roleID, 10)})
+	}
+	return err
+}
+
+// lockRoleGuild maps a deletion racing the preflight permission check to the REST contract.
+func (s *RoleService) lockRoleGuild(ctx context.Context, guildID int64) error {
+	err := database.LockGuildForModeration(ctx, s.roles, guildID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return NotFound("NOT_FOUND", "guild not found")
 	}
 	return err
 }

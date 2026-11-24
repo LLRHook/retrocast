@@ -181,7 +181,7 @@ are as documented in OpenAPI; where the code differs, the Notes column says so.
 | API-020 | updateChannel | PATCH /channels/{channelId} | 200 channel | yes | | SV-FR-015 |
 | API-021 | deleteChannel | DELETE /channels/{channelId} | 204 | — | | SV-FR-015 |
 | API-022 | sendMessage | POST /channels/{channelId}/messages | 201 message | yes | Optional attachment_ids: decimal-string upload ids; requires ATTACH_FILES when supplied; atomic owner/channel/unlinked claim; 400 INVALID_ATTACHMENTS on invalid claims; content remains 1–2000 bytes | SV-FR-025, SV-FR-055 |
-| API-023 | getMessages | GET /channels/{channelId}/messages | 200 messages | yes | Attachments batched with each page; empty attachments is []; existing internal URLs (D-10) | SV-FR-027, SV-FR-052 |
+| API-023 | getMessages | GET /channels/{channelId}/messages | 200 messages | yes | Attachments batched with each page; empty attachments is []; fresh 15-minute public HTTPS signed GET URLs (D-10 fixed) | SV-FR-027, SV-FR-052 |
 | API-024 | getMessage | GET /channels/{channelId}/messages/{messageId} | 200 message | yes | | SV-FR-028 |
 | API-025 | editMessage | PATCH /channels/{channelId}/messages/{messageId} | 200 message | yes | | SV-FR-029 |
 | API-026 | deleteMessage | DELETE /channels/{channelId}/messages/{messageId} | 204 | — | | SV-FR-030 |
@@ -217,7 +217,7 @@ are as documented in OpenAPI; where the code differs, the Notes column says so.
 | API-056 | joinVoice | POST /channels/{channelId}/voice/join | 200 token + voice states | yes | no LiveKit URL in the response | SV-FR-048, SV-IR-006 |
 | API-057 | leaveVoice | POST /channels/{channelId}/voice/leave | 204 | — | | SV-FR-049 |
 | API-058 | getVoiceStates | GET /channels/{channelId}/voice/states | 200 voice states | yes | | SV-FR-050 |
-| API-060 | reorderRoles | PUT /guilds/{guildId}/roles/order | 200 roles | yes | Complete `expected: [{id: string, position: int}]` snapshot plus `order: [id: string]` ascending, all non-default roles exactly once. Guild row lock; 409 STALE_ROLES on mismatch; atomic hierarchy/grant checked changes; @everyone fixed; one GUILD_ROLE_UPDATE per changed role after commit. | WEB-FR-013, SV-FR-041 |
+| API-060 | reorderRoles | PUT /guilds/{guildId}/roles/order | 200 roles | yes | Complete `expected: [{id: string, position: int}]` snapshot plus `order: [id: string]` ascending, all non-default roles exactly once. Guild row lock; 409 STALE_ROLES on mismatch; missing arrays return 400 INVALID_ORDER; missing/deleted guild returns 404 NOT_FOUND; non-members retain 403; ROLE_ORDER_NO_ROOM asks the owner to make room; atomic hierarchy/grant checked changes; @everyone fixed; one GUILD_ROLE_UPDATE per changed role after commit. | WEB-FR-013, SV-FR-041 |
 | API-059 | changePassword | PUT /users/@me/password | 200 tokens + user | yes | Built; body `current_password`, `new_password`; 403 `INVALID_CREDENTIALS`, 400 `INVALID_PASSWORD`; 503 SESSION_UNAVAILABLE on revocation/token-store failure; credential rate limit | SV-FR-060, SV-FR-061 |
 
 Routes outside `/api/v1`: `GET /health`, `GET /metrics` (Prometheus), `GET /docs`,
@@ -264,6 +264,10 @@ Codes added in rev 2 (registration codes implemented in PR #54; CANNOT_KICK_SELF
 
 | Code | Status | Meaning | Requirement |
 |---|---|---|---|
+| `STALE_ROLES` | 409 | API-060 snapshot no longer matches; refetch roles | WEB-FR-013, SV-FR-041 |
+| `INVALID_ORDER` | 400 | API-060 body/required arrays missing, or duplicate, unknown, default or incomplete movable IDs | WEB-FR-013, SV-FR-041 |
+| `ROLE_ORDER_NO_ROOM` | 409 | Too many roles below the actor boundary to normalize safely; ask the owner to make room | WEB-FR-013, SV-FR-041 |
+| `URL_FAILED` | 500 | Attachment download URL could not be signed | SV-FR-052 |
 | `INVITE_REQUIRED` | 403 | Mode `invite` and no `invite_code` | SV-FR-063, SV-FR-065 |
 | `INVALID_INVITE` | 403 | The invite code at registration is unknown, expired, revoked or used up | SV-FR-063 |
 | `REGISTRATION_CLOSED` | 403 | Mode `closed` | SV-FR-064 |
@@ -349,7 +353,7 @@ Downloads use fresh pre-signed GET URLs for 15 minutes on `https://{DOMAIN}/retr
 `DOMAIN` is one hostname (default `localhost`, no scheme, path or port), passed to Caddy
 and API by Compose. `MINIO_REGION` defaults to `us-east-1` for both MinIO and its clients;
 a separate fixed-region public signer makes no network requests when minting URLs.
-Caddy preserves Host and path, exposes only GET/HEAD, and sends CSP `sandbox allow-downloads` (scripts and same-origin privileges remain disabled) and
+Caddy preserves Host and path, exposes only GET, and sends CSP `sandbox allow-downloads` (scripts and same-origin privileges remain disabled) and
 `nosniff`. Exact allowed image types render inline; all other types force attachment
 disposition. History, single-message and search responses mint URLs locally on each fetch.
 JSON remains compatible, including absolute string `url`. Signed links expire; reload history to mint fresh links. Upload presigning remains Later

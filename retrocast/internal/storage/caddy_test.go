@@ -68,6 +68,7 @@ func TestCaddySignedDownloads(t *testing.T) {
 		get("GET", u.String(), 403)
 		get("GET", "https://localhost/retrocast/"+key, 403)
 		get("PUT", raw, 405)
+		get("HEAD", raw, 405)
 		short, err := m.signer.PresignedGetObject(context.Background(), m.bucket, key, time.Second, nil)
 		if err != nil {
 			t.Fatal(err)
