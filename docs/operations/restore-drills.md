@@ -1,6 +1,6 @@
 # Restore drills
 
-## B5c candidate — 2026-11-24 (Windows 11, Docker Desktop)
+## B5c candidate â€” 2026-11-24 (Windows 11, Docker Desktop)
 
 Source baseline: `140c236b08b311b382ac4489771b84ef16fd0aca`; procedure implemented
 in `eb4b921`. Owned compose project: `l30drill`. This is a development drill,
@@ -112,3 +112,17 @@ relation test. These replace the false-positive round-1 regression claims found
 by L31. Perf main exit-gate mutants P4/P5 remain a documented test limitation;
 no perf or production gateway behavior changed, so the accepted performance run
 was retained without re-running it.
+
+
+## L36 Pilot candidate — 2026-11-24
+
+Candidate `26ebe80e934be286300d7838f2f728e2eb0933e6`, Windows 11 / Docker Desktop; source l36pilot, isolated empty-volume target l36restore, identical built API/web images. Paired backups `backup_20261124_112000.sql.gz` and `minio_20261124_112000.tar.gz`; backup taken with API stopped, using documented scripts/backup.sh and scripts/restore.sh. Backup artifacts were private temporary files, removed after the drill.
+
+| Check | Before backup | After restore |
+|---|---|---|
+| Users | 2 | 2 |
+| Guilds | 1 | 1 |
+| Messages | 1 | 1 |
+| Health | 200 | 200 |
+
+Restore script exit 0. A newly invited test member registered after these counts were compared; history hydrated the original message and its PNG, decoded inline and downloaded 68 bytes with HTTP 200 over HTTPS Caddy using a fresh signed URL. Subsequent history-paging fixtures are not part of the before/after comparison. No user stack or volume was touched. No daily scheduler or 24-hour RPO measurement was performed. Raw evidence: `.git/agent-handoffs/driver-rc-revive/evidence/L36/restore.log`, `restore-counts-before.txt`, `restore-counts-after.txt`, `restored-client-download.txt/png`, `restored-download.txt`, `l36-drill.sh`. See [full validation](../validation/pilot-2026-11-24.md).
