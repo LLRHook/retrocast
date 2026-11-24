@@ -1,4 +1,4 @@
-﻿import { createRequire } from 'node:module';
+import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -623,6 +623,38 @@ test('Pilot uncached typing member fetches the public member endpoint',async()=>
  const {default:Indicator}=await component('TypingIndicator',{react:effects,'@/stores/members':m.url,'@/stores/users':u.url,'@/stores/typing':t.url,'@/stores/auth':a.url,'@/stores/guilds':g.url});Indicator({channelId:'c'});(await import(effects)).effect();assert.deepEqual(calls,[['g','300']]);
  u.module.setState({users:new Map([['300',{username:'carol',display_name:null}]])});calls.length=0;const tree=Indicator({channelId:'c'});(await import(effects)).effect();assert.deepEqual(calls,[]);assert.ok(nodes(tree).some(n=>Array.isArray(n.props?.children)&&n.props.children.includes('carol is typing...')));
 });
+
+
+test('Typing member lookup caches 404 and 403 across twenty unrelated updates',async()=>{
+ for(const status of [404,403]) await checkTypingLookup(status);
+});
+test('Typing member without public user is fetched once across store changes',async()=>{
+ await checkTypingLookup(200);
+});
+async function checkTypingLookup(status) {
+ const zustand=JSON.stringify(pathToFileURL(require.resolve('zustand')).href);
+ const usersUrl=compile(readFileSync('src/stores/users.ts','utf8').replace('"zustand"',zustand),'r2-users-'+status);
+ const {useUsersStore:u}=await import(usersUrl);
+ const memberSource=readFileSync('src/stores/members.ts','utf8').replace('"zustand"',zustand).replace('"@/lib/api"',JSON.stringify(apiUrl)).replace('"@/stores/users"',JSON.stringify(usersUrl));
+ const {useMembersStore:m}=await import(compile(memberSource,'r2-members-'+status));
+ const hooksUrl2=compile('export let effect,deps;export const useEffect=(f,d)=>{effect=f;deps=d};','r2-effect-'+status),effect=await import(hooksUrl2);
+ globalThis.l40R2LookupStores={members:m,users:u};
+ const wrap=(name,store)=>compile('export const '+name+'=sel=>sel(globalThis.l40R2LookupStores.'+store+'.getState());','r2-wrap-'+store+'-'+status);
+ const typing=await storeModule('useTypingStore',{typingByChannel:new Map([['c',new Map([['300',{timestamp:Date.now()}]])]])});
+ const a=await storeModule('useAuthStore',{user:{id:'100'}}),g=await storeModule('useGuildsStore',{selectedGuildId:'g'});
+ const {default:Indicator}=await component('TypingIndicator',{react:hooksUrl2,'@/stores/members':wrap('useMembersStore','members'),'@/stores/users':wrap('useUsersStore','users'),'@/stores/typing':typing.url,'@/stores/auth':a.url,'@/stores/guilds':g.url});
+ let calls=0,active=true,previous;
+ globalThis.fetch=async url=>{calls++;assert.ok(url.endsWith('/guilds/g/members/300'));await new Promise(setImmediate);return status===200?Response.json({data:{guild_id:'g',user_id:'300',roles:[]}}):Response.json({error:{code:'NOT_FOUND',message:'gone'}},{status})};
+ const commit=()=>{if(!active)return;Indicator({channelId:'c'});const changed=!previous||effect.deps.some((x,i)=>!Object.is(x,previous[i]));previous=effect.deps;if(changed)effect.effect()};
+ const schedule=()=>setImmediate(commit),unsub=[m.subscribe(schedule),u.subscribe(schedule)];
+ const flush=async()=>{for(let i=0;i<5;i++)await new Promise(setImmediate)};
+ try {
+ commit();await flush();
+ for(let i=0;i<20;i++){u.getState().cacheUser('other'+i,{username:'other',display_name:null,avatar_hash:null});await flush()}
+ assert.equal(calls,1,'lookup must not repeat for '+status);
+ if(status!==200){const now=Date.now;try{Date.now=()=>now()+8001;await m.getState().fetchMember('g','300').catch(()=>{});assert.equal(calls,2,'negative cache must allow a later typing entry to retry')}finally{Date.now=now}}
+ } finally {active=false;unsub.forEach(fn=>fn());await flush();delete globalThis.l40R2LookupStores}
+}
 
 } catch (error) {
  cleanup();

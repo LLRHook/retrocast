@@ -23,7 +23,7 @@ export default function TypingIndicator({
     if (!selectedGuildId || !typingMap) return;
     for (const userId of typingMap.keys()) {
       const member = membersByGuild.get(selectedGuildId)?.get(userId);
-      if (userId !== currentUserId && !member?.nickname && !member?.user && !users.has(userId)) {
+      if (userId !== currentUserId && !member && !users.has(userId)) {
         void fetchMember(selectedGuildId, userId).catch(() => {});
       }
     }

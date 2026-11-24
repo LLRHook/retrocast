@@ -12,6 +12,8 @@ interface MembersState {
 }
 
 const memberFlights = new Map<string, Promise<void>>();
+const failedMemberLookups = new Map<string, number>();
+const LOOKUP_RETRY_DELAY = 8000;
 
 export const useMembersStore = create<MembersState>()((set, get) => ({
   membersByGuild: new Map(),
@@ -46,10 +48,17 @@ export const useMembersStore = create<MembersState>()((set, get) => ({
 
   fetchMember: (guildId, userId) => {
     const key = `${guildId}/${userId}`;
+    const failedUntil = failedMemberLookups.get(key);
+    if (failedUntil && failedUntil > Date.now()) return Promise.resolve();
+    failedMemberLookups.delete(key);
     const pending = memberFlights.get(key);
     if (pending) return pending;
     const flight = api.get<Member>(`/api/v1/guilds/${guildId}/members/${userId}`)
       .then(member => get().setMember(member))
+      .catch((error: unknown) => {
+        failedMemberLookups.set(key, Date.now() + LOOKUP_RETRY_DELAY);
+        throw error;
+      })
       .finally(() => memberFlights.delete(key));
     memberFlights.set(key, flight);
     return flight;
