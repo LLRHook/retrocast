@@ -127,3 +127,10 @@ func TestTransportNonHeartbeatTrafficStillTimesOut(t *testing.T) {
 		t.Fatal("non-heartbeat frames bypassed existing heartbeat timeout")
 	}
 }
+
+func TestProductionReadWaitCoversHeartbeatGrace(t *testing.T) {
+	c := newConnection(nil, nil)
+	if c.timing.readWait < c.timing.heartbeatInterval+c.timing.heartbeatTimeout {
+		t.Fatal("production read wait must cover heartbeat interval and grace")
+	}
+}

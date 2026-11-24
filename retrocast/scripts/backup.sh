@@ -26,8 +26,8 @@ echo "MinIO backup saved: ${MINIO_FILE}"
 
 # Retention: delete backups older than 30 days
 echo "Cleaning up backups older than ${RETENTION_DAYS} days..."
-find "${BACKUP_DIR}" -name "backup_*.sql.gz" -mtime +${RETENTION_DAYS} -delete
-find "${BACKUP_DIR}" -name "minio_*.tar.gz" -mtime +${RETENTION_DAYS} -delete
+find "${BACKUP_DIR}" -maxdepth 1 -type f -name "backup_*.sql.gz" -mtime +${RETENTION_DAYS} -delete
+find "${BACKUP_DIR}" -maxdepth 1 -type f -name "minio_*.tar.gz" -mtime +${RETENTION_DAYS} -delete
 
 # Summary
 DB_SIZE=$(du -h "${DB_FILE}" | cut -f1)
