@@ -36,6 +36,7 @@ func TestPermissionFailureForcesResyncAndRetries(t *testing.T) {
 		t.Fatal("failed session still open")
 	}
 	m.unregister(old)
+	m.DispatchToGuild(1, EventGuildMemberUpdate, "invalidation after forced resync")
 	c := newConnection(nil, m)
 	defer c.Close()
 	token, _ := m.tokens.GenerateAccessToken(100)
