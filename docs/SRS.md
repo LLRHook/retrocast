@@ -2,7 +2,7 @@
 
 Conforms to the SRS content outline of ISO/IEC/IEEE 29148:2018 §9.6.
 Related: [Product Brief](PRODUCT_BRIEF.md) · [Data Contracts](DATA_CONTRACTS.md) · [Architecture](ARCHITECTURE.md)
-Status: Baselined (rev 6)
+Status: Baselined (rev 7)
 
 > **Rev 2 (2026-11-23).** Rev 1 was written unattended from repository evidence. On
 > 2026-11-23 Victor Ivanov accepted every recommendation of the product brief (Q-001–Q-034,
@@ -265,3 +265,4 @@ ARCHITECTURE §8.
 | 3 | 2026-11-23T15:35:12-05:00 | 8cbf60de297e | REVISION | Review fixes (PR #25): Pilot exit includes D-08 and D-09 (RISK-002, Q-003) |
 | 5 | 2026-11-23T16:25:23-05:00 | 7af05226f577 | REVISION | PR #44 round 2: SV-FR-078 grant limits, fixed default-role position, API notes and restored evidence |
 | 6 | 2026-11-23T19:23:21-05:00 | f3f6d6f7bafd | REVISION | B2b: migration 000020 repairs DM parent integrity and pending attachment linking; Q-017 types and D-31 route binding fixed; storage/retention limits and Later delivery retained |
+| 7 | 2026-11-23T23:28:58-05:00 | 2f78d18e5e62 | REVISION | PR #53 round 2: supported LiveKit UDP range; local demo TLS and standalone proxy; deployment drift and requirement provenance repaired; Redis deadline regression |

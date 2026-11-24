@@ -122,3 +122,4 @@ Server logging is SV-NFR-006; metrics are SV-NFR-013; scraping and dashboards ar
 | 2 | 2026-11-23T15:17:07-05:00 | 701009f47d68 | REVISION | Added SYS-FR-001–SYS-FR-004, SYS-NFR-006, SYS-NFR-007; performance, RPO and licence decisions; SYS-CON-001 Partial (D-25) |
 | 3 | 2026-11-23T22:54:35-05:00 | f4e6409e92a2 | REVISION | PR #53: deployment exposure, origins, outage policy, invite limit, LiveKit defaults and raw OpenAPI; D-10 and API-059 remain separate |
 | 4 | 2026-11-23T22:56:00-05:00 | 23fa99aabf34 | REVISION | Correct delivery columns, retain requirement statements and update PR #53 evidence |
+| 5 | 2026-11-23T23:28:58-05:00 | 2f78d18e5e62 | REVISION | PR #53 round 2: supported LiveKit UDP range; local demo TLS and standalone proxy; deployment drift and requirement provenance repaired; Redis deadline regression |
