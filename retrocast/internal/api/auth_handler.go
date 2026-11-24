@@ -119,3 +119,19 @@ func (h *AuthHandler) Logout(c echo.Context) error {
 // TokenService returns the auth token service for middleware use.
 // This is exposed through the Dependencies struct in router.go.
 var _ = auth.GetUserID // ensure auth import is used
+
+// ChangePassword handles API-059 with the standard v2 envelope.
+func (h *AuthHandler) ChangePassword(c echo.Context) error {
+	var req struct {
+		Current string `json:"current_password"`
+		Next    string `json:"new_password"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return Error(c, http.StatusBadRequest, "INVALID_BODY", "invalid request body")
+	}
+	result, err := h.service.ChangePassword(c.Request().Context(), auth.GetUserID(c), req.Current, req.Next)
+	if err != nil {
+		return mapServiceError(c, err)
+	}
+	return Success(c, http.StatusOK, authResponse{AccessToken: result.AccessToken, RefreshToken: result.RefreshToken, User: result.User})
+}

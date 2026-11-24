@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	goredis "github.com/redis/go-redis/v9"
@@ -50,40 +51,97 @@ const (
 	typingTTL          = 10 * time.Second
 )
 
-// StoreRefreshToken stores a refresh token mapped to a user ID with an expiry.
-func (c *Client) StoreRefreshToken(ctx context.Context, token string, userID int64, expiry time.Duration) error {
-	return c.rdb.Set(ctx, refreshTokenPrefix+token, userID, expiry).Err()
-}
-
-// GetRefreshTokenUserID returns the user ID associated with a refresh token.
-func (c *Client) GetRefreshTokenUserID(ctx context.Context, token string) (int64, error) {
-	val, err := c.rdb.Get(ctx, refreshTokenPrefix+token).Result()
+// RefreshGeneration returns the revocation epoch (legacy accounts start at zero).
+func (c *Client) RefreshGeneration(ctx context.Context, userID int64) (int64, error) {
+	val, err := c.rdb.Get(ctx, fmt.Sprintf("refresh_gen:%d", userID)).Int64()
 	if err == goredis.Nil {
-		return 0, fmt.Errorf("refresh token not found")
+		return 0, nil
 	}
-	if err != nil {
-		return 0, fmt.Errorf("getting refresh token: %w", err)
-	}
-
-	userID, err := strconv.ParseInt(val, 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("parsing user ID: %w", err)
-	}
-	return userID, nil
+	return val, err
 }
 
-// ConsumeRefreshTokenUserID atomically retrieves and removes a single-use token.
-func (c *Client) ConsumeRefreshTokenUserID(ctx context.Context, token string) (int64, error) {
-	val, err := c.rdb.GetDel(ctx, refreshTokenPrefix+token).Result()
+// AdvanceRefreshGeneration fails closed before any password update.
+func (c *Client) AdvanceRefreshGeneration(ctx context.Context, userID int64) error {
+	return c.rdb.Incr(ctx, fmt.Sprintf("refresh_gen:%d", userID)).Err()
+}
+
+var storeRefreshScript = goredis.NewScript(`
+local gen = redis.call("GET", KEYS[2]) or "0"
+if ARGV[3] ~= "" and gen ~= ARGV[3] then return 0 end
+redis.call("SET", KEYS[1], ARGV[1] .. ":" .. gen, "PX", ARGV[2])
+return 1
+`)
+
+func (c *Client) StoreRefreshToken(ctx context.Context, token string, userID int64, expiry time.Duration) error {
+	return c.storeRefresh(ctx, token, userID, expiry, "")
+}
+func (c *Client) StoreRefreshTokenAtGeneration(ctx context.Context, token string, userID int64, expiry time.Duration, gen int64) error {
+	return c.storeRefresh(ctx, token, userID, expiry, strconv.FormatInt(gen, 10))
+}
+func (c *Client) storeRefresh(ctx context.Context, token string, userID int64, expiry time.Duration, gen string) error {
+	n, err := storeRefreshScript.Run(ctx, c.rdb, []string{refreshTokenPrefix + token, fmt.Sprintf("refresh_gen:%d", userID)}, userID, expiry.Milliseconds(), gen).Int()
+	if err != nil {
+		return err
+	}
+	if n != 1 {
+		return fmt.Errorf("session generation changed")
+	}
+	return nil
+}
+
+// consumeRefreshScript is shared by rotation, consume and logout. Redis executes
+// the generation check, deletion and replacement without an invalidation gap.
+var consumeRefreshScript = goredis.NewScript(`
+local value = redis.call("GET", KEYS[1])
+if not value then return redis.error_reply("invalid token") end
+local uid, gen = string.match(value, "^(%d+):(%d+)$")
+if not uid then uid = value; gen = "0" end
+local current = redis.call("GET", "refresh_gen:" .. uid) or "0"
+redis.call("DEL", KEYS[1])
+if gen ~= current then return redis.error_reply("invalid token") end
+if KEYS[2] ~= KEYS[1] then redis.call("SET", KEYS[2], uid .. ":" .. gen, "PX", ARGV[1]) end
+return uid
+`)
+
+func (c *Client) RotateRefreshToken(ctx context.Context, old, next string, expiry time.Duration) (int64, error) {
+	val, err := consumeRefreshScript.Run(ctx, c.rdb, []string{refreshTokenPrefix + old, refreshTokenPrefix + next}, expiry.Milliseconds()).Text()
 	if err != nil {
 		return 0, fmt.Errorf("consuming refresh token: %w", err)
 	}
 	return strconv.ParseInt(val, 10, 64)
 }
-
-// DeleteRefreshToken removes a refresh token from Redis.
+func (c *Client) ConsumeRefreshTokenUserID(ctx context.Context, token string) (int64, error) {
+	return c.RotateRefreshToken(ctx, token, token, time.Second)
+}
 func (c *Client) DeleteRefreshToken(ctx context.Context, token string) error {
-	return c.rdb.Del(ctx, refreshTokenPrefix+token).Err()
+	_, err := c.ConsumeRefreshTokenUserID(ctx, token)
+	return err
+}
+func (c *Client) GetRefreshTokenUserID(ctx context.Context, token string) (int64, error) {
+	val, err := c.rdb.Get(ctx, refreshTokenPrefix+token).Result()
+	if err != nil {
+		return 0, err
+	}
+	parts := strings.Split(val, ":")
+	uid, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	gen := int64(0)
+	if len(parts) == 2 {
+		gen, err = strconv.ParseInt(parts[1], 10, 64)
+		if err != nil {
+			return 0, err
+		}
+	}
+	current, err := c.RefreshGeneration(ctx, uid)
+	if err != nil {
+		return 0, err
+	}
+	if gen != current {
+		return 0, fmt.Errorf("invalid token")
+	}
+	return uid, nil
 }
 
 // rateLimitScript atomically increments a counter, sets its TTL on first use,

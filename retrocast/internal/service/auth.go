@@ -154,12 +154,22 @@ func (s *AuthService) Login(ctx context.Context, username, password string) (*Au
 		return nil, Unauthorized("INVALID_CREDENTIALS", "invalid username or password")
 	}
 
+	// Read the epoch before re-reading the hash, so a login verified against an
+	// old password cannot mint a token in a newer epoch.
+	gen, err := s.redis.RefreshGeneration(ctx, user.ID)
+	if err != nil {
+		return nil, Internal("INTERNAL", "internal server error")
+	}
+	user, err = s.users.GetByID(ctx, user.ID)
+	if err != nil || user == nil {
+		return nil, Unauthorized("INVALID_CREDENTIALS", "invalid username or password")
+	}
 	ok, err := auth.VerifyPassword(password, user.PasswordHash)
 	if err != nil || !ok {
 		return nil, Unauthorized("INVALID_CREDENTIALS", "invalid username or password")
 	}
 
-	return s.issueTokens(ctx, user)
+	return s.issueTokens(ctx, user, gen)
 }
 
 // Refresh rotates a refresh token and returns a new token pair.
@@ -168,22 +178,16 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (*Refres
 		return nil, BadRequest("MISSING_TOKEN", "refresh_token is required")
 	}
 
-	userID, err := s.redis.ConsumeRefreshTokenUserID(ctx, refreshToken)
-	if err != nil {
-		return nil, Unauthorized("INVALID_TOKEN", "invalid or expired refresh token")
-	}
-
-	accessToken, err := s.tokens.GenerateAccessToken(userID)
-	if err != nil {
-		return nil, Internal("INTERNAL", "internal server error")
-	}
-
 	newRefresh, err := s.tokens.GenerateRefreshToken()
 	if err != nil {
 		return nil, Internal("INTERNAL", "internal server error")
 	}
-
-	if err := s.redis.StoreRefreshToken(ctx, newRefresh, userID, s.tokens.RefreshExpiry()); err != nil {
+	userID, err := s.redis.RotateRefreshToken(ctx, refreshToken, newRefresh, s.tokens.RefreshExpiry())
+	if err != nil {
+		return nil, Unauthorized("INVALID_TOKEN", "invalid or expired refresh token")
+	}
+	accessToken, err := s.tokens.GenerateAccessToken(userID)
+	if err != nil {
 		return nil, Internal("INTERNAL", "internal server error")
 	}
 
@@ -200,7 +204,7 @@ func (s *AuthService) Logout(ctx context.Context, refreshToken string) {
 	}
 }
 
-func (s *AuthService) issueTokens(ctx context.Context, user *models.User) (*AuthResult, error) {
+func (s *AuthService) issueTokens(ctx context.Context, user *models.User, generation ...int64) (*AuthResult, error) {
 	accessToken, err := s.tokens.GenerateAccessToken(user.ID)
 	if err != nil {
 		return nil, Internal("INTERNAL", "internal server error")
@@ -211,7 +215,13 @@ func (s *AuthService) issueTokens(ctx context.Context, user *models.User) (*Auth
 		return nil, Internal("INTERNAL", "internal server error")
 	}
 
-	if err := s.redis.StoreRefreshToken(ctx, refreshToken, user.ID, s.tokens.RefreshExpiry()); err != nil {
+	var storeErr error
+	if len(generation) > 0 {
+		storeErr = s.redis.StoreRefreshTokenAtGeneration(ctx, refreshToken, user.ID, s.tokens.RefreshExpiry(), generation[0])
+	} else {
+		storeErr = s.redis.StoreRefreshToken(ctx, refreshToken, user.ID, s.tokens.RefreshExpiry())
+	}
+	if storeErr != nil {
 		return nil, Internal("INTERNAL", "internal server error")
 	}
 
@@ -220,4 +230,44 @@ func (s *AuthService) issueTokens(ctx context.Context, user *models.User) (*Auth
 		RefreshToken: refreshToken,
 		User:         *user,
 	}, nil
+}
+
+// ChangePassword revokes all sessions before the database CAS; failures therefore
+// leave sessions revoked, even when the password remains unchanged.
+func (s *AuthService) ChangePassword(ctx context.Context, userID int64, current, next string) (*AuthResult, error) {
+	if len(next) < 6 || len(next) > 128 {
+		return nil, BadRequest("INVALID_PASSWORD", "password must be 6-128 characters")
+	}
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return nil, Internal("INTERNAL", "internal server error")
+	}
+	if user == nil {
+		return nil, Forbidden("INVALID_CREDENTIALS", "current password is incorrect")
+	}
+	ok, err := auth.VerifyPassword(current, user.PasswordHash)
+	if err != nil || !ok {
+		return nil, Forbidden("INVALID_CREDENTIALS", "current password is incorrect")
+	}
+	hash, err := auth.HashPassword(next)
+	if err != nil {
+		return nil, Internal("INTERNAL", "internal server error")
+	}
+	repo, ok := s.users.(interface {
+		CompareAndSwapPassword(context.Context, int64, string, string) (bool, error)
+	})
+	if !ok {
+		return nil, Internal("INTERNAL", "password update unavailable")
+	}
+	if err := s.redis.AdvanceRefreshGeneration(ctx, userID); err != nil {
+		return nil, Internal("INTERNAL", "could not revoke sessions")
+	}
+	changed, err := repo.CompareAndSwapPassword(ctx, userID, user.PasswordHash, hash)
+	if err != nil {
+		return nil, Internal("INTERNAL", "internal server error")
+	}
+	if !changed {
+		return nil, Forbidden("INVALID_CREDENTIALS", "current password is incorrect")
+	}
+	return s.issueTokens(ctx, user)
 }

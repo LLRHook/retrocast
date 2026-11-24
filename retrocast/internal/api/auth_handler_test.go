@@ -151,6 +151,9 @@ func TestLogin_Success(t *testing.T) {
 	}
 
 	users := &mockUserRepo{
+		GetByIDFn: func(_ context.Context, id int64) (*models.User, error) {
+			return &models.User{ID: id, Username: "testuser", PasswordHash: hash}, nil
+		},
 		GetByUsernameFn: func(_ context.Context, username string) (*models.User, error) {
 			if username == "testuser" {
 				return &models.User{ID: 100, Username: "testuser", PasswordHash: hash}, nil
