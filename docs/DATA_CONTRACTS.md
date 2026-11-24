@@ -401,3 +401,4 @@ together with the iOS client (Q-025); APNs is the one optional outside service G
 | 17 | 2026-11-24T00:33:25-05:00 | 4bfa82018aa4 | REVISION | PR #54 round 2: restore requirement evidence, correct registration diagram and operator guidance, parent-first invite locks and stronger concurrency/commit regressions |
 | 18 | 2026-11-24T00:51:47-05:00 | 03b5c35200c3 | REVISION | PR #55: API-059, refresh generations, web session restoration, invite registration and password settings |
 | 19 | 2026-11-24T01:58:10-05:00 | 76ad98d47a9d | REVISION | PR #55 round 2: post-CAS session revocation, conditional restore clearing, contract and evidence corrections |
+| 20 | 2026-11-24T03:21:06-05:00 | 400bb085e781 | REVISION | B5b: moderation UI, atomic removal and target notification; session transport mapping and bounded cross-tab recovery |
