@@ -27,7 +27,8 @@ done
 bash scripts/scheduled-backup.sh > /dev/null
 [ ! -f "$BACKUP_DIR/backup_old.sql.gz" ] && [ ! -f "$BACKUP_DIR/minio_old.tar.gz" ]
 [ -f "$BACKUP_DIR/backup_keep.sql.gz" ] && [ -f "$BACKUP_DIR/minio_keep.tar.gz" ]
-echo 'PASS retention and scheduled entrypoint'
+grep -q 'backup-tools tar -C /data -cf - .' "$CALLS"
+echo 'PASS retention, minimal-image archive helper and scheduled entrypoint'
 db=$(find "$BACKUP_DIR" -name 'backup_20*' | head -1)
 files=$(find "$BACKUP_DIR" -name 'minio_20*' | head -1)
 : > "$CALLS"

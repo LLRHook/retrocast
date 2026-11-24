@@ -92,6 +92,6 @@ Latency starts before POST and ends when each peer receives MESSAGE_CREATE,
 including HTTP and gateway time; the sender's own echo is excluded. A 5s final
 drain counts late receipts in latency. Setup honors 429 Retry-After, distributes
 seed writes across users and waits a minute before measured load. Measured calls
-never retry or change server limits. An additional 100-message phase from one sender, spaced 1.3s apart after a minute cooldown, checks SYS-NFR-002 explicitly. Default setup plus load takes about 20
+never retry or change server limits. An additional 100-message phase from one sender, spaced 1.3s apart after a minute cooldown, checks SYS-NFR-002 explicitly. Credential refresh before measurement also honors Retry-After; the single sender refreshes again before its separate phase. Default setup plus load takes about 23
 minutes. Use a fresh stack for repeated runs: fixture users/data are left behind.
 Results and limitations belong in `docs/operations/performance.md`.
