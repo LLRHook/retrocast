@@ -138,36 +138,52 @@ func (s *InviteService) GetInvite(ctx context.Context, code string) (*InviteInfo
 
 // AcceptInvite joins the user to the guild via invite.
 func (s *InviteService) AcceptInvite(ctx context.Context, code string, userID int64) (*models.Guild, error) {
+	var guild *models.Guild
+	var member *models.Member
+	err := database.InTransaction(ctx, s.invites, func(ctx context.Context) error {
+		var err error
+		guild, member, err = s.acceptInvite(ctx, code, userID)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	s.joined(userID, guild.ID, member)
+	return guild, nil
+}
+
+// acceptInvite runs inside the caller's transaction and never publishes events.
+func (s *InviteService) acceptInvite(ctx context.Context, code string, userID int64) (*models.Guild, *models.Member, error) {
 	invite, err := s.invites.GetByCode(ctx, code)
 	if err != nil {
-		return nil, Internal("INTERNAL", "internal server error")
+		return nil, nil, Internal("INTERNAL", "internal server error")
 	}
 	if invite == nil {
-		return nil, NotFound("NOT_FOUND", "invite not found")
+		return nil, nil, NotFound("NOT_FOUND", "invite not found")
 	}
 
 	if invite.ExpiresAt != nil && invite.ExpiresAt.Before(time.Now()) {
-		return nil, Gone("EXPIRED", "invite has expired")
+		return nil, nil, Gone("EXPIRED", "invite has expired")
 	}
 
 	if invite.MaxUses > 0 && invite.Uses >= invite.MaxUses {
-		return nil, Gone("MAX_USES", "invite has reached maximum uses")
+		return nil, nil, Gone("MAX_USES", "invite has reached maximum uses")
 	}
 
 	existing, err := s.members.GetByGuildAndUser(ctx, invite.GuildID, userID)
 	if err != nil {
-		return nil, Internal("INTERNAL", "internal server error")
+		return nil, nil, Internal("INTERNAL", "internal server error")
 	}
 	if existing != nil {
-		return nil, Conflict("ALREADY_MEMBER", "you are already a member of this guild")
+		return nil, nil, Conflict("ALREADY_MEMBER", "you are already a member of this guild")
 	}
 
 	ban, err := s.bans.GetByGuildAndUser(ctx, invite.GuildID, userID)
 	if err != nil {
-		return nil, Internal("INTERNAL", "internal server error")
+		return nil, nil, Internal("INTERNAL", "internal server error")
 	}
 	if ban != nil {
-		return nil, Forbidden("BANNED", "you are banned from this guild")
+		return nil, nil, Forbidden("BANNED", "you are banned from this guild")
 	}
 
 	member := &models.Member{
@@ -177,22 +193,24 @@ func (s *InviteService) AcceptInvite(ctx context.Context, code string, userID in
 	}
 
 	if err := s.members.Create(ctx, member); err != nil {
-		return nil, Internal("INTERNAL", "internal server error")
+		return nil, nil, Internal("INTERNAL", "internal server error")
 	}
 
 	if err := s.invites.IncrementUses(ctx, code); err != nil {
-		return nil, Internal("INTERNAL", "internal server error")
+		return nil, nil, Internal("INTERNAL", "internal server error")
 	}
 
 	guild, err := s.guilds.GetByID(ctx, invite.GuildID)
 	if err != nil || guild == nil {
-		return nil, Internal("INTERNAL", "internal server error")
+		return nil, nil, Internal("INTERNAL", "internal server error")
 	}
 
-	s.gateway.SubscribeToGuild(userID, invite.GuildID)
-	s.gateway.DispatchToGuild(invite.GuildID, gateway.EventGuildMemberAdd, member)
+	return guild, member, nil
+}
 
-	return guild, nil
+func (s *InviteService) joined(userID, guildID int64, member *models.Member) {
+	s.gateway.SubscribeToGuild(userID, guildID)
+	s.gateway.DispatchToGuild(guildID, gateway.EventGuildMemberAdd, member)
 }
 
 // RevokeInvite deletes an invite. The creator can always revoke; otherwise need MANAGE_GUILD.
