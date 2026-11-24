@@ -253,3 +253,36 @@ func TestLiveConcurrentVisibility(t *testing.T) {
 		t.Fatal("concurrent visibility boundary")
 	}
 }
+
+func TestLiveConcurrentResumeAndDispatch(t *testing.T) {
+	m := newTestManager(t, &mockGuildRepo{GetByUserIDFn: func(context.Context, int64) ([]models.Guild, error) { return []models.Guild{{ID: 1}}, nil }})
+	old := fakeConn(m, 100, "old")
+	defer old.Close()
+	m.SubscribeToGuild(100, 1)
+	m.DispatchToUser(100, EventMessageCreate, "seen")
+	drainEvents(old)
+	m.unregister(old)
+	c := newConnection(nil, m)
+	defer c.Close()
+	token, _ := m.tokens.GenerateAccessToken(100)
+	raw, _ := json.Marshal(ResumeData{Token: token, SessionID: "old", Sequence: 1})
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() { defer wg.Done(); m.handleResume(c, raw) }()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 20; i++ {
+			m.DispatchToGuild(1, EventMessageCreate, i)
+		}
+	}()
+	wg.Wait()
+	events := drainEvents(c)
+	if len(events) != 21 {
+		t.Fatalf("lost or duplicated concurrent replay: %d", len(events))
+	}
+	for i, p := range events {
+		if p.Sequence == nil || *p.Sequence != int64(i+2) {
+			t.Fatal("concurrent replay broke sequence order")
+		}
+	}
+}
