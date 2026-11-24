@@ -6,6 +6,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/victorivanov/retrocast/internal/auth"
+	"github.com/victorivanov/retrocast/internal/models"
 	"github.com/victorivanov/retrocast/internal/service"
 )
 
@@ -20,7 +21,8 @@ func NewMessageHandler(svc *service.MessageService) *MessageHandler {
 }
 
 type sendMessageRequest struct {
-	Content string `json:"content"`
+	Content       string           `json:"content"`
+	AttachmentIDs models.StringIDs `json:"attachment_ids"`
 }
 
 // SendMessage handles POST /api/v1/channels/:id/messages.
@@ -37,7 +39,7 @@ func (h *MessageHandler) SendMessage(c echo.Context) error {
 		return Error(c, http.StatusBadRequest, "INVALID_BODY", "invalid request body")
 	}
 
-	full, err := h.service.SendMessage(c.Request().Context(), channelID, userID, req.Content)
+	full, err := h.service.SendMessage(c.Request().Context(), channelID, userID, req.Content, req.AttachmentIDs...)
 	if err != nil {
 		return mapServiceError(c, err)
 	}

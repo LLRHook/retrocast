@@ -24,7 +24,9 @@ func TestAttachmentRepo_Create(t *testing.T) {
 
 	att := &models.Attachment{
 		ID:          nextID(),
-		MessageID:   msg.ID,
+		MessageID:   &msg.ID,
+		UploaderID:  owner.ID,
+		ChannelID:   ch.ID,
 		Filename:    "image.png",
 		ContentType: "image/png",
 		Size:        12345,
@@ -86,7 +88,9 @@ func TestAttachmentRepo_GetByMessageID_Multiple(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		att := &models.Attachment{
 			ID:          nextID(),
-			MessageID:   msg.ID,
+			MessageID:   &msg.ID,
+			UploaderID:  owner.ID,
+			ChannelID:   ch.ID,
 			Filename:    "file" + string(rune('0'+i)) + ".txt",
 			ContentType: "text/plain",
 			Size:        int64(100 + i),
@@ -124,7 +128,9 @@ func TestAttachmentRepo_Delete(t *testing.T) {
 
 	att := &models.Attachment{
 		ID:          nextID(),
-		MessageID:   msg.ID,
+		MessageID:   &msg.ID,
+		UploaderID:  owner.ID,
+		ChannelID:   ch.ID,
 		Filename:    "to-delete.txt",
 		ContentType: "text/plain",
 		Size:        100,

@@ -115,6 +115,8 @@ func main() {
 	readStateSvc := service.NewReadStateService(readStates, channels, dmChannels, permChecker)
 	reactionSvc := service.NewReactionService(reactions, messages, channels, dmChannels, gwManager, permChecker)
 	searchSvc := service.NewSearchService(messages, members, permChecker)
+	messageSvc.SetFileStorage(minioClient)
+	searchSvc.SetFileStorage(minioClient)
 	voiceSvc := service.NewVoiceService(voiceStates, channels, users, gwManager, permChecker, cfg.LiveKitAPIKey, cfg.LiveKitAPISecret)
 
 	// --- Handlers ---

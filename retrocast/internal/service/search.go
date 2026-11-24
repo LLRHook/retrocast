@@ -12,6 +12,7 @@ import (
 
 // SearchService handles message search business logic.
 type SearchService struct {
+	storage  FileStorage
 	messages database.MessageRepository
 	members  database.MemberRepository
 	perms    *PermissionChecker
@@ -65,5 +66,8 @@ func (s *SearchService) SearchMessages(ctx context.Context, guildID, userID int6
 			visible = append(visible, message)
 		}
 	}
+	setAttachmentURLs(visible, s.storage)
 	return visible, nil
 }
+
+func (s *SearchService) SetFileStorage(storage FileStorage) { s.storage = storage }

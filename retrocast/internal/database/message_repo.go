@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -17,13 +18,32 @@ func NewMessageRepository(pool *pgxpool.Pool) MessageRepository {
 	return &messageRepo{pool: pool}
 }
 
+var ErrInvalidAttachments = errors.New("invalid attachments")
+
 func (r *messageRepo) Create(ctx context.Context, msg *models.Message) error {
-	_, err := r.pool.Exec(ctx,
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	_, err = tx.Exec(ctx,
 		`INSERT INTO messages (id, channel_id, author_id, content, created_at, edited_at)
 		 VALUES ($1, $2, $3, $4, $5, $6)`,
 		msg.ID, msg.ChannelID, msg.AuthorID, msg.Content, msg.CreatedAt, msg.EditedAt,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	if len(msg.AttachmentIDs) > 0 {
+		result, err := tx.Exec(ctx, `UPDATE attachments SET message_id=$1 WHERE id=ANY($2::bigint[]) AND uploader_id=$3 AND channel_id=$4 AND message_id IS NULL`, msg.ID, msg.AttachmentIDs, msg.AuthorID, msg.ChannelID)
+		if err != nil {
+			return err
+		}
+		if result.RowsAffected() != int64(len(msg.AttachmentIDs)) {
+			return ErrInvalidAttachments
+		}
+	}
+	return tx.Commit(ctx)
 }
 
 func (r *messageRepo) GetByID(ctx context.Context, id int64) (*models.MessageWithAuthor, error) {
@@ -41,7 +61,14 @@ func (r *messageRepo) GetByID(ctx context.Context, id int64) (*models.MessageWit
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
-	return m, err
+	if err != nil {
+		return nil, err
+	}
+	page := []models.MessageWithAuthor{*m}
+	if err = r.loadAttachments(ctx, page); err != nil {
+		return nil, err
+	}
+	return &page[0], nil
 }
 
 func (r *messageRepo) GetByChannelID(ctx context.Context, channelID int64, before *int64, limit int) ([]models.MessageWithAuthor, error) {
@@ -71,7 +98,14 @@ func (r *messageRepo) GetByChannelID(ctx context.Context, channelID int64, befor
 		}
 		messages = append(messages, m)
 	}
-	return messages, rows.Err()
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	if err = r.loadAttachments(ctx, messages); err != nil {
+		return nil, err
+	}
+	return messages, nil
 }
 
 func (r *messageRepo) Update(ctx context.Context, msg *models.Message) error {
@@ -120,5 +154,40 @@ func (r *messageRepo) SearchMessages(ctx context.Context, guildID int64, query s
 		}
 		messages = append(messages, m)
 	}
-	return messages, rows.Err()
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	if err = r.loadAttachments(ctx, messages); err != nil {
+		return nil, err
+	}
+	return messages, nil
+}
+
+// loadAttachments batches a whole result page into one query.
+func (r *messageRepo) loadAttachments(ctx context.Context, messages []models.MessageWithAuthor) error {
+	if len(messages) == 0 {
+		return nil
+	}
+	ids := make([]int64, len(messages))
+	positions := make(map[int64]int, len(messages))
+	for i := range messages {
+		ids[i] = messages[i].ID
+		positions[ids[i]] = i
+		messages[i].Attachments = []models.Attachment{}
+	}
+	rows, err := r.pool.Query(ctx, `SELECT id,message_id,filename,content_type,size,storage_key FROM attachments WHERE message_id=ANY($1::bigint[]) ORDER BY id`, ids)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var a models.Attachment
+		if err = rows.Scan(&a.ID, &a.MessageID, &a.Filename, &a.ContentType, &a.Size, &a.StorageKey); err != nil {
+			return err
+		}
+		i := positions[*a.MessageID]
+		messages[i].Attachments = append(messages[i].Attachments, a)
+	}
+	return rows.Err()
 }

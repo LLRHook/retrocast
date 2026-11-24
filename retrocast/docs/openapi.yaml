@@ -4,7 +4,7 @@ info:
   description: |
     Discord-compatible chat platform API. All IDs are snowflake integers
     serialized as strings in JSON to avoid JavaScript precision loss.
-  version: "2.0.0"
+  version: "2.1.0"
   license:
     name: "Proprietary. All rights reserved."
 
@@ -215,6 +215,8 @@ components:
           type: string
         message_id:
           type: string
+          nullable: true
+          description: Null until atomically linked by message creation.
         filename:
           type: string
         content_type:
@@ -1099,6 +1101,13 @@ paths:
                 content:
                   type: string
                   example: Hello world!
+                attachment_ids:
+                  type: array
+                  description: Unlinked uploads owned by the author in this channel; invalid claims return 400 INVALID_ATTACHMENTS.
+                  uniqueItems: true
+                  items:
+                    type: string
+                    pattern: '^[0-9]+$'
       responses:
         "201":
           description: Message sent
@@ -1264,7 +1273,7 @@ paths:
       operationId: uploadAttachment
       tags: [Uploads]
       summary: Upload a file attachment
-      description: Upload a file to a channel. Use the returned attachment in a message.
+      description: Upload an allowed file of at most 10 MB to a guild channel. Returns message_id null. Send its string id in attachment_ids on message creation; unlinked uploads remain stored.
       security:
         - BearerAuth: []
       requestBody:

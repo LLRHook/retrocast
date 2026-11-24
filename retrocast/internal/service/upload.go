@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
-	"strings"
 
 	"github.com/victorivanov/retrocast/internal/database"
 	"github.com/victorivanov/retrocast/internal/models"
@@ -89,7 +88,8 @@ func (s *UploadService) UploadFile(ctx context.Context, channelID, userID int64,
 
 	attachment := &models.Attachment{
 		ID:          attachmentID,
-		MessageID:   0,
+		UploaderID:  userID,
+		ChannelID:   channelID,
 		Filename:    cleanFilename,
 		ContentType: contentType,
 		Size:        size,
@@ -98,6 +98,7 @@ func (s *UploadService) UploadFile(ctx context.Context, channelID, userID int64,
 	}
 
 	if err := s.attachments.Create(ctx, attachment); err != nil {
+		_ = s.storage.Delete(ctx, storageKey)
 		return nil, Internal("INTERNAL", "internal server error")
 	}
 
@@ -105,11 +106,5 @@ func (s *UploadService) UploadFile(ctx context.Context, channelID, userID int64,
 }
 
 func isAllowedContentType(ct string) bool {
-	if allowedContentTypes[ct] {
-		return true
-	}
-	if strings.HasPrefix(ct, "image/") {
-		return true
-	}
-	return false
+	return allowedContentTypes[ct]
 }

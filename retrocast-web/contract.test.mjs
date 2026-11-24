@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import test, { after } from 'node:test';
 import ts from 'typescript';
 const require = createRequire(import.meta.url);
-const dir = mkdtempSync(join(tmpdir(), 'retrocast-web-test-'));
+const dir = mkdtempSync(join(tmpdir(), 'l15-retrocast-web-test-'));
 const cleanup = () => rmSync(dir, {recursive:true,force:true});
 after(cleanup);
 process.on('exit', cleanup);
@@ -40,8 +40,8 @@ test('refresh persists rotation twice and auth 401 does not recursively refresh'
 });
 test('logout revokes stored refresh token before clearing state',async()=>{
  useAuthStore.setState({refreshToken:'logout-token',accessToken:'access',isAuthenticated:true});
- let calls=0;globalThis.fetch=async(url,options)=>{calls++;assert.ok(url.endsWith('/api/v1/auth/logout'));assert.equal(JSON.parse(options.body).refresh_token,'logout-token');assert.equal(useAuthStore.getState().refreshToken,'logout-token');return new Response(null,{status:204})};
- await useAuthStore.getState().logout();assert.equal(calls,1);assert.equal(useAuthStore.getState().isAuthenticated,false);assert.equal(storage.get('refreshToken'),undefined);
+ const recorded=[];globalThis.fetch=async(url,options)=>{recorded.push({url,body:JSON.parse(options.body),token:useAuthStore.getState().refreshToken});return new Response(null,{status:204})};
+ await useAuthStore.getState().logout();assert.equal(recorded.length,1);assert.ok(recorded[0].url.endsWith('/api/v1/auth/logout'));assert.equal(recorded[0].body.refresh_token,'logout-token');assert.equal(recorded[0].token,'logout-token');assert.equal(useAuthStore.getState().isAuthenticated,false);assert.equal(storage.get('refreshToken'),undefined);
 });
 test('Administrator permission remains unsigned in payload',()=>{
  const source=readFileSync(resolve('src/components/RoleEditor.tsx'),'utf8');
@@ -60,14 +60,18 @@ test('REST and gateway channel create converge without duplicate rows',async()=>
 });
 
 test('logout with expired access revokes the rotated refresh token',async()=>{
- useAuthStore.setState({refreshToken:'expired-access-refresh',accessToken:'expired',isAuthenticated:true});let calls=0;
+ useAuthStore.setState({refreshToken:'expired-access-refresh',accessToken:'expired',isAuthenticated:true});const recorded=[];
  globalThis.fetch=async(url,options)=>{
-  calls++;
-  if(calls===1) return Response.json({error:{code:'UNAUTHORIZED',message:'expired'}},{status:401});
-  if(calls===2) {assert.ok(url.endsWith('/auth/refresh'));return Response.json({data:{access_token:'new-access',refresh_token:'current-refresh'}})}
-  assert.ok(url.endsWith('/auth/logout'));assert.equal(JSON.parse(options.body).refresh_token,'current-refresh');return new Response(null,{status:204});
+  recorded.push({url,body:JSON.parse(options.body)});
+  if(recorded.length===1)return Response.json({error:{code:'UNAUTHORIZED',message:'expired'}},{status:401});
+  if(recorded.length===2)return Response.json({data:{access_token:'new-access',refresh_token:'current-refresh'}});
+  return new Response(null,{status:204});
  };
- await useAuthStore.getState().logout();assert.equal(calls,3);assert.equal(useAuthStore.getState().isAuthenticated,false);
+ await useAuthStore.getState().logout();assert.equal(recorded.length,3);
+ assert.ok(recorded[0].url.endsWith('/auth/logout'));assert.equal(recorded[0].body.refresh_token,'expired-access-refresh');
+ assert.ok(recorded[1].url.endsWith('/auth/refresh'));assert.equal(recorded[1].body.refresh_token,'expired-access-refresh');
+ assert.ok(recorded[2].url.endsWith('/auth/logout'));assert.equal(recorded[2].body.refresh_token,'current-refresh');
+ assert.equal(useAuthStore.getState().isAuthenticated,false);
 });
 
 function setSignedInFixture() {
@@ -105,7 +109,7 @@ const jsxUrl=compile('export const jsx=(type,props,key)=>({type,props,key});expo
 const hooksUrl=compile(`export let values=[];let cursor=0;
  export function reset(next=[]){values=next;cursor=0}
  export function useState(initial){const i=cursor++;if(!(i in values))values[i]=initial;return [values[i],v=>{values[i]=typeof v==='function'?v(values[i]):v}]}
- export function useEffect(){};`,'hooks');
+ export function useCallback(fn){return fn};export function useRef(initial){return {current:initial}};export function useEffect(){};`,'hooks');
 const hooks=await import(hooksUrl);
 const emptyComponentUrl=compile('export default function Component(){return null};','empty-component');
 function storeModule(name, state) {
@@ -161,6 +165,21 @@ test('MemberList empty selectors keep the same snapshot on repeated reads',async
  members.module.selected.length=0;roles.module.selected.length=0;
  hooks.reset();MemberList({guildId:'empty'});
  assert.equal(members.module.selected[0],firstMembers);assert.equal(roles.module.selected[0],firstRoles);
+});
+
+test('message composer links uploaded ids and retains files without text',async()=>{
+ const calls=[];globalThis.composerCalls=calls;
+ const fakeApi=compile('export const api={upload:async(path,file)=>{globalThis.composerCalls.push({path,file});return {id:"9007199254740993",message_id:null}},post:async(path,body)=>{globalThis.composerCalls.push({path,body});return {id:"message"}}}','composer-api');
+ const {default:MessageInput}=await component('MessageInput',{'@/lib/api':fakeApi});
+ const file=new File(['hello'],'proof.txt',{type:'text/plain'});
+ hooks.reset(['with attachment',false,[file]]);let tree=MessageInput({channelId:'channel'});
+ element(tree,n=>n.type==='textarea').props.onKeyDown({key:'Enter',shiftKey:false,preventDefault(){}});
+ await new Promise(setImmediate);
+ assert.equal(calls.length,2);assert.equal(calls[0].path,'/api/v1/channels/channel/attachments');
+ assert.deepEqual(calls[1].body,{content:'with attachment',attachment_ids:['9007199254740993']});assert.deepEqual(hooks.values[2],[]);
+ calls.length=0;hooks.reset(['',false,[file]]);tree=MessageInput({channelId:'channel'});
+ element(tree,n=>n.type==='textarea').props.onKeyDown({key:'Enter',shiftKey:false,preventDefault(){}});
+ await new Promise(setImmediate);assert.equal(calls.length,0);assert.deepEqual(hooks.values[2],[file]);delete globalThis.composerCalls;
 });
 
 test('UserSettings always navigates when disconnect or logout throws',async()=>{

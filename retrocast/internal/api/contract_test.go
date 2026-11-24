@@ -115,7 +115,7 @@ func TestContractOpenAPI(t *testing.T) {
 	if err := yaml.Unmarshal(data, &spec); err != nil {
 		t.Fatal(err)
 	}
-	if spec["info"].(map[string]any)["version"] != "2.0.0" {
+	if spec["info"].(map[string]any)["version"] != "2.1.0" {
 		t.Fatal("wrong version")
 	}
 	checkIDSchemas(t, spec, "OpenAPI", false)
