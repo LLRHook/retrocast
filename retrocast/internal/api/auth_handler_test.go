@@ -30,6 +30,7 @@ func newTestAuthHandler(t *testing.T, users *mockUserRepo) *AuthHandler {
 	tokens := auth.NewTokenService("test-secret")
 	sf := testSnowflake()
 	svc := service.NewAuthService(users, tokens, rdb, sf)
+	svc.ConfigureRegistration("open", nil)
 	return NewAuthHandler(svc)
 }
 

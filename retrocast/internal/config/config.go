@@ -23,6 +23,7 @@ import (
 )
 
 type Config struct {
+	RegistrationMode string
 	AllowedOrigins   string
 	DatabaseURL      string
 	RedisURL         string
@@ -41,6 +42,7 @@ func Load() *Config {
 	fileVals := loadConfigFile()
 
 	cfg := &Config{
+		RegistrationMode: resolve("REGISTRATION_MODE", fileVals, "invite"),
 		AllowedOrigins:   resolve("ALLOWED_ORIGINS", fileVals, ""),
 		DatabaseURL:      resolve("DATABASE_URL", fileVals, ""),
 		RedisURL:         resolve("REDIS_URL", fileVals, "redis://localhost:6379"),
@@ -55,6 +57,11 @@ func Load() *Config {
 		MinIOSecretKey:   resolve("MINIO_SECRET_KEY", fileVals, ""),
 	}
 
+	switch cfg.RegistrationMode {
+	case "open", "invite", "closed":
+	default:
+		panic("invalid REGISTRATION_MODE: expected open, invite or closed")
+	}
 	var missing []string
 	if cfg.DatabaseURL == "" {
 		missing = append(missing, "DATABASE_URL")

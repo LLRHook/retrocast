@@ -168,7 +168,7 @@ VOICE_STATE_UPDATE. The client must already know the LiveKit URL. The iOS client
 token but has no LiveKit SDK (IOS-FR-011).
 
 Refreshing a session (SV-FR-005): the client posts the refresh token; the server reads
-`refresh:{token}` from Redis, deletes it, and issues a new pair.
+and deletes `refresh:{token}` atomically with Redis GETDEL, then issues a new pair (PR #54).
 
 Registering (SV-FR-062–SV-FR-065, ADR-014):
 
@@ -180,19 +180,32 @@ sequenceDiagram
   participant G as Gateway manager
   C->>A: POST /api/v1/auth/register (username, password, invite_code)
   A->>A: read REGISTRATION_MODE
-  alt closed
+  alt closed (including an empty instance)
     A-->>C: 403 REGISTRATION_CLOSED
-  else invite, instance has no users
-    A->>P: BEGIN, lock, count users = 0, INSERT user, COMMIT
-    A-->>C: 200 data (tokens, user)
-  else invite with a code
-    A->>P: BEGIN, lock invite row, check expiry and uses
-    A->>P: INSERT user, member, @everyone row, uses + 1, COMMIT
-    A->>G: DispatchToGuild(GUILD_MEMBER_ADD)
-    A-->>C: 200 data (tokens, user)
-  else open
-    A->>P: INSERT user
-    A-->>C: 200 data (tokens, user)
+  else open or invite
+    A->>P: BEGIN, advisory lock, check whether users exist
+    alt invite without code and no users
+      A->>P: INSERT user, COMMIT
+      A-->>C: 200 data (tokens, user)
+    else invite without code and users exist
+      A->>P: ROLLBACK
+      A-->>C: 403 INVITE_REQUIRED
+    else invite with a code (including an empty instance)
+      A->>P: INSERT user, read invite guild_id
+      A->>P: lock guild FOR KEY SHARE, lock invite FOR UPDATE
+      A->>P: re-check guild, expiry and uses
+      alt valid invite
+        A->>P: INSERT member, uses + 1, COMMIT
+        A->>G: SubscribeToGuild and DispatchToGuild(GUILD_MEMBER_ADD)
+        A-->>C: 200 data (tokens, user)
+      else invalid invite or deleted guild
+        A->>P: ROLLBACK user and membership
+        A-->>C: 403 INVALID_INVITE
+      end
+    else open (ignore invite_code)
+      A->>P: INSERT user, COMMIT
+      A-->>C: 200 data (tokens, user); join separately with API-050
+    end
   end
 ```
 
@@ -309,7 +322,7 @@ spec lead's.
 | ADR-011 | Single-host Docker Compose deployment | Kubernetes; managed cloud | Accepted | No high availability (SYS-CON-001) | SYSTEM_DESIGN.md:196; retrocast/docker-compose.yml |
 | ADR-012 | Handlers call services, services call repositories behind interfaces | Handlers calling the database | Accepted | Handler tests run on mock repositories; `internal/service` has no tests of its own | retrocast/internal |
 | ADR-013 | Every REST success body is `{"data": …}` and errors stay `{"error": {code, message}}`; the path stays `/api/v1`; OpenAPI `info.version` becomes 2.0.0; no parallel old-shape API is served | The owner chose one wrapped shape as a new major version (Q-010). For the version itself the alternatives were a `/api/v2` path served beside v1, or a negotiated version header. Both keep a second shape alive for clients that do not exist: nothing is released, the web client already reads `data`, and the iOS client follows the web client (Q-004), so it is updated when it is scheduled. A major version number in OpenAPI marks the break without a second route tree | Implemented (rev 7; Q-010) | Breaking for any client reading bare bodies (DATA_CONTRACTS §9); the web client must stop parsing 204 bodies (D-29); the iOS update to v2.0.0 waits for its schedule | Q-010; driver; SV-IR-007, SV-IR-008 |
-| ADR-014 | Registration modes `open`, `invite` and `closed` from `REGISTRATION_MODE`, default `invite`; registering with an invite also joins its guild in the same transaction; the first account on an empty instance may register without an invite | The owner chose operator-set modes with invite-only as the default (Q-012). Without a bootstrap rule an invite-only instance with no users could never get its first user; the alternatives (a first user created with the CLI, or a one-time setup token) add an operator step. Joining on registration saves a friend holding a link a second step | Accepted (rev 2, not built; spec lead's design within Q-012) | The first registration must be serialised (SV-FR-065); an operator who wants nobody to register uses `closed` and seeds users with the CLI | Q-012; SV-FR-062–SV-FR-065 |
+| ADR-014 | Registration modes `open`, `invite` and `closed` from `REGISTRATION_MODE`, default `invite`; in `invite` mode registering with a valid invite also joins its guild in the same transaction; `open` ignores `invite_code` (join separately with API-050); the first account on an empty instance may register without an invite | The owner chose operator-set modes with invite-only as the default (Q-012). Without a bootstrap rule an invite-only instance with no users could never get its first user; the alternatives (a new CLI user-create command, or a one-time setup token) add an operator step. Joining on registration saves a friend holding a link a second step | Built (PR #54; accepted Q-012) | The first registration must be serialised (SV-FR-065); `closed` admits nobody even on an empty instance; bootstrap the first account in `invite` mode, then switch to `closed`. There is no CLI user-create command | Q-012; SV-FR-062–SV-FR-065 |
 | ADR-015 | Client IP comes from `X-Forwarded-For` only as written by the Caddy hop; unauthenticated routes (including the invite lookup) are limited per client IP and authenticated routes per user; when Redis is unreachable, unauthenticated routes fail closed with 503 and authenticated routes fail open | The owner chose the proxy trust and the limit keys (Q-015). The failure policy is the spec lead's: guessing and enumeration happen on sign-in, registration and the invite lookup; sign-in already needs Redis for refresh tokens, so failing closed there costs no extra availability; access tokens are checked without Redis, so members already signed in keep chatting; the 15-minute token lifetime and a small trusted group bound the abuse. Failing open everywhere (today) lets guessing run unthrottled during an outage; failing closed everywhere stops all chat when an ephemeral store fails | Accepted, built (PR #23 and PR #53) | Port 8080 is unpublished (PR #53) | Q-015; SV-NFR-003, SV-NFR-009, SV-NFR-010 |
 | ADR-016 | Browsers are served only for the same origin and `ALLOWED_ORIGINS`, for CORS and gateway upgrades; requests without an Origin header (native clients) are served. Compose publishes only Caddy 80 and 443 and LiveKit 7880, 7881 and UDP 50000–50100; Grafana binds to 127.0.0.1:3000; 8080, 9000, 9001 and 9090 are not published | The owner chose the same origin plus an operator list, and only Caddy's ports (Q-016). LiveKit's ports stay because WebRTC media does not pass through Caddy; Grafana on loopback keeps the operator's dashboard (CAP-035) without exposing it (spec lead's details) | Accepted, built (PR #53) | `retrocast-cli health` needs `SERVER_URL` set to the public address; MinIO is reachable only inside the network until pre-signed URLs go through Caddy (ADR-019) | Q-016; SV-NFR-008, SV-NFR-011, SV-NFR-012 |
 | ADR-017 | A user may hold several gateway connections; each receives every event for the user; presence turns offline 10 s after the last one closes; there is no per-user cap | The owner chose several devices at once (Q-009). No cap is set because the group is 5–20 trusted people (spec lead's assumption) | Built (PR #50) | The manager's per-user entry is a set of connections; READY and RESUME stay per connection; EVT-007 is not sent for a second IDENTIFY | Q-009; SV-FR-071, SV-FR-072 |
@@ -352,7 +365,7 @@ they affect stay Later.
 | D-09 | Fixed: pending uploads carry uploader/channel ownership and are atomically claimed through API-022; batched hydration returns attachments | retrocast/migrations/000020_dm_messages_and_pending_attachments.up.sql; internal/service/storage_integration_test.go; internal/database/storage_migration_test.go | SV-FR-051, WEB-FR-017; RISK-002 | Pilot (RISK-002, Q-003) | [#24](https://github.com/LLRHook/retrocast/issues/24) |
 | D-10 | Attachment URLs use the compose-internal MinIO address over `http://` | retrocast/internal/storage/minio.go:56–58 | SV-FR-052, SV-NFR-008 | Later | — |
 | D-11 | `Member.roles`, READY `guilds` and reaction user lists (API-032) serialise ids as JSON numbers; JavaScript loses precision above 2^53 | retrocast/internal/models/member.go:10; internal/gateway/events.go:78; internal/service/reaction.go | SV-IR-004, SV-FR-075 | Pilot | [#36](https://github.com/LLRHook/retrocast/issues/36) Fixed in [PR #45](https://github.com/LLRHook/retrocast/pull/45). |
-| D-12 | Guild creation runs eight writes without a transaction | retrocast/internal/service/guild.go:47–128 | SV-FR-007 | — | — |
+| D-12 | Fixed in [PR #54](https://github.com/LLRHook/retrocast/pull/54). Previous defect: Guild creation runs eight writes without a transaction | internal/service/; internal/database/transaction.go; internal/redis/client.go; test: internal/api/atomicity_live_test.go | SV-FR-007 | — | — |
 | D-13 | Anonymous Redis failures return 503; authenticated traffic fails open; invite lookup limited; API unpublished | retrocast/internal/api; internal/origin; internal/gateway; docker-compose.yml; Caddyfile | SV-NFR-003, SV-NFR-009, SV-NFR-010 | Fixed | [PR #53](https://github.com/LLRHook/retrocast/pull/53) |
 | D-14 | Clients and server disagree on the response envelope: the web client always reads `json.data`; the iOS refresh path accepts only the wrapped form. The smoke run saw web sign-in fail after a 200. Fixed on the server side by SV-IR-007 (ADR-013) | retrocast-web/src/lib/api.ts:113; retrocast-client/Retrocast/Sources/Networking/APIClient.swift:211 | SV-IR-007, WEB-FR-002, WEB-FR-003, WEB-FR-005, WEB-FR-007, WEB-FR-012, WEB-FR-013, IOS-FR-002 | Pilot | [#32](https://github.com/LLRHook/retrocast/issues/32) Fixed in [PR #45](https://github.com/LLRHook/retrocast/pull/45). |
 | D-15 | The web client keeps the old refresh token after rotation | retrocast-web/src/stores/auth.ts:83–93 | WEB-FR-003 | Pilot | — Fixed in [PR #45](https://github.com/LLRHook/retrocast/pull/45). |
@@ -360,8 +373,8 @@ they affect stay Later.
 | D-17 | REST and gateway share exact origin checks; own origin, ALLOWED_ORIGINS and native clients served | retrocast/internal/api; internal/origin; internal/gateway; docker-compose.yml; Caddyfile | SV-NFR-011 | Fixed | [PR #53](https://github.com/LLRHook/retrocast/pull/53) |
 | D-18 | Fixed in [PR #44](https://github.com/LLRHook/retrocast/pull/44). Previous defect: The typing route checks no membership or permission and returns 404 for DM channels; `MessageService.Typing` has no route | retrocast/internal/api/router.go:197; retrocast/internal/service/message.go:233 | SV-FR-031 | Pilot | [#34](https://github.com/LLRHook/retrocast/issues/34) |
 | D-19 | Fixed: READY includes shared-guild presence snapshot; authenticated heartbeat extends status TTL (PR #50) | retrocast/internal/gateway/manager.go; session_live_test.go | SV-FR-032 | Pilot | — |
-| D-20 | Invite `uses` is checked and incremented without a lock, so concurrent accepts can pass `max_uses` | retrocast/internal/service/invite.go:153, :183 | SV-FR-020 | — | — |
-| D-21 | Refresh rotation reads then deletes the token in two commands, so two concurrent refreshes can both succeed | retrocast/internal/redis/client.go:58, :75 | SV-FR-005, SV-NFR-002 | Pilot | [#43](https://github.com/LLRHook/retrocast/issues/43) |
+| D-20 | Fixed in [PR #54](https://github.com/LLRHook/retrocast/pull/54). Previous defect: Invite `uses` is checked and incremented without a lock, so concurrent accepts can pass `max_uses` | internal/service/; internal/database/transaction.go; internal/redis/client.go; test: internal/api/atomicity_live_test.go | SV-FR-020 | — | — |
+| D-21 | Fixed in [PR #54](https://github.com/LLRHook/retrocast/pull/54). Previous defect: Refresh rotation reads then deletes the token in two commands, so two concurrent refreshes can both succeed | internal/service/; internal/database/transaction.go; internal/redis/client.go; test: internal/api/atomicity_live_test.go | SV-FR-005, SV-NFR-002 | Pilot | [#43](https://github.com/LLRHook/retrocast/issues/43) |
 | D-22 | Fixed: Q-017 exact content-type allowlist; SVG and unknown image subtypes refused | retrocast/internal/service/upload.go; internal/service/upload_test.go | SV-FR-051 | Later | — |
 | D-23 | LiveKit tokens last 24 hours and do not reflect `SPEAK`; no webhook clears stale voice states | retrocast/internal/service/voice.go:178–197 | SV-FR-048, SV-FR-049 | — | — |
 | D-24 | Users cannot be deleted while they own a guild, have messages, or have linked/pending attachments as uploader (attachments.uploader_id REFERENCES users(id), without ON DELETE) | retrocast/migrations/000002_create_guilds.up.sql; 000007_create_messages.up.sql; 000020_dm_messages_and_pending_attachments.up.sql | CAP-038 (account deletion, Later) | Later | — |
@@ -402,3 +415,5 @@ See [SRS §1.3](SRS.md) and §5.3.
 | 12 | 2026-11-23T22:26:18-05:00 | e2467ea2f2de | REVISION | PR #50 round 3: join epochs, away-device READY after joins, resync invalidation regression; corrected this PR's contract revision numbering |
 | 13 | 2026-11-23T22:54:35-05:00 | f4e6409e92a2 | REVISION | PR #53: deployment exposure, origins, outage policy, invite limit, LiveKit defaults and raw OpenAPI; D-10 and API-059 remain separate |
 | 14 | 2026-11-23T23:28:58-05:00 | 2f78d18e5e62 | REVISION | PR #53 round 2: supported LiveKit UDP range; local demo TLS and standalone proxy; deployment drift and requirement provenance repaired; Redis deadline regression |
+| 15 | 2026-11-23T23:44:31-05:00 | ad03a1a80f06 | REVISION | PR #54: registration modes and bootstrap; atomic guild creation, invite acceptance and refresh consumption; delivery and evidence aligned |
+| 16 | 2026-11-24T00:33:25-05:00 | 4bfa82018aa4 | REVISION | PR #54 round 2: restore requirement evidence, correct registration diagram and operator guidance, parent-first invite locks and stronger concurrency/commit regressions |

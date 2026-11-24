@@ -27,7 +27,7 @@ server stops at start with an error naming the keys.
 | `REDIS_URL` | no | Redis connection (default `redis://localhost:6379`) |
 | `SERVER_ADDR` | no | Listen address (default `:8080`; compose keeps it internal) |
 | `LOG_LEVEL` | no | slog level (default `info`) |
-| `REGISTRATION_MODE` | no | `open`, `invite` or `closed` (default `invite`); any other value stops the server at start (SV-FR-062). Specified in rev 2, not yet read by the code |
+| `REGISTRATION_MODE` | no | `open`, `invite` or `closed` (default `invite`); any other value stops the server at start (SV-FR-062). Implemented in PR #54; validated at startup |
 | `ALLOWED_ORIGINS` | no | Comma-separated browser origins allowed besides the server's own (SV-NFR-011). Read from environment or config file; empty by default; exact scheme/host/effective-port match, no wildcards |
 | `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY` | yes for uploads | Object store; bucket `retrocast` is created at start |
 | `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | yes for voice | Token minting (§7.1) |
@@ -96,7 +96,7 @@ strings (SV-IR-004; D-11 fixed in B2).
 | ENT-016 | VoiceState | PostgreSQL `voice_states` | PK (guild_id, user_id); channel_id; session_id TEXT; self_mute BOOL; self_deaf BOOL; joined_at | No foreign keys; rows stay when a client disconnects without leaving | Personal (presence in a room) | SV-FR-048–SV-FR-050 | v1.0.0 |
 | ENT-017 | DeviceToken | PostgreSQL `device_tokens` | id BIGSERIAL PK; user_id FK cascade; platform VARCHAR(16); token TEXT; UNIQUE(user_id, token) | No code reads or writes it | Secret (push token) | none (push is Later, with the iOS client: Q-025) | v1.0.0 |
 | ENT-018 | RefreshTokenRow | PostgreSQL `refresh_tokens` | token VARCHAR(64) PK; user_id FK cascade; expires_at; created_at | No code reads or writes it; refresh tokens live in Redis (ENT-019) | Secret | none | v1.0.0 |
-| ENT-019 | RefreshToken | Redis | key `refresh:{token}` (token = 32 random bytes, hex); value user id; TTL 7 days | Read then deleted on refresh (two commands, not atomic); no per-user index, which SV-FR-061 needs | Secret | SV-FR-005, SV-FR-006, SV-FR-061, SV-NFR-002 | v1.0.0 |
+| ENT-019 | RefreshToken | Redis | key `refresh:{token}` (token = 32 random bytes, hex); value user id; TTL 7 days | Atomically consumed on refresh with Redis GETDEL (PR #54); no per-user index, which SV-FR-061 needs | Secret | SV-FR-005, SV-FR-006, SV-FR-061, SV-NFR-002 | v1.0.0 |
 | ENT-020 | Presence | Redis | key `presence:{user id}`; value status; TTL 5 minutes | Set on IDENTIFY, successful RESUME and op 3; authenticated heartbeats extend the existing status TTL | Personal | SV-FR-032–SV-FR-034 | v1.0.0 |
 | ENT-021 | RateLimitCounter and TypingMarker | Redis | `rl:user:{user id}:{route}` or `rl:ip:{client ip}:{route}`, one-minute window (Lua script); `typing:{channel id}:{user id}`, TTL 10 s | Ephemeral; the client IP is Echo's `RealIP` (SV-NFR-009) | Internal | SV-NFR-003, SV-NFR-009, SV-NFR-010, SV-FR-031 | v1.0.0 |
 | ENT-022 | StoredObject | MinIO bucket `retrocast` | key `attachments/{channel id}/{attachment id}/{filename}`; content type from upload | Unlinked uploads and objects remain indefinitely; linked-message deletion removes metadata but does not remove objects. Metadata insert failure triggers best-effort object deletion, which can leave an orphan if cleanup fails. | Personal (file content) | SV-FR-051, SV-FR-052 | v1.1.0 |
@@ -159,7 +159,7 @@ are as documented in OpenAPI; where the code differs, the Notes column says so.
 
 | ID | Operation | Method and path | Success | Wrapped today | Notes | Requirements |
 |---|---|---|---|---|---|---|
-| API-001 | register | POST /auth/register | 200 tokens + user | yes | the legacy api.md said 201; optional `invite_code` (rev 2, used in mode `invite`); 403 `INVITE_REQUIRED`, `INVALID_INVITE` or `REGISTRATION_CLOSED` by mode | SV-FR-001–SV-FR-003, SV-FR-062–SV-FR-065, SYS-CON-002 |
+| API-001 | register | POST /auth/register | 200 tokens + user | yes | the legacy api.md said 201; optional `invite_code` (rev 2, used in mode `invite`; ignored in `open`, where joining requires API-050); 403 `INVITE_REQUIRED`, `INVALID_INVITE` or `REGISTRATION_CLOSED` by mode | SV-FR-001–SV-FR-003, SV-FR-062–SV-FR-065, SYS-CON-002 |
 | API-002 | login | POST /auth/login | 200 tokens + user | yes | | SV-FR-004 |
 | API-003 | refreshToken | POST /auth/refresh | 200 token pair | yes | | SV-FR-005 |
 | API-004 | logout | POST /auth/logout | 204 | — | | SV-FR-006 |
@@ -259,7 +259,7 @@ Codes in use: `UNAUTHORIZED`, `BAD_REQUEST`, `METHOD_NOT_ALLOWED`, `PAYLOAD_TOO_
 
 `INVALID_POSITION` is 400 for a negative role position or an attempt to move @everyone away from position 0 (SV-FR-008, SV-FR-078). Grant-limit failures return 403 `MISSING_PERMISSIONS`.
 
-Codes added in rev 2 (specified; CANNOT_KICK_SELF implemented in PR #44):
+Codes added in rev 2 (registration codes implemented in PR #54; CANNOT_KICK_SELF implemented in PR #44):
 
 | Code | Status | Meaning | Requirement |
 |---|---|---|---|
@@ -396,3 +396,5 @@ together with the iOS client (Q-025); APNs is the one optional outside service G
 | 13 | 2026-11-23T22:26:18-05:00 | e2467ea2f2de | REVISION | PR #50 round 3: join epochs, away-device READY after joins, resync invalidation regression; corrected this PR's contract revision numbering |
 | 14 | 2026-11-23T22:54:35-05:00 | f4e6409e92a2 | REVISION | PR #53: deployment exposure, origins, outage policy, invite limit, LiveKit defaults and raw OpenAPI; D-10 and API-059 remain separate |
 | 15 | 2026-11-23T23:28:58-05:00 | 2f78d18e5e62 | REVISION | PR #53 round 2: supported LiveKit UDP range; local demo TLS and standalone proxy; deployment drift and requirement provenance repaired; Redis deadline regression |
+| 16 | 2026-11-23T23:44:31-05:00 | ad03a1a80f06 | REVISION | PR #54: registration modes and bootstrap; atomic guild creation, invite acceptance and refresh consumption; delivery and evidence aligned |
+| 17 | 2026-11-24T00:33:25-05:00 | 4bfa82018aa4 | REVISION | PR #54 round 2: restore requirement evidence, correct registration diagram and operator guidance, parent-first invite locks and stronger concurrency/commit regressions |

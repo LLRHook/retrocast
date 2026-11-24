@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"errors"
+	"github.com/jackc/pgx/v5/pgconn"
 	"regexp"
 	"time"
 
@@ -29,10 +31,12 @@ type RefreshResult struct {
 
 // AuthService handles registration, login, token refresh, and logout.
 type AuthService struct {
-	users     database.UserRepository
-	tokens    *auth.TokenService
-	redis     *redis.Client
-	snowflake *snowflake.Generator
+	registrationMode string
+	invites          *InviteService
+	users            database.UserRepository
+	tokens           *auth.TokenService
+	redis            *redis.Client
+	snowflake        *snowflake.Generator
 }
 
 // NewAuthService creates an AuthService.
@@ -43,15 +47,29 @@ func NewAuthService(
 	sf *snowflake.Generator,
 ) *AuthService {
 	return &AuthService{
-		users:     users,
-		tokens:    tokens,
-		redis:     redis,
-		snowflake: sf,
+		registrationMode: "invite",
+		users:            users,
+		tokens:           tokens,
+		redis:            redis,
+		snowflake:        sf,
 	}
 }
 
+// ConfigureRegistration sets the validated operator mode and shared invite service.
+func (s *AuthService) ConfigureRegistration(mode string, invites *InviteService) {
+	s.registrationMode, s.invites = mode, invites
+}
+
 // Register creates a new user and returns tokens.
-func (s *AuthService) Register(ctx context.Context, username, password string) (*AuthResult, error) {
+func (s *AuthService) Register(ctx context.Context, username, password string, inviteCodes ...string) (*AuthResult, error) {
+	if s.registrationMode == "closed" {
+		return nil, Forbidden("REGISTRATION_CLOSED", "registration is closed")
+	}
+	code := ""
+	if len(inviteCodes) > 0 {
+		code = inviteCodes[0]
+	}
+
 	if !usernameRegexp.MatchString(username) {
 		return nil, BadRequest("INVALID_USERNAME", "username must be 2-32 alphanumeric or underscore characters")
 	}
@@ -80,8 +98,47 @@ func (s *AuthService) Register(ctx context.Context, username, password string) (
 		CreatedAt:    time.Now(),
 	}
 
-	if err := s.users.Create(ctx, user); err != nil {
+	var guild *models.Guild
+	var member *models.Member
+	err = database.InTransaction(ctx, s.users, func(ctx context.Context) error {
+		first, err := database.LockRegistration(ctx, s.users)
+		if err != nil {
+			return err
+		}
+		if s.registrationMode == "invite" && code == "" && !first {
+			return Forbidden("INVITE_REQUIRED", "an invite code is required")
+		}
+		if err := s.users.Create(ctx, user); err != nil {
+			return err
+		}
+		if s.registrationMode == "invite" && code != "" {
+			if s.invites == nil {
+				return Internal("INTERNAL", "invite service unavailable")
+			}
+			guild, member, err = s.invites.acceptInvite(ctx, code, user.ID)
+			if err != nil {
+				var se *ServiceError
+				if errors.As(err, &se) && !errors.Is(err, ErrInternal) {
+					return Forbidden("INVALID_INVITE", "invite is invalid, expired or exhausted")
+				}
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		var se *ServiceError
+		if errors.As(err, &se) {
+			return nil, err
+		}
+		var pe *pgconn.PgError
+		if errors.As(err, &pe) && pe.Code == "23505" {
+			return nil, Conflict("USERNAME_TAKEN", "username is already taken")
+		}
 		return nil, Internal("INTERNAL", "internal server error")
+	}
+	if guild != nil {
+		s.invites.joined(user.ID, guild.ID, member)
 	}
 
 	return s.issueTokens(ctx, user)
@@ -111,13 +168,9 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (*Refres
 		return nil, BadRequest("MISSING_TOKEN", "refresh_token is required")
 	}
 
-	userID, err := s.redis.GetRefreshTokenUserID(ctx, refreshToken)
+	userID, err := s.redis.ConsumeRefreshTokenUserID(ctx, refreshToken)
 	if err != nil {
 		return nil, Unauthorized("INVALID_TOKEN", "invalid or expired refresh token")
-	}
-
-	if err := s.redis.DeleteRefreshToken(ctx, refreshToken); err != nil {
-		return nil, Internal("INTERNAL", "internal server error")
 	}
 
 	accessToken, err := s.tokens.GenerateAccessToken(userID)

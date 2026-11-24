@@ -17,7 +17,7 @@ func NewGuildRepository(pool *pgxpool.Pool) GuildRepository {
 }
 
 func (r *guildRepo) Create(ctx context.Context, guild *models.Guild) error {
-	_, err := r.pool.Exec(ctx,
+	_, err := queryDB(ctx, r.pool).Exec(ctx,
 		`INSERT INTO guilds (id, name, icon_hash, owner_id, created_at)
 		 VALUES ($1, $2, $3, $4, $5)`,
 		guild.ID, guild.Name, guild.IconHash, guild.OwnerID, guild.CreatedAt,
@@ -27,7 +27,7 @@ func (r *guildRepo) Create(ctx context.Context, guild *models.Guild) error {
 
 func (r *guildRepo) GetByID(ctx context.Context, id int64) (*models.Guild, error) {
 	g := &models.Guild{}
-	err := r.pool.QueryRow(ctx,
+	err := queryDB(ctx, r.pool).QueryRow(ctx,
 		`SELECT id, name, icon_hash, owner_id, created_at
 		 FROM guilds WHERE id = $1`, id,
 	).Scan(&g.ID, &g.Name, &g.IconHash, &g.OwnerID, &g.CreatedAt)
@@ -38,7 +38,7 @@ func (r *guildRepo) GetByID(ctx context.Context, id int64) (*models.Guild, error
 }
 
 func (r *guildRepo) Update(ctx context.Context, guild *models.Guild) error {
-	_, err := r.pool.Exec(ctx,
+	_, err := queryDB(ctx, r.pool).Exec(ctx,
 		`UPDATE guilds SET name = $2, icon_hash = $3, owner_id = $4
 		 WHERE id = $1`,
 		guild.ID, guild.Name, guild.IconHash, guild.OwnerID,
@@ -47,12 +47,12 @@ func (r *guildRepo) Update(ctx context.Context, guild *models.Guild) error {
 }
 
 func (r *guildRepo) Delete(ctx context.Context, id int64) error {
-	_, err := r.pool.Exec(ctx, `DELETE FROM guilds WHERE id = $1`, id)
+	_, err := queryDB(ctx, r.pool).Exec(ctx, `DELETE FROM guilds WHERE id = $1`, id)
 	return err
 }
 
 func (r *guildRepo) GetByUserID(ctx context.Context, userID int64) ([]models.Guild, error) {
-	rows, err := r.pool.Query(ctx,
+	rows, err := queryDB(ctx, r.pool).Query(ctx,
 		`SELECT g.id, g.name, g.icon_hash, g.owner_id, g.created_at
 		 FROM guilds g
 		 INNER JOIN members m ON m.guild_id = g.id
@@ -74,3 +74,5 @@ func (r *guildRepo) GetByUserID(ctx context.Context, userID int64) ([]models.Gui
 	}
 	return guilds, rows.Err()
 }
+
+func (r *guildRepo) transactionPool() *pgxpool.Pool { return r.pool }
