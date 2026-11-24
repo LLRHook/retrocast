@@ -3,14 +3,15 @@ package service
 import "errors"
 
 var (
-	ErrNotFound       = errors.New("not found")
-	ErrForbidden      = errors.New("forbidden")
-	ErrConflict       = errors.New("conflict")
-	ErrBadRequest     = errors.New("bad request")
-	ErrUnauthorized   = errors.New("unauthorized")
-	ErrInternal       = errors.New("internal")
-	ErrRoleHierarchy  = errors.New("role hierarchy")
-	ErrGone           = errors.New("gone")
+	ErrNotFound      = errors.New("not found")
+	ErrForbidden     = errors.New("forbidden")
+	ErrConflict      = errors.New("conflict")
+	ErrBadRequest    = errors.New("bad request")
+	ErrUnauthorized  = errors.New("unauthorized")
+	ErrUnavailable   = errors.New("unavailable")
+	ErrInternal      = errors.New("internal")
+	ErrRoleHierarchy = errors.New("role hierarchy")
+	ErrGone          = errors.New("gone")
 )
 
 // ServiceError wraps a sentinel error with a specific code and message for the handler to use.
@@ -60,4 +61,8 @@ func Gone(code, message string) *ServiceError {
 
 func RoleHierarchyError(message string) *ServiceError {
 	return NewError(ErrRoleHierarchy, "ROLE_HIERARCHY", message)
+}
+
+func Unavailable() *ServiceError {
+	return NewError(ErrUnavailable, "SESSION_UNAVAILABLE", "session service is temporarily unavailable")
 }

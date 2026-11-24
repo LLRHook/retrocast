@@ -159,10 +159,10 @@ are as documented in OpenAPI; where the code differs, the Notes column says so.
 
 | ID | Operation | Method and path | Success | Wrapped today | Notes | Requirements |
 |---|---|---|---|---|---|---|
-| API-001 | register | POST /auth/register | 200 tokens + user | yes | the legacy api.md said 201; optional `invite_code` (rev 2, used in mode `invite`; ignored in `open`, where joining requires API-050); 403 `INVITE_REQUIRED`, `INVALID_INVITE` or `REGISTRATION_CLOSED` by mode | SV-FR-001–SV-FR-003, SV-FR-062–SV-FR-065, SYS-CON-002 |
-| API-002 | login | POST /auth/login | 200 tokens + user | yes | | SV-FR-004 |
-| API-003 | refreshToken | POST /auth/refresh | 200 token pair | yes | | SV-FR-005 |
-| API-004 | logout | POST /auth/logout | 204 | — | | SV-FR-006 |
+| API-001 | register | POST /auth/register | 200 tokens + user | yes | the legacy api.md said 201; optional `invite_code` (rev 2, used in mode `invite`; ignored in `open`, where joining requires API-050); 403 `INVITE_REQUIRED`, `INVALID_INVITE` or `REGISTRATION_CLOSED` by mode; 503 SESSION_UNAVAILABLE on session-store/transport failure | SV-FR-001–SV-FR-003, SV-FR-062–SV-FR-065, SYS-CON-002 |
+| API-002 | login | POST /auth/login | 200 tokens + user | yes |; 503 SESSION_UNAVAILABLE on session-store/transport failure | SV-FR-004 |
+| API-003 | refreshToken | POST /auth/refresh | 200 token pair | yes | 401 INVALID_TOKEN only for invalid/consumed/revoked tokens; 503 SESSION_UNAVAILABLE for Redis transport/timeouts | SV-FR-005 |
+| API-004 | logout | POST /auth/logout | 204 | — | 401 INVALID_TOKEN for invalid/consumed/revoked tokens; 503 SESSION_UNAVAILABLE for Redis transport/timeouts | SV-FR-006 |
 | API-005 | getMe | GET /users/@me | 200 user | yes | | SV-FR-053 |
 | API-006 | updateMe | PATCH /users/@me | 200 user | yes | | SV-FR-053 |
 | API-007 | listMyGuilds | GET /users/@me/guilds | 200 guilds | yes | | SV-FR-013 |
@@ -217,7 +217,7 @@ are as documented in OpenAPI; where the code differs, the Notes column says so.
 | API-056 | joinVoice | POST /channels/{channelId}/voice/join | 200 token + voice states | yes | no LiveKit URL in the response | SV-FR-048, SV-IR-006 |
 | API-057 | leaveVoice | POST /channels/{channelId}/voice/leave | 204 | — | | SV-FR-049 |
 | API-058 | getVoiceStates | GET /channels/{channelId}/voice/states | 200 voice states | yes | | SV-FR-050 |
-| API-059 | changePassword | PUT /users/@me/password | 200 tokens + user | yes | Built; body `current_password`, `new_password`; 403 `INVALID_CREDENTIALS`, 400 `INVALID_PASSWORD`; credential rate limit | SV-FR-060, SV-FR-061 |
+| API-059 | changePassword | PUT /users/@me/password | 200 tokens + user | yes | Built; body `current_password`, `new_password`; 403 `INVALID_CREDENTIALS`, 400 `INVALID_PASSWORD`; 503 SESSION_UNAVAILABLE on revocation/token-store failure; credential rate limit | SV-FR-060, SV-FR-061 |
 
 Routes outside `/api/v1`: `GET /health`, `GET /metrics` (Prometheus), `GET /docs`,
 `GET /docs/openapi.yaml`, `GET /gateway` (WebSocket upgrade).
@@ -267,6 +267,7 @@ Codes added in rev 2 (registration codes implemented in PR #54; CANNOT_KICK_SELF
 | `INVALID_INVITE` | 403 | The invite code at registration is unknown, expired, revoked or used up | SV-FR-063 |
 | `REGISTRATION_CLOSED` | 403 | Mode `closed` | SV-FR-064 |
 | `CANNOT_KICK_SELF` | 400 | A member tried to kick themself | SV-FR-070 |
+| `SESSION_UNAVAILABLE` | 503 | Session Redis transport/timeout or token-store failure; retain saved session for Retry on refresh | SV-FR-005, SV-FR-006, SV-FR-061 |
 | `SERVICE_UNAVAILABLE` | 503 | Redis is unreachable on a rate-limited unauthenticated route | SV-NFR-010 |
 | `NO_SHARED_GUILD` | 403 | A DM or group DM names a user who shares no guild with the caller | SV-FR-054, SV-FR-056, SV-FR-057 |
 
@@ -301,7 +302,7 @@ rev 2 a user may hold several connections, each receiving every event for that u
 | EVT-011 | 0 | MESSAGE_DELETE | server → client | `id`, `channel_id` | SV-FR-030 |
 | EVT-012 | 0 | GUILD_CREATE | server → client | guild (to the creator only) | SV-FR-007 |
 | EVT-013 | 0 | GUILD_UPDATE | server → client | guild | SV-FR-011 |
-| EVT-014 | 0 | GUILD_DELETE | server → client | `id` | SV-FR-012 |
+| EVT-014 | 0 | GUILD_DELETE | server → client | `id`; also sent directly to kicked/banned users after guild unsubscribe; disconnected sessions require fresh READY | SV-FR-012, SV-FR-066, SV-FR-067 |
 | EVT-015 | 0 | CHANNEL_CREATE | server → client | channel (guild members) or DM channel (each recipient) | SV-FR-014, SV-FR-054 |
 | EVT-016 | 0 | CHANNEL_UPDATE | server → client | channel | SV-FR-015 |
 | EVT-017 | 0 | CHANNEL_DELETE | server → client | `id`, `guild_id` (guild-wide metadata, regardless of VIEW_CHANNEL) or DM channel (participants only) | SV-FR-015 |
@@ -400,3 +401,5 @@ together with the iOS client (Q-025); APNs is the one optional outside service G
 | 17 | 2026-11-24T00:33:25-05:00 | 4bfa82018aa4 | REVISION | PR #54 round 2: restore requirement evidence, correct registration diagram and operator guidance, parent-first invite locks and stronger concurrency/commit regressions |
 | 18 | 2026-11-24T00:51:47-05:00 | 03b5c35200c3 | REVISION | PR #55: API-059, refresh generations, web session restoration, invite registration and password settings |
 | 19 | 2026-11-24T01:58:10-05:00 | 76ad98d47a9d | REVISION | PR #55 round 2: post-CAS session revocation, conditional restore clearing, contract and evidence corrections |
+| 20 | 2026-11-24T03:21:06-05:00 | 400bb085e781 | REVISION | B5b: moderation UI, atomic removal and target notification; session transport mapping and bounded cross-tab recovery |
+| 21 | 2026-11-24T04:24:31-05:00 | 73cb40662507 | REVISION | PR 56 round 2: clear removed guild channel state; document session 503 and late-winner residual; strengthen moderation transaction evidence |

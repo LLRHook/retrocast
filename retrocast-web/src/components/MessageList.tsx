@@ -324,6 +324,7 @@ export default function MessageList({
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [showNewIndicator, setShowNewIndicator] = useState(false);
+  const activeChannel = useRef<string | null>(channelId);
   const bottomRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const prevScrollHeightRef = useRef(0);
@@ -337,6 +338,11 @@ export default function MessageList({
       el.scrollHeight - el.scrollTop - el.clientHeight < 50;
   }, []);
 
+  useEffect(() => {
+    activeChannel.current = channelId;
+    return () => {activeChannel.current = null;};
+  }, [channelId]);
+
   // Initial load
   useEffect(() => {
     setLoading(true);
@@ -344,6 +350,7 @@ export default function MessageList({
     setShowNewIndicator(false);
     fetchMessages(channelId)
       .then((msgs) => {
+        if (activeChannel.current !== channelId) return;
         setMessages(channelId, [...msgs].reverse());
         requestAnimationFrame(() => {
           bottomRef.current?.scrollIntoView();
@@ -387,6 +394,7 @@ export default function MessageList({
     prevScrollHeightRef.current = listRef.current?.scrollHeight || 0;
     try {
       const older = await fetchMessages(channelId, oldestId);
+      if (activeChannel.current !== channelId) return;
       if (older.length > 0) {
         prependMessages(channelId, [...older].reverse());
         requestAnimationFrame(() => {

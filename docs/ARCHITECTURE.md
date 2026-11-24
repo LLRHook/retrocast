@@ -221,10 +221,9 @@ sequenceDiagram
   M->>A: DELETE members/{user} or PUT bans/{user} (reason)
   A->>P: caller holds KICK_MEMBERS or BAN_MEMBERS
   A->>P: target is not the owner or the caller, ranks below the caller (SV-FR-070)
-  A->>P: DELETE member, INSERT ban when banning
-  A->>G: DispatchToGuild(GUILD_BAN_ADD when banning, GUILD_MEMBER_REMOVE)
-  G->>T: GUILD_MEMBER_REMOVE
-  A->>G: UnsubscribeFromGuild(target, guild) on every connection (SV-FR-071)
+  A->>P: Ban transaction: lock guild parent, DELETE member, INSERT ban, COMMIT
+  A->>G: After commit: unsubscribe target, guild ban/member events, target GUILD_DELETE
+  G->>T: GUILD_DELETE (target only); GUILD_MEMBER_REMOVE (remaining guild)
   A-->>M: 204
 ```
 
@@ -240,15 +239,14 @@ the hash. The post-CAS advance revokes logins that read the old hash while the C
 waiting; the pinned generation rejects a delayed store after that advance. Either advance
 failing returns an error; no successful password-change response is sent. Profile updates
 do not write the hash. Session Redis reads, epoch advances, stores and consumes each have
-a two-second deadline; logout still returns 204 if revocation fails. Access tokens already
+a two-second deadline. Refresh and logout return 401 INVALID_TOKEN only for the Lua invalid-token reply; Redis transport/timeouts return 503 SESSION_UNAVAILABLE. Password-change revocation and token-store failures also return 503. If the second generation advance fails, the password has already changed despite the error response, and a racing login may survive until the next password change. Access tokens already
 issued expire within 15 minutes.
 
 The web auth store restores a saved session before routing, coalesces concurrent refreshes,
 and uses Web Locks across tabs to read and rotate the latest stored token. A refresh 401
 clears only the token that failed: when another tab has replaced it, restore retries once
-with that replacement. A second replacement is preserved for Retry. This also protects
-shared storage when Web Locks are unavailable. Password-change token writes hold the
-same lock. A network error preserves the session and presents Retry. Logout drains the local
+with that replacement. A second replacement is preserved for Retry. Without Web Locks, restore waits 250 ms and rechecks storage before clearing; a winner whose response arrives after that bounded wait can leave both tabs signed out and its rotated server token orphaned until expiry. Late successful rotations do not overwrite a token that storage has already replaced. Password-change token writes hold the
+same lock for storage updates; the password request itself is not serialized with rotations. A network error preserves the session and presents Retry. Logout drains the local
 refresh and uses the same tab lock through revocation and local clearing.
 
 Backing up and restoring (SYS-FR-002–SYS-FR-004, ADR-018): a cron or launchd job on the host
@@ -402,7 +400,8 @@ they affect stay Later.
 | D-29 | The web client parses every successful response as JSON, so an empty 204 body rejects: deleting a server or channel, leaving a server and other 204 calls report failure although the server succeeded | retrocast-web/src/lib/api.ts:97–114; components/GuildSettingsModal.tsx:56–74; components/ChannelModal.tsx:56–65 | WEB-FR-006, WEB-FR-014, WEB-FR-021, WEB-FR-022, WEB-FR-024 | Pilot | [#41](https://github.com/LLRHook/retrocast/issues/41) Fixed in [PR #45](https://github.com/LLRHook/retrocast/pull/45). |
 | D-30 | Web sign-out clears the local tokens without calling API-004, so the refresh token stays valid for up to 7 days | retrocast-web/src/stores/auth.ts:68–75 | WEB-FR-024 | Pilot | [#42](https://github.com/LLRHook/retrocast/issues/42) Fixed in [PR #45](https://github.com/LLRHook/retrocast/pull/45). |
 | D-31 | Fixed: reaction remove/list verify that the message exists in the route channel before repository access | retrocast/internal/service/reaction.go; internal/api/reaction_handler_test.go (TestReactionRouteBinding) | SV-FR-074, SV-FR-075 | Fixed | [#47](https://github.com/LLRHook/retrocast/issues/47) |
-| D-32 | Fixed: web reload restores a saved session before routing; offline retry preserves the refresh token | retrocast-web/src/stores/auth.ts; src/App.tsx; contract.test.mjs | WEB-FR-001, WEB-FR-002, WEB-FR-003 | Fixed | [#49](https://github.com/LLRHook/retrocast/issues/49), [PR #55](https://github.com/LLRHook/retrocast/pull/55) |
+| D-32 | Fixed: web reload restores a saved session before routing; transport failures preserve tokens; bounded no-lock recheck and late-rotation protection | retrocast-web/src/stores/auth.ts; src/App.tsx; contract.test.mjs | WEB-FR-001, WEB-FR-002, WEB-FR-003 | Fixed | [#49](https://github.com/LLRHook/retrocast/issues/49), [PR #55](https://github.com/LLRHook/retrocast/pull/55) |
+| D-33 | Fixed: kick/ban notify every active target device with GUILD_DELETE after unsubscribe; ban membership and ban row commit atomically, using the guild parent lock before child rows | internal/service/ban.go; member.go; internal/api/moderation_live_test.go; internal/gateway/membership_live_test.go | SV-FR-066, SV-FR-067, WEB-FR-023 | Fixed | [#52](https://github.com/LLRHook/retrocast/issues/52) |
 
 Other debt: the `refresh_tokens` and `device_tokens` tables have no code; op 4 is defined
 but unhandled; username uniqueness is case-sensitive; invite codes carry 32 random bits;
@@ -412,6 +411,8 @@ the Go version in go.mod, CI and the Dockerfile; rev 2 updates README.md to matc
 prose docs moved to `docs/legacy/` with a pointer to their successor (Q-034). Documentation
 drift outside `docs/`: `retrocast-web/README.md` (Vite template), TODO.md ("Vite 6"; marks
 features done that fail at runtime, RISK-002), SYSTEM_DESIGN.md (SvelteKit web client).
+
+
 
 ## 10. Glossary
 See [SRS §1.3](SRS.md) and §5.3.
@@ -437,3 +438,5 @@ See [SRS §1.3](SRS.md) and §5.3.
 | 16 | 2026-11-24T00:33:25-05:00 | 4bfa82018aa4 | REVISION | PR #54 round 2: restore requirement evidence, correct registration diagram and operator guidance, parent-first invite locks and stronger concurrency/commit regressions |
 | 17 | 2026-11-24T00:51:47-05:00 | 03b5c35200c3 | REVISION | PR #55: API-059, refresh generations, web session restoration, invite registration and password settings |
 | 18 | 2026-11-24T01:58:10-05:00 | 76ad98d47a9d | REVISION | PR #55 round 2: post-CAS session revocation, conditional restore clearing, contract and evidence corrections |
+| 19 | 2026-11-24T03:21:06-05:00 | 400bb085e781 | REVISION | B5b: moderation UI, atomic removal and target notification; session transport mapping and bounded cross-tab recovery |
+| 20 | 2026-11-24T04:24:31-05:00 | 73cb40662507 | REVISION | PR 56 round 2: clear removed guild channel state; document session 503 and late-winner residual; strengthen moderation transaction evidence |

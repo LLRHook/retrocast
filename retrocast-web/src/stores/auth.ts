@@ -49,6 +49,12 @@ export const useAuthStore = create<AuthState>()((set, get) => {
     if (!refreshToken) throw new Error("No refresh token");
     try {
       const data = await api.post<RefreshResponse>("/api/v1/auth/refresh", {refresh_token: refreshToken});
+      // A newer session (including a password change) wins over a late response.
+      if (localStorage.getItem("refreshToken") !== refreshToken) {
+        const latest = localStorage.getItem("refreshToken");
+        if (!latest) throw new Error("Session changed");
+        return get().accessToken ?? data.access_token;
+      }
       localStorage.setItem("refreshToken", data.refresh_token);
       set({accessToken: data.access_token, refreshToken: data.refresh_token});
       return data.access_token;
@@ -152,7 +158,11 @@ export const useAuthStore = create<AuthState>()((set, get) => {
             }
             const rejected = rejectedTokens.get(err) ?? get().refreshToken;
             const replaced = await sessionLock(async () => {
-              const stored = localStorage.getItem("refreshToken");
+              let stored = localStorage.getItem("refreshToken");
+              if (!globalThis.navigator?.locks && (!stored || stored === rejected)) {
+                await new Promise(resolve => setTimeout(resolve, 250));
+                stored = localStorage.getItem("refreshToken");
+              }
               if (stored && stored !== rejected) return true;
               localStorage.removeItem("refreshToken");
               set({user: null, accessToken: null, refreshToken: null, isAuthenticated: false, restoreState: "ready"});

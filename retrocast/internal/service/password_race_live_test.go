@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"github.com/alicebob/miniredis/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/victorivanov/retrocast/internal/auth"
 	"github.com/victorivanov/retrocast/internal/database"
@@ -157,11 +156,7 @@ func (r *passwordDeadlineRepo) CompareAndSwapPassword(context.Context, int64, st
 	return true, nil
 }
 func TestPasswordRedisDeadline(t *testing.T) {
-	mr := miniredis.RunT(t)
-	rdb, err := redisclient.NewClient("redis://" + mr.Addr())
-	if err != nil {
-		t.Fatal(err)
-	}
+	rdb := newSilentRedis(t)
 	defer func() { _ = rdb.Close() }()
 	hash, err := auth.HashPassword("password123")
 	if err != nil {
@@ -169,7 +164,6 @@ func TestPasswordRedisDeadline(t *testing.T) {
 	}
 	repo := &passwordDeadlineRepo{user: &models.User{ID: 25, PasswordHash: hash}}
 	svc := NewAuthService(repo, auth.NewTokenService("deadline-fixture"), rdb, nil)
-	mr.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
 	defer cancel()
 	start := time.Now()
@@ -177,7 +171,7 @@ func TestPasswordRedisDeadline(t *testing.T) {
 	if err == nil || repo.casCalls != 0 {
 		t.Fatal("unavailable Redis must refuse password change before CAS")
 	}
-	if elapsed := time.Since(start); elapsed > 3*time.Second {
+	if elapsed := time.Since(start); elapsed > 2750*time.Millisecond {
 		t.Fatalf("password Redis deadline exceeded: %s", elapsed)
 	}
 }

@@ -1,5 +1,8 @@
 import { create } from "zustand";
 import { api } from "@/lib/api";
+import { useChannelsStore } from "@/stores/channels";
+import { useMessagesStore } from "@/stores/messages";
+import { useTypingStore } from "@/stores/typing";
 import type { Guild } from "@/types";
 
 interface GuildsState {
@@ -25,6 +28,22 @@ export const useGuildsStore = create<GuildsState>()((set, get) => ({
   },
 
   removeGuild: (guildId) => {
+    const ids = new Set((useChannelsStore.getState().channelsByGuild.get(guildId) ?? []).map(c => c.id));
+    useChannelsStore.setState(state => {
+      const channelsByGuild = new Map(state.channelsByGuild);
+      channelsByGuild.delete(guildId);
+      return {channelsByGuild, selectedChannelId: state.selectedChannelId && ids.has(state.selectedChannelId) ? null : state.selectedChannelId};
+    });
+    useMessagesStore.setState(state => {
+      const messagesByChannel = new Map(state.messagesByChannel), hasMore = new Map(state.hasMore);
+      for (const id of ids) { messagesByChannel.delete(id); hasMore.delete(id); }
+      return {messagesByChannel, hasMore};
+    });
+    useTypingStore.setState(state => {
+      const typingByChannel = new Map(state.typingByChannel);
+      for (const id of ids) typingByChannel.delete(id);
+      return {typingByChannel};
+    });
     set((state) => {
       const guilds = new Map(state.guilds);
       guilds.delete(guildId);

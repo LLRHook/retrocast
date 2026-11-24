@@ -33,7 +33,8 @@ export const useTypingStore = create<TypingState>()((set) => ({
           typingByChannel.get(channelId) || new Map(),
         );
         const entry = channelTyping.get(userId);
-        if (entry && Date.now() - entry.timestamp >= TYPING_TIMEOUT) {
+        if (!entry) return state;
+        if (Date.now() - entry.timestamp >= TYPING_TIMEOUT) {
           channelTyping.delete(userId);
           typingByChannel.set(channelId, channelTyping);
         }

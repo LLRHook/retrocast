@@ -111,7 +111,9 @@ func (h *AuthHandler) Logout(c echo.Context) error {
 		return Error(c, http.StatusBadRequest, "INVALID_BODY", "invalid request body")
 	}
 
-	h.service.Logout(c.Request().Context(), req.RefreshToken)
+	if err := h.service.Logout(c.Request().Context(), req.RefreshToken); err != nil {
+		return mapServiceError(c, err)
+	}
 
 	return c.NoContent(http.StatusNoContent)
 }

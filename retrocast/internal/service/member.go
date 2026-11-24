@@ -273,6 +273,7 @@ func (s *MemberService) KickMember(ctx context.Context, guildID, callerID, targe
 
 	s.gateway.UnsubscribeFromGuild(targetUserID, guildID)
 	s.gateway.DispatchToGuild(guildID, gateway.EventGuildMemberRemove, map[string]any{"guild_id": strconv.FormatInt(guildID, 10), "user_id": strconv.FormatInt(targetUserID, 10)})
+	s.gateway.DispatchToUser(targetUserID, gateway.EventGuildDelete, map[string]any{"id": strconv.FormatInt(guildID, 10)})
 	return nil
 }
 

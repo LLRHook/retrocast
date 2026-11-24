@@ -116,6 +116,7 @@ function storeModule(name, state) {
  const url=compile('export let state;export const selected=[];export function setState(value){state=value;selected.length=0};export function '+name+'(selector){const value=selector(state);selected.push(value);return value};'+name+'.getState=()=>state;',name);
  return import(url).then(module=>{module.setState(state);return {url,module}});
 }
+let componentSequence=0;
 async function component(file, replacements, suffix='') {
  let source=readFileSync(resolve('src/components/'+file+'.tsx'),'utf8')+suffix;
  source=source.replace(/from "([^"]+)"/g,(whole,name)=>{
@@ -123,7 +124,7 @@ async function component(file, replacements, suffix='') {
   return target?'from '+JSON.stringify(target):whole;
  });
  // The JSX runtime import is introduced by TypeScript after import rewriting.
- const url=compile(source,file+'-component');const path=new URL(url);
+ const url=compile(source,file+'-component-'+(++componentSequence));const path=new URL(url);
  writeFileSync(path,readFileSync(path,'utf8').replace('"react/jsx-runtime"',JSON.stringify(jsxUrl)));
  return import(url);
 }
@@ -351,6 +352,89 @@ test('password token write waits for the shared session lock',async()=>{
  } finally {release();reset()}
 });
 
+test('second replacement ends in error and retains token',async()=>{
+ const reset=installLocks(undefined);try{sharedSession();const a=await authTab();let k=0;
+ globalThis.fetch=async()=>{storage.set('refreshToken','other'+(++k));return rejectedToken()};
+ await a.getState().restore();assert.equal(a.getState().restoreState,'error');assert.equal(storage.get('refreshToken'),'other2');assert.equal(k,2);
+ }finally{reset()}
+});
+test('request rejection tracks its attempted token despite in-memory replacement',async()=>{
+ const reset=installLocks(undefined);try{sharedSession();const a=await authTab();let k=0;
+ globalThis.fetch=async url=>{if(!url.endsWith('/auth/refresh'))return Response.json({data:{id:'u'}});
+ if(++k===1){storage.set('refreshToken','winner');a.setState({refreshToken:'winner'});return rejectedToken()}return pairResponse('retried')};
+ await a.getState().restore();assert.equal(a.getState().isAuthenticated,true);assert.equal(storage.get('refreshToken'),'retried');
+ }finally{reset()}
+});
+test('delayed winning tab is checked before clearing on 401',async()=>{
+ const reset=installLocks(undefined);try{sharedSession();const a=await authTab();let k=0;
+ globalThis.fetch=async url=>{if(!url.endsWith('/auth/refresh'))return Response.json({data:{id:'u'}});
+ if(++k===1){setTimeout(()=>storage.set('refreshToken','winner'),80);return rejectedToken()}return pairResponse('retried')};
+ await a.getState().restore();assert.equal(a.getState().isAuthenticated,true);assert.equal(storage.get('refreshToken'),'retried');
+ }finally{reset()}
+});
+test('late refresh cannot overwrite a password-change token without locks',async()=>{
+ const reset=installLocks(undefined);try{sharedSession();const a=await authTab(),b=await authTab();let release;const gate=new Promise(r=>release=r);
+ globalThis.fetch=async url=>{if(url.endsWith('/auth/refresh')){await gate;return pairResponse('revoked')}
+ return Response.json({data:{user:{id:'u'},access_token:'changed',refresh_token:'password'}})};
+ const rotation=b.getState().refreshAccessToken();await new Promise(setImmediate);await a.getState().changePassword('old','newpassword');release();await rotation;
+ assert.equal(storage.get('refreshToken'),'password');
+ }finally{reset()}
+});
+test('moderation popover gates actions, sends reason, and explains hierarchy',async()=>{
+ const modUrl=compile('export let value={kick:true,ban:true,userId:"mod"};export function useModeration(){return value};export function setValue(v){value=v}','moderation-mock');const mod=await import(modUrl);
+ const presence=await storeModule('usePresenceStore',{presences:new Map()});const roles=await storeModule('useRolesStore',{rolesByGuild:new Map()});
+ const {default:Popover}=await component('UserProfilePopover',{'@/lib/api':apiUrl,'@/hooks/useModeration':modUrl,'@/stores/presence':presence.url,'@/stores/roles':roles.url});
+ const prev=globalThis.window;globalThis.window={innerWidth:1200,innerHeight:900};
+ const props={member:{user_id:'target',roles:[],joined_at:'2026-01-01'},displayName:'Target',username:'target',guildId:'guild',x:10,y:10,onClose(){}};
+ try{
+ hooks.reset();let tree=Popover(props);assert.ok(nodes(tree).some(n=>n.props?.children==='Kick'));assert.ok(nodes(tree).some(n=>n.props?.children==='Ban'));
+ mod.setValue({kick:false,ban:false,userId:'plain'});hooks.reset();tree=Popover(props);assert.ok(!nodes(tree).some(n=>n.props?.children==='Ban'||n.props?.children==='Kick'));
+ mod.setValue({kick:true,ban:true,userId:'mod'});hooks.reset(['ban','spam',false,'']);tree=Popover(props);
+ let sent;globalThis.fetch=async(url,o)=>{sent={url,body:JSON.parse(o.body)};return new Response(null,{status:204})};
+ await element(tree,n=>n.props?.children==='Confirm Ban').props.onClick();assert.ok(sent.url.endsWith('/guilds/guild/bans/target'));assert.deepEqual(sent.body,{reason:'spam'});
+ globalThis.fetch=async()=>Response.json({error:{code:'ROLE_HIERARCHY',message:'too high'}},{status:403});await element(tree,n=>n.props?.children==='Confirm Ban').props.onClick();assert.match(hooks.values[3],/ranks too high/);
+ hooks.reset(['kick','',false,'']);tree=Popover(props);globalThis.fetch=async(url,o)=>{sent={url,method:o.method};return new Response(null,{status:204})};await element(tree,n=>n.props?.children==='Confirm Kick').props.onClick();assert.ok(sent.url.endsWith('/members/target'));assert.equal(sent.method,'DELETE');
+ }finally{globalThis.window=prev}
+});
+test('Bans tab renders reasons and unbans the selected user only',async()=>{
+ const {default:Bans}=await component('BansTab',{'@/lib/api':apiUrl});const bans=[{user_id:'a',reason:'spam'},{user_id:'b',reason:'abuse'}];hooks.reset([bans,false,'',null,0]);const tree=Bans({guildId:'guild'});
+ assert.ok(nodes(tree).some(n=>n.props?.children==='spam'));assert.ok(nodes(tree).some(n=>n.props?.children==='abuse'));
+ let sent;globalThis.fetch=async(url,o)=>{sent={url,method:o.method};return new Response(null,{status:204})};await element(tree,n=>n.props?.children==='Unban').props.onClick();assert.ok(sent.url.endsWith('/bans/a'));assert.equal(sent.method,'DELETE');assert.deepEqual(hooks.values[0],[bans[1]]);
+});
+test('GUILD_DELETE purges selected guild channels, messages and typing, preserving other guilds',async()=>{
+ const urls={};const stores={};
+ for(const name of ['users','channels','messages','typing','members','roles','guilds']){
+  let source=readFileSync(resolve('src/stores/'+name+'.ts'),'utf8').replace('"zustand"',JSON.stringify(pathToFileURL(require.resolve('zustand')).href)).replace('"@/lib/api"',JSON.stringify(apiUrl));
+  for(const [dep,url]of Object.entries(urls))source=source.replaceAll('"@/stores/'+dep+'"',JSON.stringify(url));
+  urls[name]=compile(source,'delete-'+name);stores[name]=await import(urls[name]);
+ }
+ const channels=stores.channels.useChannelsStore,guilds=stores.guilds.useGuildsStore,messages=stores.messages.useMessagesStore,typing=stores.typing.useTypingStore;
+ const gwUrl=compile(readFileSync(resolve('src/lib/gateway.ts'),'utf8'),'delete-gateway');const {gateway}=await import(gwUrl);
+ const fallback=compile('export const usePresenceStore={getState:()=>({})};','delete-presence');
+ let source=readFileSync(resolve('src/lib/gateway-dispatcher.ts'),'utf8').replace('"@/lib/gateway"',JSON.stringify(gwUrl));
+ for(const [name,url]of Object.entries(urls))source=source.replaceAll('"@/stores/'+name+'"',JSON.stringify(url));source=source.replace('"@/stores/presence"',JSON.stringify(fallback));
+ (await import(compile(source,'delete-dispatcher'))).initGatewayDispatcher();
+ channels.getState().setChannels('gone',[{id:'a',guild_id:'gone',position:0}]);channels.getState().setChannels('kept',[{id:'b',guild_id:'kept',position:0}]);
+ guilds.getState().setGuild({id:'gone'});guilds.getState().setGuild({id:'kept'});guilds.getState().selectGuild('gone');channels.getState().selectChannel('a');
+ messages.setState({messagesByChannel:new Map([['a',[{id:'secret'}]],['b',[{id:'other'}]]]),hasMore:new Map([['a',true],['b',true]])});typing.setState({typingByChannel:new Map([['a',new Map([['u',{}]])],['b',new Map()]])});
+ gateway.handlePayload({op:0,t:'GUILD_DELETE',s:1,d:{id:'gone'}});
+ assert.equal(channels.getState().selectedChannelId,null);assert.equal(guilds.getState().selectedGuildId,null);assert.equal(channels.getState().channelsByGuild.has('gone'),false);
+ assert.equal(messages.getState().messagesByChannel.has('a'),false);assert.equal(messages.getState().hasMore.has('a'),false);assert.equal(typing.getState().typingByChannel.has('a'),false);
+ assert.equal(channels.getState().channelsByGuild.has('kept'),true);assert.equal(messages.getState().messagesByChannel.has('b'),true);
+ channels.getState().selectChannel('b');guilds.getState().selectGuild('kept');gateway.handlePayload({op:0,t:'GUILD_DELETE',s:2,d:{id:'gone'}});assert.equal(channels.getState().selectedChannelId,'b');
+});
+test('actual moderation hook drives kick-only, ban-only, Administrator, plain, and self popovers',async()=>{
+ const auth=await storeModule('useAuthStore',{user:{id:'moderator'}}),guilds=await storeModule('useGuildsStore',{guilds:new Map([['g',{owner_id:'owner'}]])}),members=await storeModule('useMembersStore',{membersByGuild:new Map([['g',new Map([['moderator',{roles:['r']} ]])]])}),roles=await storeModule('useRolesStore',{rolesByGuild:new Map()});
+ let source=readFileSync(resolve('src/hooks/useModeration.ts'),'utf8').replace('"react"',JSON.stringify(hooksUrl)).replace('"@/lib/api"',JSON.stringify(apiUrl));
+ for(const [name,store]of Object.entries({auth,guilds,members,roles}))source=source.replace('"@/stores/'+name+'"',JSON.stringify(store.url));
+ const modUrl=compile(source,'real-moderation-hook'),presence=await storeModule('usePresenceStore',{presences:new Map()});
+ const {default:Popover}=await component('UserProfilePopover',{'@/lib/api':apiUrl,'@/hooks/useModeration':modUrl,'@/stores/presence':presence.url,'@/stores/roles':roles.url});
+ const previous=globalThis.window;globalThis.window={innerWidth:1200,innerHeight:900};
+ try{for(const [bits,expected]of [['32',['Kick']],['64',['Ban']],['2147483648',['Kick','Ban']],['0',[]]])for(const self of [false,true]){
+  roles.module.setState({rolesByGuild:new Map([['g',[{id:'r',permissions:bits,is_default:false}]]])});hooks.reset();const tree=Popover({member:{user_id:self?'moderator':'target',roles:[],joined_at:'2026-01-01'},displayName:'Target',username:'target',guildId:'g',x:1,y:1,onClose(){}});
+  const buttons=nodes(tree).filter(n=>n.type==='button').map(n=>n.props.children).filter(s=>s==='Kick'||s==='Ban');assert.deepEqual(buttons,self?[]:expected,bits+' self='+self);
+ }}finally{globalThis.window=previous}
+});
 } catch (error) {
  cleanup();
  throw error;

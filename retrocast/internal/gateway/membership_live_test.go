@@ -54,3 +54,37 @@ func TestLiveMembershipConcurrentRemoval(t *testing.T) {
 		t.Fatal("received after removal completed")
 	}
 }
+
+func TestRemovalNotifiesAllDevicesAndPreservesOtherGuild(t *testing.T) {
+	m := newTestManager(t, &mockGuildRepo{})
+	a, b, away := fakeConn(m, 100, "a"), fakeConn(m, 100, "b"), fakeConn(m, 100, "away")
+	defer a.Close()
+	defer b.Close()
+	defer away.Close()
+	m.SubscribeToGuild(100, 1)
+	m.SubscribeToGuild(100, 2)
+	m.DispatchToGuild(1, EventGuildUpdate, "old")
+	drainEvents(a)
+	drainEvents(b)
+	drainEvents(away)
+	m.unregister(away)
+	m.UnsubscribeFromGuild(100, 1)
+	m.DispatchToUser(100, EventGuildDelete, map[string]string{"id": "1"})
+	for _, c := range []*Connection{a, b} {
+		events := drainEvents(c)
+		if len(events) != 1 || events[0].Event == nil || *events[0].Event != EventGuildDelete {
+			t.Fatal("removal missing on a device")
+		}
+	}
+	if away.replayFloor <= away.sequence.Load() {
+		t.Fatal("away device can replay stale guild events")
+	}
+	m.DispatchToGuild(1, EventGuildUpdate, "forbidden")
+	if len(drainEvents(a))+len(drainEvents(b)) != 0 {
+		t.Fatal("removed guild still subscribed")
+	}
+	m.DispatchToGuild(2, EventGuildUpdate, "other")
+	if len(drainEvents(a)) != 1 || len(drainEvents(b)) != 1 {
+		t.Fatal("other guild subscription lost")
+	}
+}

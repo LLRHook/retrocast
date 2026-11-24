@@ -95,6 +95,7 @@ func TestSessionRedisDeadlinesOnSilentConnection(t *testing.T) {
 		name string
 		call func(context.Context, *Client) error
 	}{
+		{"read-epoch", func(ctx context.Context, c *Client) error { _, err := c.RefreshGeneration(ctx, 25); return err }},
 		{"epoch", func(ctx context.Context, c *Client) error { return c.AdvanceRefreshGeneration(ctx, 25) }},
 		{"store", func(ctx context.Context, c *Client) error {
 			return c.StoreRefreshToken(ctx, "fixture", 25, time.Minute)
