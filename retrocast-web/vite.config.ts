@@ -13,12 +13,15 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": {
-        target: "http://localhost:8080",
+        target: process.env.RETROCAST_PROXY_URL || "https://localhost",
         changeOrigin: true,
+        secure: false,
       },
       "/gateway": {
-        target: "ws://localhost:8080",
+        target: process.env.RETROCAST_PROXY_URL || "https://localhost",
         ws: true,
+        changeOrigin: true,
+        secure: false,
       },
     },
   },

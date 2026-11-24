@@ -19,7 +19,7 @@
 
 set -euo pipefail
 
-BASE_URL="${RETROCAST_URL:-http://localhost:8080}"
+BASE_URL="${RETROCAST_URL:-https://localhost}"
 API="$BASE_URL/api/v1"
 
 # ---------------------------------------------------------------------------
