@@ -1,11 +1,13 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { useAuthStore } from "@/stores/auth";
 import { ApiClientError } from "@/lib/api";
 
 export default function RegisterPage() {
   const navigate = useNavigate();
   const register = useAuthStore((s) => s.register);
+  const [params] = useSearchParams();
+  const [inviteCode, setInviteCode] = useState(params.get("invite_code") || params.get("invite") || "");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -16,11 +18,11 @@ export default function RegisterPage() {
     setError("");
     setLoading(true);
     try {
-      await register(username, password);
+      await register(username, password, inviteCode.trim());
       navigate("/app");
     } catch (err) {
       if (err instanceof ApiClientError) {
-        setError(err.message);
+        setError(({INVITE_REQUIRED: "An invite is required to register.", INVALID_INVITE: "The invite is invalid or used up.", REGISTRATION_CLOSED: "Registration is closed."} as Record<string, string>)[err.code] || err.message);
       } else {
         setError("Failed to connect to server");
       }
@@ -66,6 +68,8 @@ export default function RegisterPage() {
         className="mb-6 w-full rounded bg-bg-input p-2.5 text-text-primary outline-none focus:ring-2 focus:ring-accent"
       />
 
+      <label htmlFor="invite-code" className="mb-2 block text-xs font-semibold uppercase text-text-secondary">Invite code (optional)</label>
+      <input id="invite-code" value={inviteCode} onChange={e => setInviteCode(e.target.value)} className="mb-6 w-full rounded bg-bg-input p-2.5 text-text-primary" />
       <button
         type="submit"
         disabled={loading}

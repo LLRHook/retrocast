@@ -20,18 +20,40 @@ interface AuthState {
   serverUrl: string | null;
   isAuthenticated: boolean;
   login: (username: string, password: string) => Promise<void>;
-  register: (username: string, password: string) => Promise<void>;
+  register: (username: string, password: string, inviteCode?: string) => Promise<void>;
+  restore: () => Promise<void>;
+  restoreState: "pending" | "ready" | "error";
+  changePassword: (current: string, next: string) => Promise<void>;
   logout: () => Promise<void>;
   setServerUrl: (url: string) => void;
   refreshAccessToken: () => Promise<string>;
 }
 
+// Web Locks serialize rotations across same-origin tabs; each lock reads the latest
+// token from storage. The store promise also coalesces API, restore and logout calls.
+async function sessionLock<T>(action: () => Promise<T>): Promise<T> {
+  if (globalThis.navigator?.locks) return navigator.locks.request("retrocast-session", action);
+  return action();
+}
+let refreshFlight: Promise<string> | null = null;
+let restoreFlight: Promise<void> | null = null;
 export const useAuthStore = create<AuthState>()((set, get) => {
   // Wire up the API client token provider
   api.setTokenProvider(() => get().accessToken);
   api.setTokenRefresher(() => get().refreshAccessToken());
 
+  const rotate = async () => {
+        const refreshToken = localStorage.getItem("refreshToken");
+        if (!refreshToken) throw new Error("No refresh token");
+        const data = await api.post<RefreshResponse>("/api/v1/auth/refresh", {refresh_token: refreshToken});
+        localStorage.setItem("refreshToken", data.refresh_token);
+        set({accessToken: data.access_token, refreshToken: data.refresh_token});
+        return data.access_token;
+
+  };
+
   return {
+    restoreState: "pending",
     user: null,
     accessToken: null,
     refreshToken: localStorage.getItem("refreshToken"),
@@ -52,8 +74,9 @@ export const useAuthStore = create<AuthState>()((set, get) => {
       });
     },
 
-    register: async (username, password) => {
+    register: async (username, password, inviteCode) => {
       const data = await api.post<AuthResponse>("/api/v1/auth/register", {
+        invite_code: inviteCode || undefined,
         username,
         password,
       });
@@ -67,29 +90,26 @@ export const useAuthStore = create<AuthState>()((set, get) => {
     },
 
     logout: async () => {
-      try {
-        const { refreshToken } = get();
-        if (refreshToken) {
-          try {
-            await api.post("/api/v1/auth/logout", { refresh_token: refreshToken });
-          } catch (err) {
-            if (!(err instanceof ApiClientError) || err.status !== 401) throw err;
-            // Refresh can rotate the token; revoke the current pair on retry.
-            await get().refreshAccessToken();
-            await api.post("/api/v1/auth/logout", { refresh_token: get().refreshToken });
+      // Drain an existing local refresh before taking the shared tab lock.
+      if (refreshFlight) { try { await refreshFlight; } catch { /* best effort */ } }
+      await sessionLock(async () => {
+        try {
+          const refreshToken = localStorage.getItem("refreshToken");
+          if (refreshToken) {
+            try { await api.post("/api/v1/auth/logout", {refresh_token: refreshToken}); }
+            catch (err) {
+              if (!(err instanceof ApiClientError) || err.status !== 401) throw err;
+              // Already under the same lock: rotate directly to avoid nesting it.
+              await rotate();
+              await api.post("/api/v1/auth/logout", {refresh_token: get().refreshToken});
+            }
           }
+        } catch { console.warn("Could not revoke the server session while signing out"); }
+        finally {
+          localStorage.removeItem("refreshToken");
+          set({user: null, accessToken: null, refreshToken: null, isAuthenticated: false});
         }
-      } catch {
-        console.warn("Could not revoke the server session while signing out");
-      } finally {
-        localStorage.removeItem("refreshToken");
-        set({
-          user: null,
-          accessToken: null,
-          refreshToken: null,
-          isAuthenticated: false,
-        });
-      }
+      });
     },
 
     setServerUrl: (url) => {
@@ -97,17 +117,37 @@ export const useAuthStore = create<AuthState>()((set, get) => {
       set({ serverUrl: url });
     },
 
-    refreshAccessToken: async () => {
-      const { refreshToken } = get();
-      if (!refreshToken) {
-        throw new Error("No refresh token");
-      }
-      const data = await api.post<RefreshResponse>("/api/v1/auth/refresh", {
-        refresh_token: refreshToken,
+    changePassword: async (current, next) => {
+      const data = await api.put<AuthResponse>("/api/v1/users/@me/password", {
+        current_password: current, new_password: next,
       });
       localStorage.setItem("refreshToken", data.refresh_token);
-      set({ accessToken: data.access_token, refreshToken: data.refresh_token });
-      return data.access_token;
+      set({user: data.user, accessToken: data.access_token, refreshToken: data.refresh_token});
+    },
+
+    restore: () => {
+      if (restoreFlight) return restoreFlight;
+      restoreFlight = (async () => {
+        if (!get().serverUrl || !get().refreshToken) { set({restoreState: "ready"}); return; }
+        set({restoreState: "pending"});
+        try {
+          await get().refreshAccessToken();
+          const user = await api.get<User>("/api/v1/users/@me");
+          set({user, isAuthenticated: true, restoreState: "ready"});
+        } catch (err) {
+          if (err instanceof ApiClientError && err.status === 401) {
+            localStorage.removeItem("refreshToken");
+            set({user: null, accessToken: null, refreshToken: null, isAuthenticated: false, restoreState: "ready"});
+          } else set({restoreState: "error"});
+        }
+      })().finally(() => {restoreFlight = null;});
+      return restoreFlight;
+    },
+
+    refreshAccessToken: () => {
+      if (refreshFlight) return refreshFlight;
+      refreshFlight = sessionLock(rotate).finally(() => {refreshFlight = null;});
+      return refreshFlight;
     },
   };
 });

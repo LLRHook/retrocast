@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import test, { after } from 'node:test';
 import ts from 'typescript';
 const require = createRequire(import.meta.url);
-const dir = mkdtempSync(join(tmpdir(), 'l18-retrocast-web-test-'));
+const dir = mkdtempSync(join(tmpdir(), 'l25-retrocast-web-test-'));
 const cleanup = () => rmSync(dir, {recursive:true,force:true});
 after(cleanup);
 process.on('exit', cleanup);
@@ -31,7 +31,7 @@ test('204 deletes succeed, success and upload unwrap, errors preserve detail',as
  await assert.rejects(api.patch('/role',{}),err=>err instanceof ApiClientError && err.message==='Role is too high');
 });
 test('refresh persists rotation twice and auth 401 does not recursively refresh',async()=>{
- useAuthStore.setState({refreshToken:'old'});let calls=0;
+ storage.set('refreshToken','old');useAuthStore.setState({refreshToken:'old'});let calls=0;
  globalThis.fetch=async()=>{calls++;return Response.json({data:{access_token:'access'+calls,refresh_token:'rotated'+calls}})};
  await useAuthStore.getState().refreshAccessToken();await useAuthStore.getState().refreshAccessToken();
  assert.equal(calls,2);assert.equal(storage.get('refreshToken'),'rotated2');assert.equal(useAuthStore.getState().refreshToken,'rotated2');
@@ -39,7 +39,7 @@ test('refresh persists rotation twice and auth 401 does not recursively refresh'
  await assert.rejects(useAuthStore.getState().refreshAccessToken());assert.equal(calls,1);
 });
 test('logout revokes stored refresh token before clearing state',async()=>{
- useAuthStore.setState({refreshToken:'logout-token',accessToken:'access',isAuthenticated:true});
+ storage.set('refreshToken','logout-token');useAuthStore.setState({refreshToken:'logout-token',accessToken:'access',isAuthenticated:true});
  const recorded=[];globalThis.fetch=async(url,options)=>{recorded.push({url,body:JSON.parse(options.body),token:useAuthStore.getState().refreshToken});return new Response(null,{status:204})};
  await useAuthStore.getState().logout();assert.equal(recorded.length,1);assert.ok(recorded[0].url.endsWith('/api/v1/auth/logout'));assert.equal(recorded[0].body.refresh_token,'logout-token');assert.equal(recorded[0].token,'logout-token');assert.equal(useAuthStore.getState().isAuthenticated,false);assert.equal(storage.get('refreshToken'),undefined);
 });
@@ -60,7 +60,7 @@ test('REST and gateway channel create converge without duplicate rows',async()=>
 });
 
 test('logout with expired access revokes the rotated refresh token',async()=>{
- useAuthStore.setState({refreshToken:'expired-access-refresh',accessToken:'expired',isAuthenticated:true});const recorded=[];
+ storage.set('refreshToken','expired-access-refresh');useAuthStore.setState({refreshToken:'expired-access-refresh',accessToken:'expired',isAuthenticated:true});const recorded=[];
  globalThis.fetch=async(url,options)=>{
   recorded.push({url,body:JSON.parse(options.body)});
   if(recorded.length===1)return Response.json({error:{code:'UNAUTHORIZED',message:'expired'}},{status:401});
@@ -135,7 +135,7 @@ function nodes(tree) {
 function element(tree, predicate) {const match=nodes(tree).find(predicate);assert.ok(match,'component element missing');return match;}
 test('invite revoke uses the versioned API path',async()=>{
  let requested;
- const fakeApi=compile('export const api={get:async()=>[],delete:async(path)=>{globalThis.inviteRevokePath=path}}','invite-api');
+ const fakeApi=compile('export class ApiClientError extends Error {} export const api={get:async()=>[],delete:async(path)=>{globalThis.inviteRevokePath=path}}','invite-api');
  const {default:InviteModal}=await component('InviteModal',{'@/lib/api':fakeApi});
  hooks.reset([[{code:'fixture-code',uses:0,max_uses:0}],false,false,null]);
  const tree=InviteModal({guildId:'guild',onClose(){}});
@@ -148,7 +148,7 @@ test('invite join selects the returned id and fetches its channels',async()=>{
  const guilds=await storeModule('useGuildsStore',{fetchGuilds:async()=>{},selectGuild:id=>selected.push(id)});
  const channels=await storeModule('useChannelsStore',{fetchChannels:async id=>fetched.push(id)});
  const dms=await storeModule('useDMsStore',{});
- const fakeApi=compile('export const api={post:async()=>({id:"joined-guild"})}','join-api');
+ const fakeApi=compile('export class ApiClientError extends Error {} export const api={post:async()=>({id:"joined-guild"})}','join-api');
  const {JoinGuildModal}=await component('ServerList',{'@/lib/api':fakeApi,'@/stores/guilds':guilds.url,'@/stores/channels':channels.url,'@/stores/dms':dms.url},'\nexport {JoinGuildModal};');
  hooks.reset(['fixture-code',false,'']);
  const tree=JoinGuildModal({onClose(){}});
@@ -169,7 +169,7 @@ test('MemberList empty selectors keep the same snapshot on repeated reads',async
 
 test('message composer links uploaded ids and retains files without text',async()=>{
  const calls=[];globalThis.composerCalls=calls;
- const fakeApi=compile('export const api={upload:async(path,file)=>{globalThis.composerCalls.push({path,file});return {id:"9007199254740993",message_id:null}},post:async(path,body)=>{globalThis.composerCalls.push({path,body});return {id:"message"}}}','composer-api');
+ const fakeApi=compile('export class ApiClientError extends Error {} export const api={upload:async(path,file)=>{globalThis.composerCalls.push({path,file});return {id:"9007199254740993",message_id:null}},post:async(path,body)=>{globalThis.composerCalls.push({path,body});return {id:"message"}}}','composer-api');
  const {default:MessageInput}=await component('MessageInput',{'@/lib/api':fakeApi});
  const file=new File(['hello'],'proof.txt',{type:'text/plain'});
  hooks.reset(['with attachment',false,[file]]);let tree=MessageInput({channelId:'channel'});
@@ -186,7 +186,7 @@ test('message composer links uploaded ids and retains files without text',async(
 test('UserSettings always navigates when disconnect or logout throws',async()=>{
  let logoutCalls=0;
  const auth=await storeModule('useAuthStore',{user:{id:'fixture-user',display_name:'Fixture'},logout:async()=>{logoutCalls++;throw new Error('logout fixture failure')}});
- const fakeApi=compile('export const api={};','settings-api');
+ const fakeApi=compile('export class ApiClientError extends Error {} export const api={};','settings-api');
  const fakeGateway=compile('export let fail=false;export function setFail(value){fail=value};export const gateway={disconnect(){if(fail)throw new Error("disconnect fixture failure")}};','settings-gateway');
  const gatewayMock=await import(fakeGateway);
  const {default:UserSettingsModal}=await component('UserSettingsModal',{'@/stores/auth':auth.url,'@/lib/api':fakeApi,'@/lib/gateway':fakeGateway});
@@ -199,7 +199,8 @@ test('UserSettings always navigates when disconnect or logout throws',async()=>{
    assert.equal(globalThis.window.location.href,'/server');
    assert.equal(logoutCalls,fail?2:1);
   }
- } finally {globalThis.window=previousWindow}
+
+} finally {globalThis.window=previousWindow}
 });
 
 test('READY after RESUME signals resync and retains the replacement session',async()=>{
@@ -233,6 +234,32 @@ test('successful resume dispatch and cleanup clear resuming',async()=>{
  c.handlePayload({op:0,t:'READY',s:1,d:{session_id:'fresh-again'}});assert.equal(resync,0);
 });
 
+test('restore single-flights refresh, loads user, and distinguishes 401 from offline', async()=>{
+ storage.set('serverUrl','http://fixture');storage.set('refreshToken','restore-token');
+ useAuthStore.setState({serverUrl:'http://fixture',refreshToken:'restore-token',user:null,isAuthenticated:false});
+ let refreshes=0;
+ globalThis.fetch=async url=> {if(url.endsWith('/auth/refresh')) {refreshes++;await new Promise(r=>setTimeout(r,10));return Response.json({data:{access_token:'restored',refresh_token:'restore-next'}})}return Response.json({data:{id:'restored-user'}})};
+ await Promise.all([useAuthStore.getState().restore(),useAuthStore.getState().restore()]);
+ assert.equal(refreshes,1);assert.equal(useAuthStore.getState().isAuthenticated,true);assert.equal(useAuthStore.getState().user.id,'restored-user');
+ globalThis.fetch=async()=>{throw new TypeError('offline')};await useAuthStore.getState().restore();
+ assert.equal(useAuthStore.getState().restoreState,'error');assert.equal(storage.get('refreshToken'),'restore-next');
+ globalThis.fetch=async()=>Response.json({error:{code:'INVALID_TOKEN',message:'expired'}},{status:401});await useAuthStore.getState().restore();
+ assert.equal(useAuthStore.getState().restoreState,'ready');assertSignedOut();
+});
+test('logout waits for in-flight rotation and revokes its replacement',async()=>{
+ setSignedInFixture();let release;const gate=new Promise(r=>release=r);const paths=[];
+ globalThis.fetch=async(url,options)=>{paths.push({url,body:JSON.parse(options.body)});if(url.endsWith('/auth/refresh')){await gate;return Response.json({data:{access_token:'new',refresh_token:'replacement'}})}return new Response(null,{status:204})};
+ const rotation=useAuthStore.getState().refreshAccessToken();const logout=useAuthStore.getState().logout();release();await Promise.all([rotation,logout]);
+ assert.equal(paths.length,2);assert.equal(paths[1].body.refresh_token,'replacement');assertSignedOut();
+});
+test('password change stores tokens, wrong current password preserves session, registration sends invite',async()=>{
+ setSignedInFixture();globalThis.fetch=async()=>Response.json({error:{code:'INVALID_CREDENTIALS',message:'current password is incorrect'}},{status:403});
+ await assert.rejects(useAuthStore.getState().changePassword('wrong','nextpassword'));assert.equal(useAuthStore.getState().isAuthenticated,true);
+ globalThis.fetch=async()=>Response.json({data:{user:{id:'fixture-user'},access_token:'changed-access',refresh_token:'changed-refresh'}});
+ await useAuthStore.getState().changePassword('current','nextpassword');assert.equal(storage.get('refreshToken'),'changed-refresh');
+ let body;globalThis.fetch=async(url,options)=>{body=JSON.parse(options.body);return Response.json({data:{user:{id:'new'},access_token:'a',refresh_token:'r'}})};
+ await useAuthStore.getState().register('new','password','invite-code');assert.equal(body.invite_code,'invite-code');
+});
 } catch (error) {
  cleanup();
  throw error;
