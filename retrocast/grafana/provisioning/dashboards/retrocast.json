@@ -83,8 +83,8 @@
       "options": { "legend": { "displayMode": "list" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "expr": "sum(rate(retrocast_requests_total[5m])) by (handler)",
-          "legendFormat": "{{handler}}"
+          "expr": "sum(rate(retrocast_requests_total[5m])) by (url)",
+          "legendFormat": "{{url}}"
         }
       ],
       "title": "Request Rate by Handler",

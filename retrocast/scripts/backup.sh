@@ -16,7 +16,7 @@ echo "Database backup saved: ${DB_FILE}"
 # MinIO data backup
 MINIO_FILE="${BACKUP_DIR}/minio_${TIMESTAMP}.tar.gz"
 echo "Backing up MinIO data..."
-docker compose exec -T minio sh -c 'cd /data && tar cf - .' | gzip > "${MINIO_FILE}"
+docker compose run --rm -T --no-deps backup-tools tar -C /data -cf - . | gzip > "${MINIO_FILE}"
 echo "MinIO backup saved: ${MINIO_FILE}"
 
 # Retention: delete backups older than 30 days

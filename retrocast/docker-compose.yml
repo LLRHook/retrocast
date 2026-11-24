@@ -1,4 +1,12 @@
 services:
+  # MinIO's minimal image has no tar. Run archive tools against its named volume
+  # only on demand; --rm removes every one-off container.
+  backup-tools:
+    image: alpine:3.24
+    profiles: [operations]
+    volumes:
+      - minio-data:/data
+
   api:
     build: .
     env_file: .env

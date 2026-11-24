@@ -41,6 +41,11 @@ jobs:
         env:
           DATABASE_URL: postgres://retrocast:password@localhost:5432/retrocast?sslmode=disable
         run: go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest -path=migrations -database "$DATABASE_URL" up
+      - name: Operator script and dashboard regressions
+        working-directory: retrocast
+        run: |
+          bash scripts/test-operations.sh
+          python3 scripts/test-monitoring.py
       - name: Run tests
         working-directory: retrocast
         env:
