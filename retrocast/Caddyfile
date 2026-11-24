@@ -1,4 +1,17 @@
 {$DOMAIN:localhost} {
+    # SigV4 signs both Host and path; preserve them unchanged.
+    handle /retrocast/* {
+        header X-Content-Type-Options nosniff
+        header Content-Security-Policy "sandbox allow-downloads"
+        @download method GET HEAD
+        handle @download {
+            reverse_proxy minio:9000 {
+                header_up Host {http.request.host}
+            }
+        }
+        respond 405
+    }
+
     handle /api/* {
         reverse_proxy api:8080
     }

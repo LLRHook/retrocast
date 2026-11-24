@@ -66,7 +66,9 @@ func (s *SearchService) SearchMessages(ctx context.Context, guildID, userID int6
 			visible = append(visible, message)
 		}
 	}
-	setAttachmentURLs(visible, s.storage)
+	if err := setAttachmentURLs(visible, s.storage); err != nil {
+		return nil, err
+	}
 	return visible, nil
 }
 

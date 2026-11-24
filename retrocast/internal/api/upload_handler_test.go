@@ -35,11 +35,11 @@ func (m *mockStorage) Upload(ctx context.Context, key string, reader io.Reader, 
 	return nil
 }
 
-func (m *mockStorage) GetURL(key string) string {
+func (m *mockStorage) GetURL(key, contentType string) (string, error) {
 	if m.GetURLFn != nil {
-		return m.GetURLFn(key)
+		return m.GetURLFn(key), nil
 	}
-	return "http://localhost:9000/retrocast/" + key
+	return "http://localhost:9000/retrocast/" + key, nil
 }
 
 func (m *mockStorage) Delete(ctx context.Context, key string) error {

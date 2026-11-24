@@ -46,8 +46,10 @@ func (*storageTestGateway) UnsubscribeFromGuild(int64, int64) {}
 type storageTestFiles struct{ deleted int }
 
 func (*storageTestFiles) Upload(context.Context, string, io.Reader, int64, string) error { return nil }
-func (*storageTestFiles) GetURL(key string) string                                       { return "http://files/" + key }
-func (f *storageTestFiles) Delete(context.Context, string) error                         { f.deleted++; return nil }
+func (*storageTestFiles) GetURL(key, contentType string) (string, error) {
+	return "http://files/" + key, nil
+}
+func (f *storageTestFiles) Delete(context.Context, string) error { f.deleted++; return nil }
 
 func TestStorageServices(t *testing.T) {
 	dsn := os.Getenv("DATABASE_URL")

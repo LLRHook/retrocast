@@ -134,3 +134,5 @@ All changes to `main` must go through a pull request with at least one approved 
 ## License
 
 This project is unlicensed. All rights reserved.
+
+Attachment downloads use 15-minute signed HTTPS URLs through Caddy. Set `DOMAIN` in `retrocast/.env` to the public hostname (default `localhost`, no scheme, path or port); Compose passes it to both Caddy and the API. Set `MINIO_REGION` consistently (default `us-east-1`). Only the `retrocast` bucket download path is proxied; MinIO remains private.
