@@ -53,6 +53,8 @@ const (
 
 // RefreshGeneration returns the revocation epoch (legacy accounts start at zero).
 func (c *Client) RefreshGeneration(ctx context.Context, userID int64) (int64, error) {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
 	val, err := c.rdb.Get(ctx, fmt.Sprintf("refresh_gen:%d", userID)).Int64()
 	if err == goredis.Nil {
 		return 0, nil
@@ -62,6 +64,8 @@ func (c *Client) RefreshGeneration(ctx context.Context, userID int64) (int64, er
 
 // AdvanceRefreshGeneration fails closed before any password update.
 func (c *Client) AdvanceRefreshGeneration(ctx context.Context, userID int64) error {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
 	return c.rdb.Incr(ctx, fmt.Sprintf("refresh_gen:%d", userID)).Err()
 }
 
@@ -79,6 +83,8 @@ func (c *Client) StoreRefreshTokenAtGeneration(ctx context.Context, token string
 	return c.storeRefresh(ctx, token, userID, expiry, strconv.FormatInt(gen, 10))
 }
 func (c *Client) storeRefresh(ctx context.Context, token string, userID int64, expiry time.Duration, gen string) error {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
 	n, err := storeRefreshScript.Run(ctx, c.rdb, []string{refreshTokenPrefix + token, fmt.Sprintf("refresh_gen:%d", userID)}, userID, expiry.Milliseconds(), gen).Int()
 	if err != nil {
 		return err
@@ -96,6 +102,13 @@ local value = redis.call("GET", KEYS[1])
 if not value then return redis.error_reply("invalid token") end
 local uid, gen = string.match(value, "^(%d+):(%d+)$")
 if not uid then uid = value; gen = "0" end
+-- Keep the key suffix identical to Go's int64 user id, without numeric
+-- conversion in Lua (snowflakes exceed its exact-number range).
+if not string.match(uid, "^%d+$") or (#uid > 1 and string.sub(uid, 1, 1) == "0")
+ or #uid > 19 or (#uid == 19 and uid > "9223372036854775807") then
+ redis.call("DEL", KEYS[1])
+ return redis.error_reply("invalid token")
+end
 local current = redis.call("GET", "refresh_gen:" .. uid) or "0"
 redis.call("DEL", KEYS[1])
 if gen ~= current then return redis.error_reply("invalid token") end
@@ -104,6 +117,8 @@ return uid
 `)
 
 func (c *Client) RotateRefreshToken(ctx context.Context, old, next string, expiry time.Duration) (int64, error) {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
 	val, err := consumeRefreshScript.Run(ctx, c.rdb, []string{refreshTokenPrefix + old, refreshTokenPrefix + next}, expiry.Milliseconds()).Text()
 	if err != nil {
 		return 0, fmt.Errorf("consuming refresh token: %w", err)

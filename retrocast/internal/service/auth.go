@@ -269,5 +269,10 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID int64, current,
 	if !changed {
 		return nil, Forbidden("INVALID_CREDENTIALS", "current password is incorrect")
 	}
+	// The pre-CAS epoch cannot revoke a login that read the old hash during
+	// the CAS wait. Advance again after commit to close that MVCC window.
+	if err := s.redis.AdvanceRefreshGeneration(ctx, userID); err != nil {
+		return nil, Internal("INTERNAL", "could not revoke sessions")
+	}
 	return s.issueTokens(ctx, user)
 }

@@ -118,6 +118,36 @@ func TestContractOpenAPI(t *testing.T) {
 	if spec["info"].(map[string]any)["version"] != "2.1.0" {
 		t.Fatal("wrong version")
 	}
+	// Shared response/schema references must resolve, including API-059 errors.
+	var checkRefs func(any)
+	checkRefs = func(node any) {
+		switch v := node.(type) {
+		case map[string]any:
+			if ref, ok := v["$ref"].(string); ok && strings.HasPrefix(ref, "#/") {
+				var target any = spec
+				for _, key := range strings.Split(strings.TrimPrefix(ref, "#/"), "/") {
+					m, ok := target.(map[string]any)
+					if !ok {
+						t.Errorf("unresolved OpenAPI ref %s", ref)
+						break
+					}
+					target, ok = m[key]
+					if !ok {
+						t.Errorf("unresolved OpenAPI ref %s", ref)
+						break
+					}
+				}
+			}
+			for _, child := range v {
+				checkRefs(child)
+			}
+		case []any:
+			for _, child := range v {
+				checkRefs(child)
+			}
+		}
+	}
+	checkRefs(spec)
 	checkIDSchemas(t, spec, "OpenAPI", false)
 	count := 0
 	for path, raw := range spec["paths"].(map[string]any) {
@@ -129,6 +159,9 @@ func TestContractOpenAPI(t *testing.T) {
 			responses, ok := op["responses"].(map[string]any)
 			if !ok {
 				continue
+			}
+			if id, ok := op["operationId"].(string); !ok || id == "" {
+				t.Errorf("%s %s: missing operationId", method, path)
 			}
 			for status, rawResponse := range responses {
 				if !strings.HasPrefix(status, "2") {
@@ -143,6 +176,12 @@ func TestContractOpenAPI(t *testing.T) {
 				for _, rawContent := range content {
 					schema := rawContent.(map[string]any)["schema"].(map[string]any)
 					properties, _ := schema["properties"].(map[string]any)
+					if op["operationId"] == "changePassword" {
+						required, ok := schema["required"].([]any)
+						if !ok || len(required) != 1 || required[0] != "data" || schema["additionalProperties"] != false {
+							t.Error("password response must require only the data envelope")
+						}
+					}
 					if op["operationId"] == "getReactions" {
 						checkIDSchemas(t, properties["data"], "getReactions/data", true)
 					}

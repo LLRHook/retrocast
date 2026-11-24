@@ -42,3 +42,28 @@ func TestLegacyRefreshGenerationLive(t *testing.T) {
 		}
 	}
 }
+
+func TestMalformedRefreshValueLive(t *testing.T) {
+	if os.Getenv("REDIS_URL") == "" {
+		t.Skip("REDIS_URL required")
+	}
+	c, err := NewClient(os.Getenv("REDIS_URL"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = c.Close() }()
+	ctx := context.Background()
+	for i, value := range []string{"abc", "abc:0", "+123", "123:invalid", "12:3:4", "", "00123", "9223372036854775808"} {
+		token := fmt.Sprintf("l25-malformed-%d-%d", time.Now().UnixNano(), i)
+		next := token + "next"
+		if err := c.rdb.Set(ctx, refreshTokenPrefix+token, value, time.Minute).Err(); err != nil {
+			t.Fatal(err)
+		}
+		_, err := c.RotateRefreshToken(ctx, token, next, time.Minute)
+		count, e := c.rdb.Exists(ctx, refreshTokenPrefix+token, refreshTokenPrefix+next).Result()
+		_ = c.rdb.Del(ctx, refreshTokenPrefix+token, refreshTokenPrefix+next).Err()
+		if err == nil || e != nil || count != 0 {
+			t.Fatalf("malformed case %d wrote or retained a token", i)
+		}
+	}
+}
