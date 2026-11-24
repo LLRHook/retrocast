@@ -217,6 +217,7 @@ are as documented in OpenAPI; where the code differs, the Notes column says so.
 | API-056 | joinVoice | POST /channels/{channelId}/voice/join | 200 token + voice states | yes | no LiveKit URL in the response | SV-FR-048, SV-IR-006 |
 | API-057 | leaveVoice | POST /channels/{channelId}/voice/leave | 204 | — | | SV-FR-049 |
 | API-058 | getVoiceStates | GET /channels/{channelId}/voice/states | 200 voice states | yes | | SV-FR-050 |
+| API-060 | reorderRoles | PUT /guilds/{guildId}/roles/order | 200 roles | yes | Complete `expected: [{id: string, position: int}]` snapshot plus `order: [id: string]` ascending, all non-default roles exactly once. Guild row lock; 409 STALE_ROLES on mismatch; atomic hierarchy/grant checked changes; @everyone fixed; one GUILD_ROLE_UPDATE per changed role after commit. | WEB-FR-013, SV-FR-041 |
 | API-059 | changePassword | PUT /users/@me/password | 200 tokens + user | yes | Built; body `current_password`, `new_password`; 403 `INVALID_CREDENTIALS`, 400 `INVALID_PASSWORD`; 503 SESSION_UNAVAILABLE on revocation/token-store failure; credential rate limit | SV-FR-060, SV-FR-061 |
 
 Routes outside `/api/v1`: `GET /health`, `GET /metrics` (Prometheus), `GET /docs`,
@@ -343,11 +344,16 @@ check `SPEAK` in the grant and receives no LiveKit webhooks, so voice state is o
 clients report (SV-FR-049). Clients need the LiveKit URL, which API-056 does not return.
 
 ### 7.2 MinIO (S3-compatible)
-`retrocast/internal/storage/minio.go` uploads to bucket `retrocast` and builds URLs as
-`http://{MINIO_ENDPOINT}/retrocast/{key}`. `MINIO_ENDPOINT` is an address inside the compose
-network, so clients outside it cannot fetch those URLs (D-10). Rev 2 decides short-lived
-pre-signed URLs for upload and download, valid 15 minutes and served through the public entry
-point (Q-011; SV-FR-051, SV-FR-052; ADR-019); attachments are Later.
+`retrocast/internal/storage/minio.go` uploads multipart API files to bucket `retrocast`.
+Downloads use fresh pre-signed GET URLs for 15 minutes on `https://{DOMAIN}/retrocast/{key}`.
+`DOMAIN` is one hostname (default `localhost`, no scheme, path or port), passed to Caddy
+and API by Compose. `MINIO_REGION` defaults to `us-east-1` for both MinIO and its clients;
+a separate fixed-region public signer makes no network requests when minting URLs.
+Caddy preserves Host and path, exposes only GET/HEAD, and sends CSP `sandbox allow-downloads` (scripts and same-origin privileges remain disabled) and
+`nosniff`. Exact allowed image types render inline; all other types force attachment
+disposition. History, single-message and search responses mint URLs locally on each fetch.
+JSON remains compatible, including absolute string `url`. Signed links expire; reload history to mint fresh links. Upload presigning remains Later
+(SV-FR-051); the multipart upload route remains in use (ADR-019).
 
 ### 7.3 Apple Push Notification service
 Not integrated. `device_tokens` (ENT-017) exists without code. Push notifications are Later,
