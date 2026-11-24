@@ -19,8 +19,9 @@ func NewAuthHandler(svc *service.AuthService) *AuthHandler {
 }
 
 type registerRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
+	InviteCode string `json:"invite_code"`
+	Username   string `json:"username"`
+	Password   string `json:"password"`
 }
 
 type authResponse struct {
@@ -36,7 +37,7 @@ func (h *AuthHandler) Register(c echo.Context) error {
 		return Error(c, http.StatusBadRequest, "INVALID_BODY", "invalid request body")
 	}
 
-	result, err := h.service.Register(c.Request().Context(), req.Username, req.Password)
+	result, err := h.service.Register(c.Request().Context(), req.Username, req.Password, req.InviteCode)
 	if err != nil {
 		return mapServiceError(c, err)
 	}

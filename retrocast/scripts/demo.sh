@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# demo.sh — Seed the Retrocast database with demo data.
+# demo.sh â€” Seed the Retrocast database with demo data.
 #
 # Usage:
 #   ./scripts/demo.sh
@@ -62,7 +62,7 @@ api_call() {
     fi
 
     local response
-    response=$(curl "${CURL_TLS_ARGS[@]}" "${curl_args[@]}" "$url") || die "curl failed for $method $path"
+    response=$(curl ${CURL_TLS_ARGS[@]+"${CURL_TLS_ARGS[@]}"} "${curl_args[@]}" "$url") || die "curl failed for $method $path"
 
     http_code=$(echo "$response" | tail -n1)
     BODY=$(echo "$response" | sed '$d')
@@ -86,7 +86,7 @@ json_field() {
 
 echo "=> Waiting for server at $BASE_URL ..."
 for i in $(seq 1 30); do
-    if curl "${CURL_TLS_ARGS[@]}" -sf "$BASE_URL/health" > /dev/null 2>&1; then
+    if curl ${CURL_TLS_ARGS[@]+"${CURL_TLS_ARGS[@]}"} -sf "$BASE_URL/health" > /dev/null 2>&1; then
         echo "   Server is ready."
         break
     fi
@@ -113,19 +113,6 @@ else
     echo "   Logged in as alice (id=$ALICE_ID)"
 fi
 
-echo "=> Registering user bob ..."
-if api_call POST "/auth/register" '{"username":"bob","password":"password123"}'; then
-    BOB_TOKEN=$(json_field '.data.access_token')
-    BOB_ID=$(json_field '.data.user.id')
-    echo "   Created bob (id=$BOB_ID)"
-else
-    echo "   bob may already exist, logging in ..."
-    api_call POST "/auth/login" '{"username":"bob","password":"password123"}' || die "Cannot register or log in as bob"
-    BOB_TOKEN=$(json_field '.data.access_token')
-    BOB_ID=$(json_field '.data.user.id')
-    echo "   Logged in as bob (id=$BOB_ID)"
-fi
-
 # ---------------------------------------------------------------------------
 # Step 2: Create guild
 # ---------------------------------------------------------------------------
@@ -143,6 +130,26 @@ else
         die "Failed to create or find the demo guild."
     fi
     echo "   Found existing guild (id=$GUILD_ID)"
+fi
+
+echo "=> Creating invite for guild ..."
+if api_call POST "/guilds/$GUILD_ID/invites" '{"max_uses":10,"max_age_seconds":86400}' "$ALICE_TOKEN"; then
+    INVITE_CODE=$(json_field '.data.code')
+else
+    die "Failed to create invite."
+fi
+
+echo "=> Registering user bob ..."
+if api_call POST "/auth/register" "{\"username\":\"bob\",\"password\":\"password123\",\"invite_code\":\"$INVITE_CODE\"}"; then
+    BOB_TOKEN=$(json_field '.data.access_token')
+    BOB_ID=$(json_field '.data.user.id')
+    echo "   Created bob (id=$BOB_ID)"
+else
+    echo "   bob may already exist, logging in ..."
+    api_call POST "/auth/login" '{"username":"bob","password":"password123"}' || die "Cannot register or log in as bob"
+    BOB_TOKEN=$(json_field '.data.access_token')
+    BOB_ID=$(json_field '.data.user.id')
+    echo "   Logged in as bob (id=$BOB_ID)"
 fi
 
 # ---------------------------------------------------------------------------
@@ -183,14 +190,6 @@ ANNOUNCEMENTS_ID=$(create_channel "announcements" | tail -1)
 # ---------------------------------------------------------------------------
 # Step 4: Create invite and have bob join
 # ---------------------------------------------------------------------------
-
-echo "=> Creating invite for guild ..."
-if api_call POST "/guilds/$GUILD_ID/invites" '{"max_uses":10,"max_age_seconds":86400}' "$ALICE_TOKEN"; then
-    INVITE_CODE=$(json_field '.data.code')
-    echo "   Invite code: $INVITE_CODE"
-else
-    die "Failed to create invite."
-fi
 
 echo "=> Bob joining guild via invite ..."
 if api_call POST "/invites/$INVITE_CODE" '' "$BOB_TOKEN"; then
@@ -265,7 +264,7 @@ echo ""
 echo "=== Demo data seeded successfully ==="
 echo ""
 echo "Users:"
-echo "  alice (id=$ALICE_ID) — guild owner, Moderator"
+echo "  alice (id=$ALICE_ID) â€” guild owner, Moderator"
 echo "  bob (id=$BOB_ID)"
 echo ""
 echo "Guild: Retrocast Demo Server (id=$GUILD_ID)"

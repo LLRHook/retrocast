@@ -115,6 +115,7 @@ func main() {
 	messageSvc := service.NewMessageService(messages, channels, dmChannels, sf, gwManager, permChecker)
 	messageSvc.SetTypingStore(rdb)
 	inviteSvc := service.NewInviteService(invites, guilds, members, bans, gwManager, permChecker)
+	authSvc.ConfigureRegistration(cfg.RegistrationMode, inviteSvc)
 	banSvc := service.NewBanService(guilds, members, roles, bans, gwManager, permChecker)
 	dmSvc := service.NewDMService(dmChannels, users, sf, gwManager)
 	uploadSvc := service.NewUploadService(attachments, channels, sf, minioClient, permChecker)

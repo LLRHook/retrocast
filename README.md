@@ -127,3 +127,5 @@ All changes to `main` must go through a pull request with at least one approved 
 ## License
 
 This project is unlicensed. All rights reserved.
+
+Registration defaults to `REGISTRATION_MODE=invite`, including upgrades that omit the key. On an empty instance, register the first account without an invite, sign in, create a server, then create invites for friends. Further registrations must send `invite_code` to `/api/v1/auth/register`; account creation, invite consumption and guild membership commit together. Set `open` for unrestricted registration or `closed` to disable registration while preserving sign-in. Unknown mode values stop startup. The web invite-code field is pending WEB-FR-020 (B5); use the API for invited registrations until then. `retrocast/scripts/demo.sh` bootstraps alice and registers bob using her guild invite, and can run again with those existing accounts.

@@ -29,3 +29,6 @@ LIVEKIT_API_SECRET = "devsecret"
 
 # Extra browser origins besides the instance origin (comma-separated).
 ALLOWED_ORIGINS = ""
+
+# open, invite (default), or closed
+REGISTRATION_MODE = "invite"
