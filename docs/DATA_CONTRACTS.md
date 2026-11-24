@@ -97,7 +97,7 @@ strings (SV-IR-004; D-11 fixed in B2).
 | ENT-017 | DeviceToken | PostgreSQL `device_tokens` | id BIGSERIAL PK; user_id FK cascade; platform VARCHAR(16); token TEXT; UNIQUE(user_id, token) | No code reads or writes it | Secret (push token) | none (push is Later, with the iOS client: Q-025) | v1.0.0 |
 | ENT-018 | RefreshTokenRow | PostgreSQL `refresh_tokens` | token VARCHAR(64) PK; user_id FK cascade; expires_at; created_at | No code reads or writes it; refresh tokens live in Redis (ENT-019) | Secret | none | v1.0.0 |
 | ENT-019 | RefreshToken | Redis | key `refresh:{token}` (token = 32 random bytes, hex); value user id; TTL 7 days | Read then deleted on refresh (two commands, not atomic); no per-user index, which SV-FR-061 needs | Secret | SV-FR-005, SV-FR-006, SV-FR-061, SV-NFR-002 | v1.0.0 |
-| ENT-020 | Presence | Redis | key `presence:{user id}`; value status; TTL 5 minutes | Set on IDENTIFY and op 3; heartbeats do not extend the TTL | Personal | SV-FR-032–SV-FR-034 | v1.0.0 |
+| ENT-020 | Presence | Redis | key `presence:{user id}`; value status; TTL 5 minutes | Set on IDENTIFY, successful RESUME and op 3; authenticated heartbeats extend the existing status TTL | Personal | SV-FR-032–SV-FR-034 | v1.0.0 |
 | ENT-021 | RateLimitCounter and TypingMarker | Redis | `rl:user:{user id}:{route}` or `rl:ip:{client ip}:{route}`, one-minute window (Lua script); `typing:{channel id}:{user id}`, TTL 10 s | Ephemeral; the client IP is Echo's `RealIP` (SV-NFR-009) | Internal | SV-NFR-003, SV-NFR-009, SV-NFR-010, SV-FR-031 | v1.0.0 |
 | ENT-022 | StoredObject | MinIO bucket `retrocast` | key `attachments/{channel id}/{attachment id}/{filename}`; content type from upload | Unlinked uploads and objects remain indefinitely; linked-message deletion removes metadata but does not remove objects. Metadata insert failure triggers best-effort object deletion, which can leave an orphan if cleanup fails. | Personal (file content) | SV-FR-051, SV-FR-052 | v1.1.0 |
 
@@ -276,7 +276,7 @@ Codes added in rev 2 (specified; CANNOT_KICK_SELF implemented in PR #44):
 
 Endpoint `GET /gateway` (WebSocket). Every frame is `{"op": int, "d": any, "s": int, "t": string}`;
 `s` and `t` are set on dispatches (op 0) only. Sequence numbers are per connection for live
-dispatches and per guild in the replay buffer (D-07). Every event is version v1.0.0.
+dispatches. Each session retains its last 100 serialized dispatches for 5 minutes after disconnect; replay preserves their sequence numbers (PR #50). Gateway contract v1.1.0 adds an optional READY presence snapshot; existing frames remain compatible.
 
 Connection parameters (`retrocast/internal/gateway/connection.go:13–19`): the upgrade needs no
 token; the client authenticates with IDENTIFY. Heartbeat interval 41 250 ms; the server also
@@ -290,11 +290,11 @@ rev 2 a user may hold several connections, each receiving every event for that u
 |---|---|---|---|---|---|
 | EVT-001 | 10 | HELLO | server → client | `heartbeat_interval` (41 250 ms) | SV-FR-035 |
 | EVT-002 | 2 | IDENTIFY | client → server | `token` (access token) | SV-FR-036 |
-| EVT-003 | 0 | READY | server → client | `session_id`, `user_id`, `guilds` (ids as decimal strings, D-11 fixed in PR #45), `read_states`; no presence list | SV-FR-036, SV-FR-032 |
+| EVT-003 | 0 | READY | server → client | `session_id`, `user_id`, `guilds` (ids as decimal strings, D-11 fixed in PR #45), `read_states`, optional `presences` array of `{user_id,status}` for online/idle/dnd members sharing a guild (invisible omitted) | SV-FR-036, SV-FR-032 |
 | EVT-004 | 1 | HEARTBEAT | both ways | last sequence (from the client); none (from the server) | SV-FR-037 |
 | EVT-005 | 11 | HEARTBEAT_ACK | server → client | none | SV-FR-037 |
-| EVT-006 | 6 | RESUME | client → server | `token`, `session_id`, `seq` | SV-FR-038 |
-| EVT-007 | 7 | RECONNECT | server → client | none; today sent to the older connection when a user identifies again. From rev 2 it is not sent for a second IDENTIFY (SV-FR-072) and stays available for server-initiated reconnects | SV-FR-038, SV-FR-072 |
+| EVT-006 | 6 | RESUME | client → server | `token`, `session_id`, `seq`; validate token as IDENTIFY. Replay only this user's session, with original sequence numbers. Unknown/expired/foreign sessions, active session reuse, membership changes or sequence gaps receive fresh READY with new session_id, sequence 1 and full current snapshot; replay nothing from the rejected session | SV-FR-038 |
+| EVT-007 | 7 | RECONNECT | server → client | none; available for server-initiated reconnects. A second IDENTIFY does not displace another device (PR #50) | SV-FR-038, SV-FR-072 |
 | EVT-008 | 3 | PRESENCE_UPDATE (client) | client → server | `status`: online, idle, dnd, invisible | SV-FR-033 |
 | EVT-009 | 0 | MESSAGE_CREATE | server → client | message with author fields | SV-FR-026, SV-FR-055, SV-FR-071, SV-FR-072 |
 | EVT-010 | 0 | MESSAGE_UPDATE | server → client | message | SV-FR-029 |
@@ -366,6 +366,8 @@ together with the iOS client (Q-025); APNs is the one optional outside service G
 | 2 | API-001 register | v1.0.0 | v2.0.0 | Optional `invite_code`; 403 codes by registration mode | Web register page gains the field (WEB-FR-020) | Q-012; ADR-014 |
 | 2 | EVT-007 RECONNECT | v1.0.0 | v1.0.0 (frame unchanged) | Sent in fewer cases: not for a second IDENTIFY | A client that reads op 7 as "signed in elsewhere" must not | Q-009; ADR-017 |
 | 9 | API-022 / API-027, ENT-008/009/012/013/022 | REST v2.0.0 | REST v2.1.0 |Migration 000020: DM parent validation/delete triggers; nullable pending upload link with ownership backfill; attachment_ids atomic claim and batched hydration. After a refused down, the schema remains at 20 while golang-migrate marks version 19 dirty: run `migrate force 20` to recover; `force 19` then `up` fails. | Web sends uploaded ids with nonempty text; pending message_id is null; existing linked ids stay strings; down refuses while DM messages or pending attachments exist | Driver E116; Q-017; D-08/D-09/D-22 |
+
+| 10 | EVT-003 / EVT-006 gateway | v1.0.0 | v1.1.0 (compatible) | READY gains optional presences. RESUME frames unchanged; fresh READY with a new session id signals unavailable replay, sequences restart at 1. Last 100 events per session, retained 5 minutes after disconnect; authorization changes invalidate old history | Web refetches open-channel recent messages after fallback READY. iOS already accepts READY; reconnect catch-up refresh is a follow-up | Driver B3 decision; PR #50 |
 
 ## Revision history
 | Rev | Date | Commit | Mode | Summary |
