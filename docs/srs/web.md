@@ -137,3 +137,4 @@ Bound by SYS-CON-003 (existing stack: React 19, Vite 7, TypeScript, Tailwind 4, 
 | 15 | 2026-11-24T12:07:01-05:00 | 6e9507a02345 | REVISION | B7: copied invite routing and server selection; REST contract 2.2.0 and SV-IR-008 version equality through API-060 |
 | 16 | 2026-11-24T13:22:47-05:00 | 2b64e5b68b82 | REVISION | B8 L40: Pilot clause test index; SV-IR-001 documented success criterion; WEB-FR-009 name wording; optional public member identity per E347 |
 | 17 | 2026-11-24T14:31:40-05:00 | 23ec2de281ea | REVISION | B8 round 2: bound typing member lookups; restore acceptance revision punctuation |
+| 18 | 2026-11-24T15:12:09-05:00 | 33dc349ad91a | REVISION | L42 candidate0f7ee55: all107 Pilot Musts Verified with acceptance-mapped CI/runtime evidence; accelerated cron, restore/RPO, offline flows and10-minute performance; explicit Should and readiness gaps |
