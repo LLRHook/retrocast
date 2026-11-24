@@ -257,6 +257,8 @@ ARCHITECTURE §8.
 | WCAG | Web Content Accessibility Guidelines |
 | RPO | Recovery point objective: the most data, in time, a restore may lose |
 
+Run 3 candidate `0f7ee55`: [Pilot validation record](validation/pilot-2026-11-24.md), all107 Musts Verified; three Should platform/accessibility checks remain untested. SRS Pilot exit met; release-readiness security/rollback evidence remains unavailable.
+
 ## Revision history
 | Rev | Date | Commit | Mode | Summary |
 |---|---|---|---|---|
