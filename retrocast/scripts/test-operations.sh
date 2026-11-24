@@ -12,7 +12,7 @@ printf '%s\n' "$*" >> "$CALLS"
 case "$*" in
   *'pg_dump'*) echo '-- fixture dump';;
   *'psql'*) cat >/dev/null; [ "${FAIL_SQL:-0}" != 1 ];;
-  *'backup-tools tar -C /data -cf - .'*) tar -cf - --files-from /dev/null;;
+  *'backup-tools tar -C /data -cf - .'*) [ "${FAIL_ARCHIVE:-0}" != 1 ]; tar -cf - --files-from /dev/null;;
   *'backup-tools tar -C /data -xf -'*) cat >/dev/null;;
 esac
 MOCK
@@ -52,3 +52,6 @@ if bash scripts/restore.sh "$db" "$tmp/broken.gz" >/dev/null 2>&1; then exit 1; 
 echo 'PASS invalid archive rejected before any stack change'
 if BACKUP_DIR=relative bash scripts/scheduled-backup.sh >/dev/null 2>&1; then exit 1; fi
 echo 'PASS relative scheduled backup directory rejected'
+if BACKUP_DIR="$tmp/failed" FAIL_ARCHIVE=1 bash scripts/scheduled-backup.sh >/dev/null 2>&1; then exit 1; fi
+[ -z "$(find "$tmp/failed" -type f -print -quit)" ]
+echo 'PASS archive failure publishes no backup pair or partial files'
