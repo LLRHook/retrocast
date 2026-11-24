@@ -83,6 +83,9 @@ func TestLiveMultipleConnectionsAndConcurrentDelivery(t *testing.T) {
 			t.Fatalf("got %d", len(events))
 		}
 		for i, p := range events {
+			if p.Op != OpDispatch {
+				t.Fatal("non-dispatch event", p.Op)
+			}
 			if *p.Sequence != int64(i+1) {
 				t.Fatal("sequence order")
 			}
@@ -284,5 +287,27 @@ func TestLiveConcurrentResumeAndDispatch(t *testing.T) {
 		if p.Sequence == nil || *p.Sequence != int64(i+2) {
 			t.Fatal("concurrent replay broke sequence order")
 		}
+	}
+}
+
+func TestPilotInvisibleBroadcastsOffline(t *testing.T) {
+	m := newTestManager(t, &mockGuildRepo{})
+	a := fakeConn(m, 100, "pilot-a")
+	b := fakeConn(m, 200, "pilot-b")
+	defer a.Close()
+	defer b.Close()
+	m.SubscribeToGuild(100, 1)
+	m.SubscribeToGuild(200, 1)
+	m.handlePresenceUpdate(a, json.RawMessage(`{"status":"invisible"}`))
+	events := drainEvents(b)
+	if len(events) != 1 || events[0].Op != OpDispatch || (events[0].Event == nil || *events[0].Event != EventPresenceUpdate) {
+		t.Fatalf("presence events: %+v", events)
+	}
+	var p PresenceUpdateData
+	if err := json.Unmarshal(events[0].Data, &p); err != nil {
+		t.Fatal(err)
+	}
+	if p.UserID != 100 || p.Status != "offline" {
+		t.Fatal(p)
 	}
 }

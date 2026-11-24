@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -454,6 +455,116 @@ func TestRegistrationAtomicityLive(t *testing.T) {
 			}()
 		}
 	})
+
+	t.Run("pilot defaults member identity and page", func(t *testing.T) {
+		gs := service.NewGuildService(guilds, database.NewChannelRepository(pool), members, roles, sf, gw, perms)
+		guild, err := gs.CreateGuild(ctx, ownerID, "Pilot defaults")
+		if err != nil {
+			t.Fatal(err)
+		}
+		ch := NewChannelHandler(service.NewChannelService(database.NewChannelRepository(pool), members, sf, gw, perms))
+		c, rec := newTestContext(http.MethodGet, "/", nil)
+		c.SetParamNames("id")
+		c.SetParamValues(fmt.Sprint(guild.ID))
+		setAuthUser(c, ownerID)
+		if err := ch.ListChannels(c); err != nil {
+			t.Fatal(err)
+		}
+		var channels []models.Channel
+		if err := decodeResponse(rec, &channels); err != nil {
+			t.Fatal(err)
+		}
+		if rec.Code != 200 || len(channels) != 2 || channels[0].Name != "general" || channels[0].Type != 0 || channels[1].Name != "General" || channels[1].Type != 2 {
+			t.Fatalf("default channels: %d %+v", rec.Code, channels)
+		}
+		for i := int64(0); i < 60; i++ {
+			id := int64(400000) + i
+			exec("INSERT INTO users(id,username,display_name,password_hash) VALUES($1,$2,'','private-hash')", id, fmt.Sprintf("pilot%d", i))
+			exec("INSERT INTO members(guild_id,user_id) VALUES($1,$2)", guild.ID, id)
+			exec("INSERT INTO member_roles(guild_id,user_id,role_id) SELECT $1,$2,id FROM roles WHERE guild_id=$1 AND is_default", guild.ID, id)
+		}
+		h := NewMemberHandler(service.NewMemberService(members, guilds, roles, gw, perms))
+		c, rec = newTestContext(http.MethodGet, "/", nil)
+		c.SetParamNames("id")
+		c.SetParamValues(fmt.Sprint(guild.ID))
+		setAuthUser(c, ownerID)
+		if err := h.ListMembers(c); err != nil {
+			t.Fatal(err)
+		}
+		var page []models.Member
+		if err := decodeResponse(rec, &page); err != nil {
+			t.Fatal(err)
+		}
+		if rec.Code != 200 || len(page) != 50 {
+			t.Fatalf("page: %d %d", rec.Code, len(page))
+		}
+		for _, m := range page {
+			if len(m.Roles) == 0 || m.User == nil || m.User.ID != m.UserID {
+				t.Fatalf("roles/user missing: %+v", m)
+			}
+		}
+		for _, op := range []string{"get", "update"} {
+			c, rec = newTestContext(http.MethodPatch, "/", strings.NewReader(`{"nickname":"Buddy"}`))
+			c.SetParamNames("id", "user_id")
+			c.SetParamValues(fmt.Sprint(guild.ID), "400000")
+			setAuthUser(c, ownerID)
+			var err error
+			if op == "get" {
+				err = h.GetMember(c)
+			} else {
+				err = h.UpdateMember(c)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			var m models.Member
+			if err = decodeResponse(rec, &m); err != nil {
+				t.Fatal(err)
+			}
+			if rec.Code != 200 || m.User == nil || m.User.Username != "pilot0" {
+				t.Fatalf("%s identity: %d %+v", op, rec.Code, m)
+			}
+			if strings.Contains(rec.Body.String(), "password") || strings.Contains(rec.Body.String(), "private-hash") {
+				t.Fatal("private identity leaked")
+			}
+		}
+		payload := assertGatewayPayload(t, gw, "GUILD_MEMBER_UPDATE", map[string]any{"user_id": "400000"}).(*models.Member)
+		if payload.User == nil || payload.User.Username != "pilot0" {
+			t.Fatal("update event lacks identity")
+		}
+	})
+
+	t.Run("pilot stored password", func(t *testing.T) {
+		var row string
+		if err := pool.QueryRow(ctx, "SELECT row_to_json(users)::text FROM users WHERE id=$1", ownerID).Scan(&row); err != nil {
+			t.Fatal(err)
+		}
+		var user map[string]any
+		if err := json.Unmarshal([]byte(row), &user); err != nil {
+			t.Fatal(err)
+		}
+		hash := user["password_hash"].(string)
+		parts := strings.Split(hash, "$")
+		if len(parts) != 6 || parts[3] != "m=65536,t=1,p=4" {
+			t.Fatal("argon parameters", hash)
+		}
+		salt, err := base64.RawStdEncoding.DecodeString(parts[4])
+		if err != nil {
+			t.Fatal(err)
+		}
+		key, err := base64.RawStdEncoding.DecodeString(parts[5])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(salt) != 16 || len(key) != 32 {
+			t.Fatal("argon salt/key sizes", len(salt), len(key))
+		}
+		for field, value := range user {
+			if strings.Contains(fmt.Sprint(value), "password123") {
+				t.Fatal("plaintext stored in", field)
+			}
+		}
+	})
 	t.Run("closed preserves login", func(t *testing.T) {
 		as.ConfigureRegistration("closed", invites)
 		check(t, register("closed", ""), 403, "REGISTRATION_CLOSED")
@@ -481,7 +592,7 @@ func TestRegistrationAtomicityLive(t *testing.T) {
 			t.Fatal(err)
 		}
 		check(t, change("wrong-password", "newpassword123"), 403, "INVALID_CREDENTIALS")
-		check(t, change("password123", "tiny"), 400, "INVALID_PASSWORD")
+		check(t, change("password123", "abcde"), 400, "INVALID_PASSWORD")
 		if _, err := rdb.GetRefreshTokenUserID(ctx, other.RefreshToken); err != nil {
 			t.Fatal("negative cases revoked a session")
 		}

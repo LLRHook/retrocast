@@ -120,6 +120,15 @@ func TestSendMessage_Success(t *testing.T) {
 	if len(gw.events) != 1 || gw.events[0].Event != gateway.EventMessageCreate {
 		t.Fatalf("expected MESSAGE_CREATE event, got %+v", gw.events)
 	}
+
+	var message models.MessageWithAuthor
+	if err := decodeResponse(rec, &message); err != nil {
+		t.Fatal(err)
+	}
+	if message.Content != "hello" || message.AuthorID != testUserID || message.AuthorUsername != "testuser" {
+		t.Fatal(message)
+	}
+
 }
 
 func TestSendMessage_EmptyContent(t *testing.T) {

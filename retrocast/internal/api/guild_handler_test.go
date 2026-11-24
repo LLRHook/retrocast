@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync/atomic"
@@ -110,6 +111,15 @@ func TestCreateGuild_Success(t *testing.T) {
 	if _, ok := resp["data"]; !ok {
 		t.Error("expected 'data' key in response")
 	}
+
+	if guild.Data.OwnerID != 1000 {
+		t.Fatal("owner differs from caller")
+	}
+	assertGatewayPayload(t, gw, "GUILD_CREATE", map[string]any{"id": fmt.Sprint(guild.Data.ID)})
+	if gw.events[0].UserID != 1000 || gw.events[0].GuildID != 0 {
+		t.Fatal("GUILD_CREATE must go only to creator")
+	}
+
 }
 
 func TestGetGuild_AsMember(t *testing.T) {
@@ -182,7 +192,8 @@ func TestUpdateGuild_WithPermission(t *testing.T) {
 		},
 	}
 
-	h := newTestGuildHandler(guilds, &mockChannelRepo{}, &mockMemberRepo{}, &mockRoleRepo{})
+	gw := &mockGateway{}
+	h := newTestGuildHandler(guilds, &mockChannelRepo{}, &mockMemberRepo{}, &mockRoleRepo{}, gw)
 
 	body := strings.NewReader(`{"name":"New Name"}`)
 	c, rec := newTestContext(http.MethodPatch, "/api/v1/guilds/500", body)
@@ -206,6 +217,11 @@ func TestUpdateGuild_WithPermission(t *testing.T) {
 	}
 	if resp.Data.Name != "New Name" {
 		t.Errorf("expected guild name 'New Name', got %q", resp.Data.Name)
+	}
+
+	assertGatewayPayload(t, gw, "GUILD_UPDATE", map[string]any{"id": "500"})
+	if gw.events[0].GuildID != 500 {
+		t.Fatal("wrong guild recipient")
 	}
 }
 
@@ -272,7 +288,8 @@ func TestDeleteGuild_AsOwner(t *testing.T) {
 		},
 	}
 
-	h := newTestGuildHandler(guilds, &mockChannelRepo{}, &mockMemberRepo{}, &mockRoleRepo{})
+	gw := &mockGateway{}
+	h := newTestGuildHandler(guilds, &mockChannelRepo{}, &mockMemberRepo{}, &mockRoleRepo{}, gw)
 
 	c, rec := newTestContext(http.MethodDelete, "/api/v1/guilds/500", nil)
 	c.SetParamNames("id")
@@ -288,6 +305,11 @@ func TestDeleteGuild_AsOwner(t *testing.T) {
 	}
 	if !deleted {
 		t.Error("expected guild delete to be called")
+	}
+
+	assertGatewayPayload(t, gw, "GUILD_DELETE", map[string]any{"id": "500"})
+	if gw.events[0].GuildID != 500 {
+		t.Fatal("wrong guild recipient")
 	}
 }
 

@@ -136,6 +136,11 @@ func TestEveryonePositionImmutable(t *testing.T) {
 						t.Fatalf("position 0: %v", err)
 					}
 				} else {
+					c, rec := newTestContext(http.MethodPatch, "/", nil)
+					_ = mapServiceError(c, err)
+					if rec.Code != 400 {
+						t.Fatalf("immutable position = %d", rec.Code)
+					}
 					se, ok := err.(*service.ServiceError)
 					if !ok || se.Code != "INVALID_POSITION" || writes != 0 {
 						t.Fatalf("position changed: %v", err)
