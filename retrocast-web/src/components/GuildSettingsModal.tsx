@@ -2,6 +2,8 @@ import { useState } from "react";
 import { api } from "@/lib/api";
 import { useGuildsStore } from "@/stores/guilds";
 import { useAuthStore } from "@/stores/auth";
+import { useModeration } from "@/hooks/useModeration";
+import BansTab from "@/components/BansTab";
 import RoleEditor from "@/components/RoleEditor";
 import type { Guild } from "@/types";
 
@@ -10,12 +12,13 @@ interface GuildSettingsModalProps {
   onClose: () => void;
 }
 
-type Tab = "general" | "roles";
+type Tab = "general" | "roles" | "bans";
 
 export default function GuildSettingsModal({
   guild,
   onClose,
 }: GuildSettingsModalProps) {
+  const moderation = useModeration(guild.id);
   const [tab, setTab] = useState<Tab>("general");
   const [name, setName] = useState(guild.name);
   const [saving, setSaving] = useState(false);
@@ -78,6 +81,7 @@ export default function GuildSettingsModal({
   const tabs: { id: Tab; label: string }[] = [
     { id: "general", label: "General" },
     { id: "roles", label: "Roles" },
+    { id: "bans", label: "Bans" },
   ];
 
   return (
@@ -95,7 +99,7 @@ export default function GuildSettingsModal({
 
         {/* Tabs */}
         <div className="mb-4 flex gap-1 border-b border-border">
-          {tabs.map((t) => (
+          {tabs.filter(t => t.id !== "bans" || moderation.ban).map((t) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
@@ -188,6 +192,7 @@ export default function GuildSettingsModal({
           </>
         )}
 
+        {tab === "bans" && moderation.ban && <BansTab guildId={guild.id} />}
         {tab === "roles" && <RoleEditor guildId={guild.id} />}
 
         <div className="mt-4 flex justify-end">

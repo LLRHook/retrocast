@@ -56,3 +56,14 @@ func LockRegistration(ctx context.Context, users UserRepository) (bool, error) {
 	err := db.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users)").Scan(&exists)
 	return !exists, err
 }
+
+// LockGuildForModeration takes the parent before member or ban rows, matching
+// guild deletion and invite acceptance. The transaction serializes those writes.
+func LockGuildForModeration(ctx context.Context, repository any, guildID int64) error {
+	source, ok := repository.(interface{ transactionPool() *pgxpool.Pool })
+	if !ok {
+		return nil
+	}
+	var id int64
+	return queryDB(ctx, source.transactionPool()).QueryRow(ctx, "SELECT id FROM guilds WHERE id=$1 FOR UPDATE", guildID).Scan(&id)
+}

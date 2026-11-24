@@ -82,17 +82,23 @@ func (s *BanService) BanMember(ctx context.Context, guildID, callerID, targetUse
 		CreatedAt: time.Now(),
 	}
 
-	if err := s.bans.Create(ctx, ban); err != nil {
-		return Internal("INTERNAL", "internal server error")
-	}
-
-	if err := s.members.Delete(ctx, guildID, targetUserID); err != nil {
+	err = database.InTransaction(ctx, s.bans, func(ctx context.Context) error {
+		if err := database.LockGuildForModeration(ctx, s.bans, guildID); err != nil {
+			return err
+		}
+		if err := s.members.Delete(ctx, guildID, targetUserID); err != nil {
+			return err
+		}
+		return s.bans.Create(ctx, ban)
+	})
+	if err != nil {
 		return Internal("INTERNAL", "internal server error")
 	}
 	s.gateway.UnsubscribeFromGuild(targetUserID, guildID)
 
 	s.gateway.DispatchToGuild(guildID, gateway.EventGuildBanAdd, ban)
 	s.gateway.DispatchToGuild(guildID, gateway.EventGuildMemberRemove, map[string]any{"guild_id": strconv.FormatInt(guildID, 10), "user_id": strconv.FormatInt(targetUserID, 10)})
+	s.gateway.DispatchToUser(targetUserID, gateway.EventGuildDelete, map[string]any{"id": strconv.FormatInt(guildID, 10)})
 
 	return nil
 }
