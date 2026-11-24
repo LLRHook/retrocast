@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/prometheus/client_golang/prometheus"
@@ -10,14 +11,18 @@ import (
 	"github.com/victorivanov/retrocast/internal/models"
 	"github.com/victorivanov/retrocast/internal/service"
 	"go.yaml.in/yaml/v3"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Every routed handler must use the common success writer or an empty 204.
@@ -116,8 +121,20 @@ func TestContractOpenAPI(t *testing.T) {
 	if err := yaml.Unmarshal(data, &spec); err != nil {
 		t.Fatal(err)
 	}
-	if spec["info"].(map[string]any)["version"] != "2.1.0" {
-		t.Fatal("wrong version")
+	contract, err := os.ReadFile("../../../docs/DATA_CONTRACTS.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	version := regexp.MustCompile("(?m)^Current REST contract version: `([0-9]+\\.[0-9]+\\.[0-9]+)`\\.\\r?$").FindAllSubmatch(contract, -1)
+	if len(version) != 1 {
+		t.Fatal("missing single current contract version")
+	}
+	if spec["info"].(map[string]any)["version"] != string(version[0][1]) {
+		t.Fatal("OpenAPI version differs from DATA_CONTRACTS current version")
+	}
+	license := spec["info"].(map[string]any)["license"].(map[string]any)
+	if len(license) != 1 || license["name"] != "Proprietary. All rights reserved." {
+		t.Fatal("license mismatch", license)
 	}
 	// Shared response/schema references must resolve, including API-059 errors.
 	var checkRefs func(any)
@@ -420,6 +437,297 @@ func TestContractSessionUnavailable(t *testing.T) {
 			schema := response["content"].(map[string]any)["application/json"].(map[string]any)["schema"].(map[string]any)
 			if schema["$ref"] != "#/components/schemas/ErrorResponse" {
 				t.Fatal("session error does not use shared schema")
+			}
+		})
+	}
+}
+
+// TestContractDocumentedSuccess enumerates the document, so a new operation
+// cannot silently escape runtime status, envelope and response schema checks.
+func TestContractDocumentedSuccess(t *testing.T) {
+	var spec map[string]any
+	data, err := os.ReadFile("../../docs/openapi.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = yaml.Unmarshal(data, &spec); err != nil {
+		t.Fatal(err)
+	}
+	bodies := map[string]string{
+		"register": `{"username":"newuser","password":"password123"}`, "login": `{"username":"owner","password":"password123"}`,
+		"refreshToken": `{"refresh_token":"pilot-refresh"}`, "logout": `{"refresh_token":"pilot-refresh"}`,
+		"changePassword": `{"current_password":"password123","new_password":"changed123"}`,
+		"updateMe":       `{"display_name":"Changed"}`, "createDM": `{"recipient_id":"200"}`,
+		"createGuild": `{"name":"New guild"}`, "updateGuild": `{"name":"Renamed"}`,
+		"createChannel": `{"name":"random","type":0}`, "updateChannel": `{"name":"renamed"}`,
+		"sendMessage": `{"content":"hi","attachment_ids":["41"]}`, "editMessage": `{"content":"changed"}`,
+		"updateSelf": `{"nickname":"Buddy"}`, "updateMember": `{"nickname":"Buddy"}`,
+		"createRole": `{"name":"New role"}`, "updateRole": `{"name":"Changed"}`,
+		"reorderRoles":       `{"expected":[{"id":"30","position":0},{"id":"31","position":1}],"order":["31"]}`,
+		"setChannelOverride": `{"allow":"0","deny":"0"}`, "createInvite": `{}`, "banMember": `{"reason":"spam"}`,
+	}
+	count := 0
+	for path, raw := range spec["paths"].(map[string]any) {
+		for method, rawOp := range raw.(map[string]any) {
+			op, ok := rawOp.(map[string]any)
+			if !ok || op["responses"] == nil {
+				continue
+			}
+			count++
+			id := op["operationId"].(string)
+			t.Run(id, func(t *testing.T) {
+				e, token, _ := pilotContractServer(t)
+				target := path
+				params := map[string]string{"guildId": "1", "channelId": "10", "messageId": "20", "roleId": "31", "userId": "200", "code": "pilot", "emoji": "smile"}
+				for key, value := range params {
+					target = strings.ReplaceAll(target, "{"+key+"}", value)
+				}
+				switch id {
+				case "leaveGuild":
+					target = strings.ReplaceAll(target, "/guilds/1/", "/guilds/2/")
+				case "addGroupDMMember", "removeGroupDMMember":
+					target = strings.ReplaceAll(target, "/channels/10/", "/channels/12/")
+					if id == "addGroupDMMember" {
+						target = strings.ReplaceAll(target, "/recipients/200", "/recipients/300")
+					}
+				case "joinVoice", "leaveVoice", "getVoiceStates":
+					target = strings.ReplaceAll(target, "/channels/10/", "/channels/11/")
+				case "searchMessages":
+					target += "?q=hello"
+				}
+				req := httptest.NewRequest(strings.ToUpper(method), "/api/v1"+target, strings.NewReader(bodies[id]))
+				req.Header.Set("Content-Type", "application/json")
+				req.Header.Set("Authorization", "Bearer "+token)
+				if id == "acceptInvite" {
+					token, _ = auth.NewTokenService("pilot-contract-fixture").GenerateAccessToken(300)
+					req.Header.Set("Authorization", "Bearer "+token)
+				}
+				if id == "uploadAttachment" {
+					c, _ := newMultipartContext(t, "photo.png", "image/png", []byte("fixture png"))
+					req = c.Request()
+					req.URL.Path = "/api/v1" + target
+					req.Method = strings.ToUpper(method)
+					req.Header.Set("Authorization", "Bearer "+token)
+				}
+				rec := httptest.NewRecorder()
+				e.ServeHTTP(rec, req)
+				responses := op["responses"].(map[string]any)
+				var status string
+				for code := range responses {
+					if strings.HasPrefix(code, "2") {
+						if status != "" {
+							t.Fatal("multiple successes require explicit fixture")
+						}
+						status = code
+					}
+				}
+				if strconv.Itoa(rec.Code) != status {
+					t.Fatalf("%s %s: status %d want %s: %s", method, target, rec.Code, status, rec.Body.String())
+				}
+				if status == "204" {
+					if rec.Body.Len() != 0 {
+						t.Fatal("204 response has body")
+					}
+					return
+				}
+				var body any
+				if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+					t.Fatal(err)
+				}
+				envelope, ok := body.(map[string]any)
+				if !ok || len(envelope) != 1 || envelope["data"] == nil {
+					t.Fatalf("data envelope: %s", rec.Body.String())
+				}
+				// These fixtures must exercise item schemas, not just empty arrays.
+				switch id {
+				case "getReactions", "getReadStates", "listBans":
+					if len(envelope["data"].([]any)) == 0 {
+						t.Fatal("empty contract fixture", id)
+					}
+				case "getMember", "updateMember", "updateSelf":
+					if len(envelope["data"].(map[string]any)["roles"].([]any)) == 0 {
+						t.Fatal("empty member roles fixture")
+					}
+				case "listMembers":
+					for _, member := range envelope["data"].([]any) {
+						if len(member.(map[string]any)["roles"].([]any)) == 0 {
+							t.Fatal("empty list member roles fixture")
+						}
+					}
+				case "sendMessage", "getMessage", "editMessage":
+					if len(envelope["data"].(map[string]any)["attachments"].([]any)) == 0 {
+						t.Fatal("empty attachment fixture", id)
+					}
+				case "getMessages", "searchMessages":
+					for _, message := range envelope["data"].([]any) {
+						if len(message.(map[string]any)["attachments"].([]any)) == 0 {
+							t.Fatal("empty list attachment fixture", id)
+						}
+					}
+				}
+				schema := responses[status].(map[string]any)["content"].(map[string]any)["application/json"].(map[string]any)["schema"].(map[string]any)
+				validateContractSchema(t, spec, schema, body, "response")
+			})
+		}
+	}
+	if count != 60 {
+		t.Fatalf("covered %d operations, want 60; skipped 0", count)
+	}
+}
+
+func validateContractSchema(t *testing.T, spec, schema map[string]any, value any, path string) {
+	t.Helper()
+	if all, ok := schema["allOf"].([]any); ok {
+		for _, child := range all {
+			validateContractSchema(t, spec, child.(map[string]any), value, path)
+		}
+	}
+	if ref, ok := schema["$ref"].(string); ok {
+		var node any = spec
+		for _, key := range strings.Split(strings.TrimPrefix(ref, "#/"), "/") {
+			node = node.(map[string]any)[key]
+		}
+		validateContractSchema(t, spec, node.(map[string]any), value, path)
+		return
+	}
+	if value == nil {
+		if schema["nullable"] != true {
+			t.Errorf("%s: unexpected null", path)
+		}
+		return
+	}
+	switch schema["type"] {
+	case "object":
+		obj, ok := value.(map[string]any)
+		if !ok {
+			t.Errorf("%s: want object got %T", path, value)
+			return
+		}
+		props, _ := schema["properties"].(map[string]any)
+		if required, ok := schema["required"].([]any); ok {
+			for _, key := range required {
+				if _, ok := obj[key.(string)]; !ok {
+					t.Errorf("%s: missing %s", path, key)
+				}
+			}
+		}
+		for key, v := range obj {
+			if child, ok := props[key].(map[string]any); ok {
+				validateContractSchema(t, spec, child, v, path+"/"+key)
+			} else if schema["additionalProperties"] == false {
+				t.Errorf("%s: extra %s", path, key)
+			}
+		}
+	case "array":
+		arr, ok := value.([]any)
+		if !ok {
+			t.Errorf("%s: want array got %T", path, value)
+			return
+		}
+		for i, v := range arr {
+			validateContractSchema(t, spec, schema["items"].(map[string]any), v, fmt.Sprintf("%s/%d", path, i))
+		}
+	case "string":
+		v, ok := value.(string)
+		if !ok {
+			t.Errorf("%s: want string got %T", path, value)
+			return
+		}
+		if pattern, ok := schema["pattern"].(string); ok && !regexp.MustCompile(pattern).MatchString(v) {
+			t.Errorf("%s: pattern mismatch", path)
+		}
+		if schema["format"] == "date-time" {
+			if _, err := time.Parse(time.RFC3339Nano, v); err != nil {
+				t.Errorf("%s: invalid date-time", path)
+			}
+		}
+	case "integer":
+		n, ok := value.(float64)
+		if !ok || n != math.Trunc(n) {
+			t.Errorf("%s: want integer", path)
+		}
+	case "number":
+		if _, ok := value.(float64); !ok {
+			t.Errorf("%s: want number", path)
+		}
+	case "boolean":
+		if _, ok := value.(bool); !ok {
+			t.Errorf("%s: want boolean", path)
+		}
+	}
+	if enum, ok := schema["enum"].([]any); ok {
+		found := false
+		for _, v := range enum {
+			if fmt.Sprint(v) == fmt.Sprint(value) {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s: value outside enum", path)
+		}
+	}
+}
+
+// Keep the documentation's required fields aligned with what the wire models
+// always emit. Optional projections/pointers with omitempty remain optional.
+func TestContractRequiredModelFields(t *testing.T) {
+	var spec map[string]any
+	b, err := os.ReadFile("../../docs/openapi.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = yaml.Unmarshal(b, &spec); err != nil {
+		t.Fatal(err)
+	}
+	schemas := spec["components"].(map[string]any)["schemas"].(map[string]any)
+	cases := map[string]any{"User": models.User{}, "Guild": models.Guild{}, "Channel": models.Channel{}, "Role": models.Role{}, "MemberUser": models.MemberUser{}, "Member": models.Member{}, "Message": models.Message{}, "MessageWithAuthor": models.MessageWithAuthor{}, "Attachment": models.Attachment{}, "InvitePreview": service.InviteInfo{}, "Invite": models.Invite{}, "Ban": models.Ban{}, "ChannelOverride": models.ChannelOverride{}, "DMChannel": models.DMChannel{}, "ReactionCount": models.ReactionCount{}, "ReadState": models.ReadState{}, "VoiceState": models.VoiceState{}, "JoinVoiceResponse": service.JoinChannelResponse{}, "AuthResponse": authResponse{}, "RefreshResponse": refreshResponse{}}
+	for name, value := range cases {
+		t.Run(name, func(t *testing.T) {
+			want := map[string]bool{}
+			var fields func(reflect.Type)
+			fields = func(typ reflect.Type) {
+				for i := 0; i < typ.NumField(); i++ {
+					f := typ.Field(i)
+					if f.Anonymous {
+						fields(f.Type)
+						continue
+					}
+					tag := strings.Split(f.Tag.Get("json"), ",")
+					if tag[0] == "-" {
+						continue
+					}
+					optional := false
+					for _, opt := range tag[1:] {
+						if opt == "omitempty" {
+							optional = true
+						}
+					}
+					if !optional {
+						want[tag[0]] = true
+					}
+				}
+			}
+			fields(reflect.TypeOf(value))
+			got := map[string]bool{}
+			var required func(map[string]any)
+			required = func(schema map[string]any) {
+				if ref, ok := schema["$ref"].(string); ok {
+					required(schemas[strings.TrimPrefix(ref, "#/components/schemas/")].(map[string]any))
+				}
+				if all, ok := schema["allOf"].([]any); ok {
+					for _, child := range all {
+						required(child.(map[string]any))
+					}
+				}
+				if keys, ok := schema["required"].([]any); ok {
+					for _, key := range keys {
+						got[key.(string)] = true
+					}
+				}
+			}
+			required(schemas[name].(map[string]any))
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("required fields %v, want non-omitempty JSON fields %v", got, want)
 			}
 		})
 	}

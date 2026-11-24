@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -206,7 +207,7 @@ func main() {
 
 	<-sigCtx.Done()
 	slog.Info("shutting down")
-	if err := e.Shutdown(context.Background()); err != nil {
+	if err := shutdownServer(e.Shutdown); err != nil {
 		slog.Error("shutdown error", "error", err)
 		os.Exit(1)
 	}
@@ -218,4 +219,11 @@ func gatewayPermissionResult(err error) error {
 		return gateway.ErrChannelHidden
 	}
 	return err
+}
+
+// Keep draining inside Docker's stop grace period even if a handler is stuck.
+func shutdownServer(shutdown func(context.Context) error) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return shutdown(ctx)
 }

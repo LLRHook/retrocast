@@ -14,6 +14,7 @@ import (
 
 // InviteInfo is the public-facing invite information (no auth required).
 type InviteInfo struct {
+	GuildID     int64  `json:"guild_id,string"`
 	Code        string `json:"code"`
 	GuildName   string `json:"guild_name"`
 	MemberCount int    `json:"member_count"`
@@ -129,6 +130,7 @@ func (s *InviteService) GetInvite(ctx context.Context, code string) (*InviteInfo
 	}
 
 	return &InviteInfo{
+		GuildID:     invite.GuildID,
 		Code:        invite.Code,
 		GuildName:   guild.Name,
 		MemberCount: len(members),
@@ -205,6 +207,9 @@ func (s *InviteService) acceptInvite(ctx context.Context, code string, userID in
 		return nil, nil, Internal("INTERNAL", "internal server error")
 	}
 
+	if err := s.members.HydrateUsers(ctx, []*models.Member{member}); err != nil {
+		return nil, nil, Internal("INTERNAL", "internal server error")
+	}
 	return guild, member, nil
 }
 

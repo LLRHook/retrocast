@@ -41,6 +41,7 @@ type RoleRepository interface {
 }
 
 type MemberRepository interface {
+	HydrateUsers(ctx context.Context, members []*models.Member) error
 	Create(ctx context.Context, member *models.Member) error
 	GetByGuildAndUser(ctx context.Context, guildID, userID int64) (*models.Member, error)
 	GetByGuildID(ctx context.Context, guildID int64, limit, offset int) ([]models.Member, error)

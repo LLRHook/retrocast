@@ -1,10 +1,12 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { useAuthStore } from "@/stores/auth";
 import { ApiClientError } from "@/lib/api";
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const inviteCode = params.get("invite_code") || "";
   const login = useAuthStore((s) => s.login);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -17,7 +19,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await login(username, password);
-      navigate("/app");
+      navigate(inviteCode ? `/invite/${encodeURIComponent(inviteCode)}` : "/app");
     } catch (err) {
       if (err instanceof ApiClientError) {
         setError(err.message);
@@ -76,7 +78,7 @@ export default function LoginPage() {
 
       <p className="mt-4 text-sm text-text-muted">
         Need an account?{" "}
-        <Link to="/register" className="text-accent hover:underline">
+        <Link to={inviteCode ? `/register?invite_code=${encodeURIComponent(inviteCode)}` : "/register"} className="text-accent hover:underline">
           Register
         </Link>
       </p>

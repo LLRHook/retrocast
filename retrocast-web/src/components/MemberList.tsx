@@ -106,7 +106,7 @@ export default function MemberList({ guildId }: MemberListProps) {
 
   // Build display info for each member, using the users cache for names/avatars
   const memberInfos: MemberDisplayInfo[] = members.map((m) => {
-    const cached = usersCache.get(m.user_id);
+    const cached = m.user ?? usersCache.get(m.user_id);
     return {
       member: m,
       displayName: m.nickname || cached?.display_name || cached?.username || `User ${m.user_id.slice(-4)}`,

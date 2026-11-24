@@ -56,7 +56,15 @@ export interface Role {
   is_default: boolean;
 }
 
+export interface MemberUser {
+  id: string;
+  username: string;
+  display_name: string | null;
+  avatar_hash?: string | null;
+}
+
 export interface Member {
+  user?: MemberUser;
   guild_id: string;
   user_id: string;
   nickname: string | null;

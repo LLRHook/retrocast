@@ -1,4 +1,4 @@
-﻿import { createRequire } from 'node:module';
+import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import test, { after } from 'node:test';
 import ts from 'typescript';
 const require = createRequire(import.meta.url);
-const dir = mkdtempSync(join(tmpdir(), 'l25-retrocast-web-test-'));
+const dir = mkdtempSync(join(tmpdir(), 'l40-retrocast-web-test-'));
 const cleanup = () => rmSync(dir, {recursive:true,force:true});
 after(cleanup);
 process.on('exit', cleanup);
@@ -118,9 +118,9 @@ function storeModule(name, state) {
 }
 let componentSequence=0;
 async function component(file, replacements, suffix='') {
- let source=readFileSync(resolve('src/components/'+file+'.tsx'),'utf8')+suffix;
+ let source=readFileSync(resolve((file==='AppLayout'?'src/layouts/':['InvitePage','LoginPage','RegisterPage','ServerAddressPage'].includes(file)?'src/pages/':'src/components/')+file+'.tsx'),'utf8')+suffix;
  source=source.replace(/from "([^"]+)"/g,(whole,name)=>{
-  const target=name==='react'?hooksUrl:replacements[name]??(name.startsWith('@/components/')?emptyComponentUrl:undefined);
+  const target=name==='react'?(replacements.react??hooksUrl):replacements[name]??(name.startsWith('@/components/')?emptyComponentUrl:undefined);
   return target?'from '+JSON.stringify(target):whole;
  });
  // The JSX runtime import is introduced by TypeScript after import rewriting.
@@ -210,7 +210,7 @@ test('READY after RESUME signals resync and retains the replacement session',asy
  globalThis.WebSocket={OPEN:1};c.ws={readyState:1,send:raw=>sent.push(JSON.parse(raw))};c.token='test';
  c.on('RESYNC',()=>resync++);
  c.handlePayload({op:0,t:'READY',s:1,d:{session_id:'old'}});assert.equal(resync,0);
- c.handlePayload({op:10,d:{heartbeat_interval:60000}});assert.equal(sent.at(-1).op,6);
+ c.handlePayload({op:0,t:'MESSAGE_CREATE',s:7,d:{}});c.handlePayload({op:10,d:{heartbeat_interval:60000}});assert.equal(sent.at(-1).op,6);assert.equal(sent.at(-1).d.seq,7);
  c.handlePayload({op:0,t:'READY',s:1,d:{session_id:'new'}});assert.equal(resync,1);assert.equal(c.sessionId,'new');assert.equal(c.sequence,1);
  c.handlePayload({op:10,d:{heartbeat_interval:60000}});assert.equal(sent.at(-1).d.session_id,'new');c.stopHeartbeat();
 });
@@ -442,6 +442,220 @@ test('actual moderation hook drives kick-only, ban-only, Administrator, plain, a
   const buttons=nodes(tree).filter(n=>n.type==='button').map(n=>n.props.children).filter(s=>s==='Kick'||s==='Ban');assert.deepEqual(buttons,self?[]:expected,bits+' self='+self);
  }}finally{globalThis.window=previous}
 });
+test('copied invite route preserves code through server, register and login',async()=>{
+ assert.match(readFileSync('src/App.tsx','utf8'),/path="\/invite\/:code"/);
+ const auth=await storeModule('useAuthStore',{serverUrl:null,isAuthenticated:false});
+ const router=compile('export const Navigate="Navigate";export const Link="Link";export const useNavigate=()=>()=>{};export const useParams=()=>({code:"copied-code"});','invite-router');
+ const invite=compile('export const acceptInvite=async()=>{}','invite-action');
+ const {default:Page}=await component('InvitePage',{'@/stores/auth':auth.url,'react-router':router,'@/lib/invite':invite,'@/lib/api':apiUrl});
+ hooks.reset();assert.equal(Page().props.to,'/server?invite_code=copied-code');
+ auth.module.setState({serverUrl:'https://fixture',isAuthenticated:false});hooks.reset();assert.equal(Page().props.to,'/register?invite_code=copied-code');
+ for(const page of ['ServerAddressPage','LoginPage','RegisterPage']) assert.match(readFileSync('src/pages/'+page+'.tsx','utf8'),/encodeURIComponent\(inviteCode\)/);
+});
+
+test('invite acceptance coalesces replays, selects target and propagates invalid errors',async()=>{
+ const g=await storeModule('useGuildsStore',{setGuild:x=>calls.push(['guild',x.id]),selectGuild:x=>calls.push(['select',x])});
+ const c=await storeModule('useChannelsStore',{selectChannel:x=>calls.push(['channel',x]),fetchChannels:async x=>calls.push(['fetch',x]),channelsByGuild:new Map([['target',[{id:'text',type:0}]]])});
+ let calls=[];
+ const source=readFileSync('src/lib/invite.ts','utf8').replace('"@/lib/api"',JSON.stringify(apiUrl)).replace('"@/stores/guilds"',JSON.stringify(g.url)).replace('"@/stores/channels"',JSON.stringify(c.url));
+ const {acceptInvite}=await import(compile(source,'real-invite'));
+ let requests=0;globalThis.fetch=async()=>{requests++;await new Promise(setImmediate);return Response.json({data:{id:'target'}})};
+ await Promise.all([acceptInvite('copied'),acceptInvite('copied')]);assert.equal(requests,1);
+ assert.deepEqual(calls,[['guild','target'],['select','target'],['channel',null],['fetch','target'],['channel','text']]);
+ calls=[];globalThis.fetch=async()=>Response.json({error:{code:'EXPIRED',message:'invite has expired'}},{status:410});
+ await assert.rejects(acceptInvite('expired'),/expired/);assert.deepEqual(calls,[]);
+});
+
+test('already-member invite previews once, loads missing guild and selects its channel',async()=>{
+ let selected=[],calls=[];
+ const g=await storeModule('useGuildsStore',{guilds:new Map(),setGuild:x=>selected.push(['guild',x.id]),selectGuild:x=>selected.push(['select',x])});
+ const c=await storeModule('useChannelsStore',{selectChannel:x=>selected.push(['channel',x]),fetchChannels:async()=>{},channelsByGuild:new Map([['invited',[{id:'first-text',type:0}]]])});
+ const source=readFileSync('src/lib/invite.ts','utf8').replace('"@/lib/api"',JSON.stringify(apiUrl)).replace('"@/stores/guilds"',JSON.stringify(g.url)).replace('"@/stores/channels"',JSON.stringify(c.url));
+ const {acceptInvite}=await import(compile(source,'member-invite'));
+ globalThis.fetch=async(url,o)=>{calls.push([o.method,url]);if(o.method==='POST')return Response.json({error:{code:'ALREADY_MEMBER',message:'already a member'}},{status:409});return Response.json({data:url.endsWith('/invites/copied')?{guild_id:'invited'}:{id:'invited'}})};
+ await Promise.all([acceptInvite('copied'),acceptInvite('copied')]);
+ assert.deepEqual(calls.map(([m,u])=>[m,new URL(u,'http://fixture').pathname]),[['POST','/api/v1/invites/copied'],['GET','/api/v1/invites/copied'],['GET','/api/v1/guilds/invited']]);
+ assert.deepEqual(selected,[['guild','invited'],['select','invited'],['channel',null],['channel','first-text']]);
+ calls=[];selected=[];globalThis.fetch=async(url,o)=>{calls.push(o.method);return Response.json({error:{code:'BANNED',message:'you are banned'}},{status:403})};
+ await assert.rejects(acceptInvite('banned'),/banned/);assert.deepEqual(calls,['POST']);assert.deepEqual(selected,[]);
+});
+
+test('login submit preserves invite destination and registration never reaccepts joined membership',async()=>{
+ let destinations=[],logins=0,registers=0,selected=[];
+ const router=compile('export const Link="Link";export const useNavigate=()=>globalThis.l37Navigate;export const useSearchParams=()=>[new URLSearchParams("invite_code=copied-code")];','post-auth-router');
+ globalThis.l37Navigate=path=>destinations.push(path);
+ const a=await storeModule('useAuthStore',{login:async()=>{logins++},register:async(_u,_p,code)=>{assert.equal(code,'copied-code');registers++}});
+ const g=await storeModule('useGuildsStore',{fetchGuilds:async()=>{},guilds:new Map([['invited',{id:'invited'}]])});
+ globalThis.l37Select=async guild=>selected.push(guild.id);
+ const invite=compile('export const selectInviteGuild=g=>globalThis.l37Select(g);','post-register-select');
+ const {default:Login}=await component('LoginPage',{'@/stores/auth':a.url,'react-router':router,'@/lib/api':apiUrl});
+ hooks.reset(['user','password','','false']);await Login().props.onSubmit({preventDefault(){}});assert.equal(logins,1);assert.deepEqual(destinations,['/invite/copied-code']);
+ const {default:Register}=await component('RegisterPage',{'@/stores/auth':a.url,'react-router':router,'@/lib/api':apiUrl,'@/stores/guilds':g.url,'@/lib/invite':invite});
+ destinations=[];hooks.reset(['copied-code','new-user','password','',false]);await Register().props.onSubmit({preventDefault(){}});
+ assert.equal(registers,1);assert.deepEqual(selected,['invited']);assert.deepEqual(destinations,['/app']);
+ g.module.setState({fetchGuilds:async()=>{},guilds:new Map()});destinations=[];hooks.reset(['copied-code','open-user','password','',false]);await Register().props.onSubmit({preventDefault(){}});assert.deepEqual(destinations,['/invite/copied-code']);
+ delete globalThis.l37Navigate;delete globalThis.l37Select;
+});
+
+test('successful invite history state restores its guild after a redirect-time reload',async()=>{
+ const effectUrl=compile('export const effects=[];export function useEffect(fn){effects.push(fn)};export const useState=v=>[v,()=>{}];export const useSyncExternalStore=()=>true;','invite-effects');const effect=await import(effectUrl);
+ const a=await storeModule('useAuthStore',{isAuthenticated:true,accessToken:'fixture',serverUrl:'https://fixture'});
+ let navigation,selectedGuild,selectedChannel;
+ globalThis.l37Redirect=(...args)=>navigation=args;
+ const router=compile('export const Link="Link",Navigate="Navigate",Outlet="Outlet";export const useNavigate=()=>globalThis.l37Redirect;export const useParams=()=>({code:"copied"});export const useLocation=()=>({state:globalThis.l37History});','invite-history-router');
+ const invite=compile('export const ApiClientError=Error;export const acceptInvite=async()=>({id:"target"});','invite-history-accept');
+ const {default:Invite}=await component('InvitePage',{react:effectUrl,'@/stores/auth':a.url,'react-router':router,'@/lib/invite':invite,'@/lib/api':apiUrl});
+ Invite();effect.effects.shift()();await new Promise(setImmediate);assert.deepEqual(navigation,['/app',{replace:true,state:{inviteGuildId:'target'}}]);
+ globalThis.l37History=navigation[1].state;effect.effects.length=0;
+ const g=await storeModule('useGuildsStore',{guilds:new Map([['first',{id:'first'}],['target',{id:'target'}]]),selectedGuildId:null,fetchGuilds:async()=>{},selectGuild:id=>selectedGuild=id});
+ const c=await storeModule('useChannelsStore',{fetchChannels:async()=>{},channelsByGuild:new Map([['target',[{id:'target-text',type:0}]]]),selectChannel:id=>selectedChannel=id});
+ const d=await storeModule('useDMsStore',{fetchDMs:async()=>{}});
+ const gateway=compile('export const gateway={connect(){},disconnect(){}}','reload-gateway');const dispatcher=compile('export const initGatewayDispatcher=()=>{}','reload-dispatcher');
+ const {default:Layout}=await component('AppLayout',{react:effectUrl,'react-router':router,'@/stores/auth':a.url,'@/stores/guilds':g.url,'@/stores/channels':c.url,'@/stores/dms':d.url,'@/lib/gateway':gateway,'@/lib/gateway-dispatcher':dispatcher});
+ Layout();effect.effects[0]();await new Promise(setImmediate);assert.equal(selectedGuild,'target');assert.equal(selectedChannel,'target-text');
+ delete globalThis.l37History;delete globalThis.l37Redirect;
+});
+
+
+test('Pilot already-member store hit selects the previewed guild',async()=>{
+ const wrong={id:'wrong'},target={id:'target'},selected=[];
+ const g=await storeModule('useGuildsStore',{guilds:new Map([['wrong',wrong],['target',target]]),setGuild:x=>assert.equal(x,target),selectGuild:id=>selected.push(id)});
+ const c=await storeModule('useChannelsStore',{selectChannel(){},fetchChannels:async id=>assert.equal(id,'target'),channelsByGuild:new Map()});
+ const source=readFileSync('src/lib/invite.ts','utf8').replace('"@/lib/api"',JSON.stringify(apiUrl)).replace('"@/stores/guilds"',JSON.stringify(g.url)).replace('"@/stores/channels"',JSON.stringify(c.url));
+ const {acceptInvite}=await import(compile(source,'pilot-store-hit'));const calls=[];
+ globalThis.fetch=async(url,o)=>{calls.push(o.method);assert.ok(url.endsWith('/invites/code'));return o.method==='POST'?Response.json({error:{code:'ALREADY_MEMBER',message:'member'}},{status:409}):Response.json({data:{guild_id:'target'}})};
+ assert.equal(await acceptInvite('code'),target);assert.deepEqual(selected,['target']);assert.deepEqual(calls,['POST','GET']);
+});
+test('Pilot server address persists and submit opens login',async()=>{
+ let destination;globalThis.l40Navigate=p=>destination=p;
+ const router=compile('export const useNavigate=()=>globalThis.l40Navigate;export const useSearchParams=()=>[new URLSearchParams()];','pilot-server-router');
+ const a=await storeModule('useAuthStore',useAuthStore.getState());
+ const {default:Page}=await component('ServerAddressPage',{'@/stores/auth':a.url,'react-router':router});
+ hooks.reset(['https://chat.example']);Page().props.onSubmit({preventDefault(){}});
+ assert.equal(storage.get('serverUrl'),'https://chat.example');assert.equal(destination,'/login');delete globalThis.l40Navigate;
+});
+test('Pilot expired channel refreshes once and replaces stored token',async()=>{
+ storage.set('refreshToken','old');useAuthStore.setState({refreshToken:'old'});let refreshes=0,requests=0;
+ globalThis.fetch=async url=>{if(url.endsWith('/auth/refresh')){refreshes++;return Response.json({data:{access_token:'fresh',refresh_token:'rotated'}})}requests++;return requests===1?Response.json({error:{code:'UNAUTHORIZED',message:'expired'}},{status:401}):Response.json({data:{id:'channel'}})};
+ assert.equal((await api.get('/api/v1/channels/channel')).id,'channel');assert.equal(refreshes,1);assert.equal(requests,2);assert.equal(storage.get('refreshToken'),'rotated');
+});
+test('Pilot composer sends hi, clears and throttles twenty seconds of input',async()=>{
+ const calls=[];globalThis.l40Posts=calls;const a=compile('export const api={post:async(...args)=>{globalThis.l40Posts.push(args);return {}}};','pilot-composer-api');
+ const {default:Composer}=await component('MessageInput',{'@/lib/api':a});hooks.reset(['hi',false,[]]);let tree=Composer({channelId:'channel'});
+ element(tree,n=>n.type==='textarea').props.onKeyDown({key:'Enter',shiftKey:false,preventDefault(){}});await new Promise(setImmediate);
+ assert.deepEqual(calls,[['/api/v1/channels/channel/messages',{content:'hi',attachment_ids:[]}]]);assert.equal(hooks.values[0],'');
+ const now=Date.now;try{calls.length=0;hooks.reset();tree=Composer({channelId:'channel'});const input=element(tree,n=>n.type==='textarea');for(let i=0;i<20;i++){Date.now=()=>100000+i*1000;input.props.onChange({target:{value:'hi'+i}})}assert.equal(calls.length,3);assert.ok(calls.every(p=>p[0]==='/api/v1/channels/channel/typing'));}finally{Date.now=now;delete globalThis.l40Posts}
+});
+test('Pilot typing expires at eight seconds and renewed signals extend it',async()=>{
+ const source=readFileSync('src/stores/typing.ts','utf8').replace('"zustand"',JSON.stringify(pathToFileURL(require.resolve('zustand')).href));const {useTypingStore:s}=await import(compile(source,'pilot-typing'));
+ const now=Date.now,timeout=globalThis.setTimeout;let clock=0,timers=[];
+ try{Date.now=()=>clock;globalThis.setTimeout=(fn,ms)=>{assert.equal(ms,8000);timers.push(fn)};
+ s.getState().setTyping('c','u');clock=7900;assert.ok(s.getState().typingByChannel.get('c').has('u'));clock=8000;timers.shift()();assert.equal(s.getState().typingByChannel.get('c').has('u'),false);
+ clock=10000;s.getState().setTyping('c','u');clock=17000;s.getState().setTyping('c','u');clock=18000;timers.shift()();assert.ok(s.getState().typingByChannel.get('c').has('u'));clock=25000;timers.shift()();assert.equal(s.getState().typingByChannel.get('c').has('u'),false);
+ }finally{Date.now=now;globalThis.setTimeout=timeout}
+});
+test('Pilot member names resolve nickname then display name then username',async()=>{
+ const member={guild_id:'g',user_id:'200',roles:[],user:{id:'200',username:'bob',display_name:null}};
+ const m=await storeModule('useMembersStore',{membersByGuild:new Map([['g',new Map([['200',member]])]]),fetchMembers:async()=>{}}),r=await storeModule('useRolesStore',{rolesByGuild:new Map(),fetchRoles:async()=>{}}),p=await storeModule('usePresenceStore',{presences:new Map()}),u=await storeModule('useUsersStore',{users:new Map()}),typing=await storeModule('useTypingStore',{typingByChannel:new Map([['c',new Map([['200',{}]])]])}),a=await storeModule('useAuthStore',{user:{id:'100'}}),g=await storeModule('useGuildsStore',{selectedGuildId:'g'});
+ const replacements={'@/stores/members':m.url,'@/stores/roles':r.url,'@/stores/presence':p.url,'@/stores/users':u.url,'@/stores/typing':typing.url,'@/stores/auth':a.url,'@/stores/guilds':g.url};
+ const {default:Indicator}=await component('TypingIndicator',replacements),{default:List}=await component('MemberList',replacements);
+ for(const expected of ['bob','Bobby','Nick']){if(expected==='Bobby')member.user.display_name='Bobby';if(expected==='Nick')member.nickname='Nick';hooks.reset();assert.ok(nodes(Indicator({channelId:'c'})).some(n=>Array.isArray(n.props?.children)&&n.props.children.includes(expected+' is typing...')));hooks.reset();assert.ok(nodes(List({guildId:'g'})).some(n=>n.props?.info?.displayName===expected));}
+});
+test('Pilot member responses and events hydrate the shared users cache',async()=>{
+ const zustand=JSON.stringify(pathToFileURL(require.resolve('zustand')).href),usersUrl=compile(readFileSync('src/stores/users.ts','utf8').replace('"zustand"',zustand),'pilot-users');const {useUsersStore:u}=await import(usersUrl);
+ const source=readFileSync('src/stores/members.ts','utf8').replace('"zustand"',zustand).replace('"@/lib/api"',JSON.stringify(apiUrl)).replace('"@/stores/users"',JSON.stringify(usersUrl));const {useMembersStore:m}=await import(compile(source,'pilot-members'));
+ const member={guild_id:'g',user_id:'200',roles:[],user:{id:'200',username:'bob',display_name:null}};globalThis.fetch=async()=>Response.json({data:[member]});await m.getState().fetchMembers('g');assert.equal(u.getState().users.get('200').username,'bob');m.getState().setMember({...member,user:{...member.user,display_name:'Bobby'}});assert.equal(u.getState().users.get('200').display_name,'Bobby');let requests=0;globalThis.fetch=async url=>{requests++;assert.ok(url.endsWith('/guilds/g/members/300'));await new Promise(setImmediate);return Response.json({data:{...member,user_id:'300',user:{...member.user,id:'300',username:'carol'}}})};await Promise.all([m.getState().fetchMember('g','300'),m.getState().fetchMember('g','300')]);assert.equal(requests,1);assert.equal(u.getState().users.get('300').username,'carol');
+});
+
+
+test('Pilot stored server skips the address page on return',async()=>{
+ const a=await storeModule('useAuthStore',{restoreState:'ready',restore(){},isAuthenticated:false,serverUrl:storage.get('serverUrl')});
+ const router=compile('export const BrowserRouter="BrowserRouter",Routes="Routes",Route="Route",Navigate="Navigate";','pilot-app-router');
+ let source=readFileSync('src/App.tsx','utf8').replace('"react"',JSON.stringify(hooksUrl)).replace('"react-router"',JSON.stringify(router)).replace('"@/stores/auth"',JSON.stringify(a.url)).replace(/"@\/(?:pages|layouts|components)\/[^"\n]+"/g,JSON.stringify(emptyComponentUrl));
+ let url=compile(source,'pilot-app');writeFileSync(new URL(url),readFileSync(new URL(url),'utf8').replace('"react/jsx-runtime"',JSON.stringify(jsxUrl)));
+ const {default:App}=await import(url);hooks.reset();const route=element(App(),n=>n.props?.path==='*');assert.equal(route.props.element.props.to,'/login');
+});
+test('Pilot registration explains invite-required and closed errors',async()=>{
+ const router=compile('export const Link="Link";export const useNavigate=()=>()=>{};export const useSearchParams=()=>[new URLSearchParams()];','pilot-register-router');
+ const g=await storeModule('useGuildsStore',{}),invite=compile('export const selectInviteGuild=()=>{}','pilot-register-invite');
+ for(const [code,message]of [['INVITE_REQUIRED','An invite is required to register.'],['REGISTRATION_CLOSED','Registration is closed.']]){
+ const a=await storeModule('useAuthStore',{register:async()=>{throw new ApiClientError(code,'fixture',403)}});
+ const {default:Page}=await component('RegisterPage',{'react-router':router,'@/stores/auth':a.url,'@/stores/guilds':g.url,'@/lib/invite':invite,'@/lib/api':apiUrl});hooks.reset(['','bob','password','',false]);await Page().props.onSubmit({preventDefault(){}});assert.equal(hooks.values[3],message);
+ }
+});
+test('Pilot markdown displays hostile markup literally without active attributes',async()=>{
+ let source=readFileSync('src/components/MarkdownContent.tsx','utf8').replace(/from "(react-markdown|remark-gfm|react)"/g,(_,name)=>'from '+JSON.stringify(pathToFileURL(require.resolve(name)).href));
+ const url=compile(source,'pilot-markdown');writeFileSync(new URL(url),readFileSync(new URL(url),'utf8').replace('"react/jsx-runtime"',JSON.stringify(pathToFileURL(require.resolve('react/jsx-runtime')).href)));
+ const {default:Markdown}=await import(url),{renderToStaticMarkup}=require('react-dom/server'),{createElement}=require('react');
+ const html=renderToStaticMarkup(createElement(Markdown,{content:'<img src=x onerror=alert(1)>'}));assert.ok(html.includes('&lt;img src=x onerror=alert(1)&gt;'));assert.doesNotMatch(html,/<img\b|<[^>]+\son\w+=/i);
+});
+test('Pilot leave removes the selected non-owner guild',async()=>{
+ const deps=compile('const s={channelsByGuild:new Map(),messagesByChannel:new Map(),hasMore:new Map(),typingByChannel:new Map()};const store={getState:()=>s,setState:fn=>fn(s)};export const useChannelsStore=store,useMessagesStore=store,useTypingStore=store;','pilot-leave-deps');
+ const source=readFileSync('src/stores/guilds.ts','utf8').replace(/"@\/stores\/[^"\n]+"/g,JSON.stringify(deps)).replace('"@/lib/api"',JSON.stringify(apiUrl)).replace('"zustand"',JSON.stringify(pathToFileURL(require.resolve('zustand')).href));
+ const guildUrl=compile(source,'pilot-leave-store'),{useGuildsStore:g}=await import(guildUrl),guild={id:'g',name:'Guild',owner_id:'owner'};g.getState().setGuild(guild);g.getState().selectGuild('g');
+ const a=await storeModule('useAuthStore',{user:{id:'other'}}),moderation=compile('export const useModeration=()=>({canBan:false,canManageRoles:false})','pilot-leave-moderation');
+ const guildSnapshot=await storeModule('useGuildsStore',g.getState());const {default:Modal}=await component('GuildSettingsModal',{'@/stores/auth':a.url,'@/stores/guilds':guildSnapshot.url,'@/hooks/useModeration':moderation,'@/lib/api':apiUrl});
+ let path;globalThis.fetch=async url=>{path=url;return new Response(null,{status:204})};hooks.reset();const tree=Modal({guild,onClose(){}});await element(tree,n=>n.type==='button'&&n.props.children==='Leave Server').props.onClick();assert.ok(path.endsWith('/api/v1/guilds/g/members/@me'));assert.equal(g.getState().guilds.has('g'),false);
+});
+test('Pilot gateway channel, membership and idle updates drive real stores',async()=>{
+ const zustand=JSON.stringify(pathToFileURL(require.resolve('zustand')).href),urls={},mods={};
+ for(const name of ['users','members','channels','presence']){let source=readFileSync('src/stores/'+name+'.ts','utf8').replace('"zustand"',zustand).replace('"@/lib/api"',JSON.stringify(apiUrl));if(urls.users)source=source.replace('"@/stores/users"',JSON.stringify(urls.users));urls[name]=compile(source,'pilot-event-'+name);mods[name]=await import(urls[name]);}
+ const gw=compile('const callbacks=new Map();export const gateway={on:(name,fn)=>callbacks.set(name,fn),emit:(name,data)=>callbacks.get(name)(data)};','pilot-event-gw');const {gateway}=await import(gw);
+ const noop=compile('export const useGuildsStore={},useRolesStore={},useMessagesStore={},useTypingStore={};','pilot-unused-stores');
+ const source=readFileSync('src/lib/gateway-dispatcher.ts','utf8').replace('"@/lib/gateway"',JSON.stringify(gw)).replace(/"@\/stores\/([^"\n]+)"/g,(_,name)=>JSON.stringify(urls[name]??noop));
+ (await import(compile(source,'pilot-event-dispatcher'))).initGatewayDispatcher();
+ const ch={id:'c',guild_id:'g',name:'random',type:0};gateway.emit('CHANNEL_CREATE',ch);assert.equal(mods.channels.useChannelsStore.getState().channelsByGuild.get('g')[0].name,'random');gateway.emit('CHANNEL_DELETE',{id:'c',guild_id:'g'});assert.deepEqual(mods.channels.useChannelsStore.getState().channelsByGuild.get('g'),[]);
+ const member={guild_id:'g',user_id:'bob',roles:[],user:{id:'bob',username:'bob',display_name:null}};gateway.emit('GUILD_MEMBER_ADD',member);assert.equal(mods.users.useUsersStore.getState().users.get('bob').username,'bob');gateway.emit('GUILD_MEMBER_REMOVE',{guild_id:'g',user_id:'bob'});assert.equal(mods.members.useMembersStore.getState().membersByGuild.get('g').has('bob'),false);
+ gateway.emit('PRESENCE_UPDATE',{user_id:'bob',status:'idle'});const snapshot=await storeModule('usePresenceStore',mods.presence.usePresenceStore.getState());const {default:Dot}=await component('PresenceDot',{'@/stores/presence':snapshot.url});assert.ok(Dot({userId:'bob'}).props.className.includes('bg-[#f0b232]'));
+});
+
+
+test('Pilot channel deletion accepts 204 and closes without an error',async()=>{
+ const c=await storeModule('useChannelsStore',{removeChannel:(id,guild)=>assert.deepEqual([id,guild],['c','g'])});let closed=false,path;
+ const {default:Modal}=await component('ChannelModal',{'@/stores/channels':c.url,'@/lib/api':apiUrl});globalThis.fetch=async url=>{path=url;return new Response(null,{status:204})};const confirm=globalThis.confirm;
+ try{globalThis.confirm=()=>true;hooks.reset();const tree=Modal({guildId:'g',channel:{id:'c'},onClose(){closed=true}});await element(tree,n=>n.type==='button'&&n.props.children==='Delete Channel').props.onClick();assert.ok(path.endsWith('/api/v1/channels/c'));assert.equal(closed,true);assert.equal(hooks.values[4],'');}finally{globalThis.confirm=confirm}
+});
+
+
+test('Pilot uncached typing member fetches the public member endpoint',async()=>{
+ const effects=compile('export let effect;export const useEffect=fn=>effect=fn;','pilot-typing-effect');const calls=[];
+ const m=await storeModule('useMembersStore',{membersByGuild:new Map(),fetchMember:async(...args)=>calls.push(args)}),u=await storeModule('useUsersStore',{users:new Map()}),t=await storeModule('useTypingStore',{typingByChannel:new Map([['c',new Map([['300',{}]])]])}),a=await storeModule('useAuthStore',{user:{id:'100'}}),g=await storeModule('useGuildsStore',{selectedGuildId:'g'});
+ const {default:Indicator}=await component('TypingIndicator',{react:effects,'@/stores/members':m.url,'@/stores/users':u.url,'@/stores/typing':t.url,'@/stores/auth':a.url,'@/stores/guilds':g.url});Indicator({channelId:'c'});(await import(effects)).effect();assert.deepEqual(calls,[['g','300']]);
+ u.module.setState({users:new Map([['300',{username:'carol',display_name:null}]])});calls.length=0;const tree=Indicator({channelId:'c'});(await import(effects)).effect();assert.deepEqual(calls,[]);assert.ok(nodes(tree).some(n=>Array.isArray(n.props?.children)&&n.props.children.includes('carol is typing...')));
+});
+
+
+test('Typing member lookup caches 404 and 403 across twenty unrelated updates',async()=>{
+ for(const status of [404,403]) await checkTypingLookup(status);
+});
+test('Typing member without public user is fetched once across store changes',async()=>{
+ await checkTypingLookup(200);
+});
+async function checkTypingLookup(status) {
+ const zustand=JSON.stringify(pathToFileURL(require.resolve('zustand')).href);
+ const usersUrl=compile(readFileSync('src/stores/users.ts','utf8').replace('"zustand"',zustand),'r2-users-'+status);
+ const {useUsersStore:u}=await import(usersUrl);
+ const memberSource=readFileSync('src/stores/members.ts','utf8').replace('"zustand"',zustand).replace('"@/lib/api"',JSON.stringify(apiUrl)).replace('"@/stores/users"',JSON.stringify(usersUrl));
+ const {useMembersStore:m}=await import(compile(memberSource,'r2-members-'+status));
+ const hooksUrl2=compile('export let effect,deps;export const useEffect=(f,d)=>{effect=f;deps=d};','r2-effect-'+status),effect=await import(hooksUrl2);
+ globalThis.l40R2LookupStores={members:m,users:u};
+ const wrap=(name,store)=>compile('export const '+name+'=sel=>sel(globalThis.l40R2LookupStores.'+store+'.getState());','r2-wrap-'+store+'-'+status);
+ const typing=await storeModule('useTypingStore',{typingByChannel:new Map([['c',new Map([['300',{timestamp:Date.now()}]])]])});
+ const a=await storeModule('useAuthStore',{user:{id:'100'}}),g=await storeModule('useGuildsStore',{selectedGuildId:'g'});
+ const {default:Indicator}=await component('TypingIndicator',{react:hooksUrl2,'@/stores/members':wrap('useMembersStore','members'),'@/stores/users':wrap('useUsersStore','users'),'@/stores/typing':typing.url,'@/stores/auth':a.url,'@/stores/guilds':g.url});
+ let calls=0,active=true,previous;
+ globalThis.fetch=async url=>{calls++;assert.ok(url.endsWith('/guilds/g/members/300'));await new Promise(setImmediate);return status===200?Response.json({data:{guild_id:'g',user_id:'300',roles:[]}}):Response.json({error:{code:'NOT_FOUND',message:'gone'}},{status})};
+ const commit=()=>{if(!active)return;Indicator({channelId:'c'});const changed=!previous||effect.deps.some((x,i)=>!Object.is(x,previous[i]));previous=effect.deps;if(changed)effect.effect()};
+ const schedule=()=>setImmediate(commit),unsub=[m.subscribe(schedule),u.subscribe(schedule)];
+ const flush=async()=>{for(let i=0;i<5;i++)await new Promise(setImmediate)};
+ try {
+ commit();await flush();
+ for(let i=0;i<20;i++){u.getState().cacheUser('other'+i,{username:'other',display_name:null,avatar_hash:null});await flush()}
+ assert.equal(calls,1,'lookup must not repeat for '+status);
+ if(status!==200){const now=Date.now;try{Date.now=()=>now()+8001;await m.getState().fetchMember('g','300').catch(()=>{});assert.equal(calls,2,'negative cache must allow a later typing entry to retry')}finally{Date.now=now}}
+ } finally {active=false;unsub.forEach(fn=>fn());await flush();delete globalThis.l40R2LookupStores}
+}
+
 } catch (error) {
  cleanup();
  throw error;

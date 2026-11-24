@@ -71,7 +71,10 @@ func (r *memberRepo) GetByGuildID(ctx context.Context, guildID int64, limit, off
 		m.Roles = roles
 		members = append(members, m)
 	}
-	return members, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return members, nil
 }
 
 func (r *memberRepo) Update(ctx context.Context, member *models.Member) error {
@@ -130,3 +133,36 @@ func (r *memberRepo) getMemberRoles(ctx context.Context, guildID, userID int64) 
 }
 
 func (r *memberRepo) transactionPool() *pgxpool.Pool { return r.pool }
+
+// HydrateUsers performs one identity query for the whole page. Missing users
+// retain an absent projection (useful for incomplete imported member records).
+func (r *memberRepo) HydrateUsers(ctx context.Context, members []*models.Member) error {
+	if len(members) == 0 {
+		return nil
+	}
+	ids := make([]int64, len(members))
+	for i, m := range members {
+		ids[i] = m.UserID
+		m.User = nil
+	}
+	rows, err := queryDB(ctx, r.pool).Query(ctx, `SELECT id, username, display_name, avatar_hash FROM users WHERE id = ANY($1)`, ids)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	users := make(map[int64]*models.MemberUser, len(members))
+	for rows.Next() {
+		u := &models.MemberUser{}
+		if err := rows.Scan(&u.ID, &u.Username, &u.DisplayName, &u.AvatarHash); err != nil {
+			return err
+		}
+		users[u.ID] = u
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, m := range members {
+		m.User = users[m.UserID]
+	}
+	return nil
+}

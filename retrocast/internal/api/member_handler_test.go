@@ -427,4 +427,13 @@ func TestLeaveGuild_AsOwner(t *testing.T) {
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
 	}
+
+	var detail ErrorResponse
+	if err := decodeResponse(rec, &detail); err != nil {
+		t.Fatal(err)
+	}
+	if detail.Error.Code != "FORBIDDEN" || !strings.Contains(detail.Error.Message, "transfer ownership or delete the guild") {
+		t.Fatal(detail)
+	}
+
 }

@@ -190,6 +190,9 @@ func TestChannelRepo_Delete(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 
+	if _, err := pool.Exec(ctx, `INSERT INTO messages(id,channel_id,author_id,content) VALUES($1,$2,$3,'cascade')`, nextID(), ch.ID, owner.ID); err != nil {
+		t.Fatal(err)
+	}
 	if err := repo.Delete(ctx, ch.ID); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
@@ -200,6 +203,13 @@ func TestChannelRepo_Delete(t *testing.T) {
 	}
 	if got != nil {
 		t.Error("expected nil after Delete")
+	}
+	var remaining int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM messages WHERE channel_id=$1", ch.ID).Scan(&remaining); err != nil {
+		t.Fatal(err)
+	}
+	if remaining != 0 {
+		t.Fatal("messages survived deletion")
 	}
 }
 

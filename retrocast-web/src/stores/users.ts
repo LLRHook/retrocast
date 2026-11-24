@@ -3,7 +3,7 @@ import type { User } from "@/types";
 
 interface UserCache {
   username: string;
-  display_name: string;
+  display_name: string | null;
   avatar_hash: string | null;
 }
 
@@ -13,7 +13,7 @@ interface UsersState {
   cacheFromMessage: (msg: {
     author_id: string;
     author_username: string;
-    author_display_name: string;
+    author_display_name: string | null;
     author_avatar_hash: string | null;
   }) => void;
   cacheFromUser: (user: User) => void;

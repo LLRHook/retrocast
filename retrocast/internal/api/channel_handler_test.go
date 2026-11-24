@@ -58,7 +58,8 @@ func TestCreateChannel_Success(t *testing.T) {
 		},
 	}
 
-	h := allowAllChannelHandler(channels, &mockMemberRepo{})
+	gw := &mockGateway{}
+	h := allowAllChannelHandler(channels, &mockMemberRepo{}, gw)
 
 	body := strings.NewReader(`{"name":"new-channel","type":0}`)
 	c, rec := newTestContext(http.MethodPost, "/api/v1/guilds/500/channels", body)
@@ -85,6 +86,11 @@ func TestCreateChannel_Success(t *testing.T) {
 	}
 	if resp.Data.Type != models.ChannelTypeText {
 		t.Errorf("expected channel type %d, got %d", models.ChannelTypeText, resp.Data.Type)
+	}
+
+	assertGatewayPayload(t, gw, "CHANNEL_CREATE", map[string]any{"guild_id": "500", "name": resp.Data.Name})
+	if gw.events[0].GuildID != 500 {
+		t.Fatal("wrong guild recipient")
 	}
 }
 
@@ -236,7 +242,8 @@ func TestUpdateChannel_WithPermission(t *testing.T) {
 		},
 	}
 
-	h := allowAllChannelHandler(channels, &mockMemberRepo{})
+	gw := &mockGateway{}
+	h := allowAllChannelHandler(channels, &mockMemberRepo{}, gw)
 
 	body := strings.NewReader(`{"name":"new-name"}`)
 	c, rec := newTestContext(http.MethodPatch, "/api/v1/channels/100", body)
@@ -260,6 +267,11 @@ func TestUpdateChannel_WithPermission(t *testing.T) {
 	}
 	if resp.Data.Name != "new-name" {
 		t.Errorf("expected channel name 'new-name', got %q", resp.Data.Name)
+	}
+
+	assertGatewayPayload(t, gw, "CHANNEL_UPDATE", map[string]any{"guild_id": "500", "name": resp.Data.Name})
+	if gw.events[0].GuildID != 500 {
+		t.Fatal("wrong guild recipient")
 	}
 }
 
