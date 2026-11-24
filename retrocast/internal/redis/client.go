@@ -21,7 +21,7 @@ func NewClient(redisURL string) (*Client, error) {
 		return nil, fmt.Errorf("parsing redis URL: %w", err)
 	}
 	opts.ContextTimeoutEnabled = true
- rdb := goredis.NewClient(opts)
+	rdb := goredis.NewClient(opts)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -92,8 +92,8 @@ return {count, ttl}
 // and the remaining TTL in milliseconds for the rate limit window.
 func (c *Client) CheckRateLimit(ctx context.Context, key string, limit int, window time.Duration) (allowed bool, count int64, ttlMs int64, err error) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
- defer cancel()
- result, err := rateLimitScript.Run(ctx, c.rdb, []string{key}, window.Milliseconds()).Result()
+	defer cancel()
+	result, err := rateLimitScript.Run(ctx, c.rdb, []string{key}, window.Milliseconds()).Result()
 	if err != nil {
 		return false, 0, 0, fmt.Errorf("checking rate limit: %w", err)
 	}
