@@ -24,7 +24,7 @@ The requirements and design live in `docs/`:
   [system](docs/srs/system.md) requirements
 - [Data contracts](docs/DATA_CONTRACTS.md): configuration, entities, REST API, gateway events
 - [Architecture](docs/ARCHITECTURE.md): components, deployment, decisions, known defects
-- [OpenAPI](retrocast/docs/openapi.yaml): REST contract v2.0.0
+- [OpenAPI](retrocast/docs/openapi.yaml): REST contract; current version recorded in [Data contracts](docs/DATA_CONTRACTS.md)
 
 The older prose documents are kept in [docs/legacy](docs/legacy/) for reference; each names
 the document that replaces it.
