@@ -405,7 +405,7 @@ func (m *Manager) handleResume(c *Connection, data json.RawMessage) {
 		}
 	}
 	status := c.presenceStatus
- m.mu.Unlock()
+	m.mu.Unlock()
 	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
 	if status == "" {
 		status = "online"

@@ -13,7 +13,7 @@ interface ReadyPayload {
   session_id: string;
   user_id: string;
   guilds: string[];
- presences?: PresencePayload[];
+  presences?: PresencePayload[];
 }
 
 interface MessageDeletePayload {
@@ -63,19 +63,21 @@ export function initGatewayDispatcher() {
   initialized = true;
 
   gateway.on("READY", (_data) => {
-    const ready=_data as ReadyPayload;
- usePresenceStore.getState().clearPresences();
- for (const p of ready.presences ?? []) { usePresenceStore.getState().setPresence(p.user_id,p.status); }
+    const ready = _data as ReadyPayload;
+    usePresenceStore.getState().clearPresences();
+    for (const p of ready.presences ?? []) {
+      usePresenceStore.getState().setPresence(p.user_id, p.status);
+    }
     // READY provides guild IDs — fetch full guild data
     useGuildsStore.getState().fetchGuilds().catch(() => {});
   });
 
   gateway.on("RESYNC", () => {
- const id=useChannelsStore.getState().selectedChannelId;
- if(id) useMessagesStore.getState().fetchMessages(id).catch(() => {});
- });
+    const id = useChannelsStore.getState().selectedChannelId;
+    if (id) useMessagesStore.getState().fetchMessages(id).catch(() => {});
+  });
 
- // Guild events
+  // Guild events
   gateway.on("GUILD_CREATE", (data) => {
     const guild = data as Guild;
     useGuildsStore.getState().setGuild(guild);
