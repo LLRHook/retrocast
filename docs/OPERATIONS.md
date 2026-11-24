@@ -44,7 +44,9 @@ whole days old; archive names alone do not determine age. This is a sequential
 backup, not a transaction across PostgreSQL and MinIO. For a consistent recovery
 point, arrange a maintenance window (stop the API and other writers, leave DB
 and MinIO running) around the scheduled job. Do not delete attachments during
-backup. Keep the same timestamp pair together; verify both with `gzip -t`.
+backup. Archives are staged as .partial files and published only after both exports
+succeed; failed exports remove their partial files. Keep the same timestamp
+pair together; verify both with `gzip -t` and the file archive with `tar -tzf`.
 
 Restore (SYS-FR-004): **this replaces the target database**. Use a new, isolated
 compose project with empty volumes and the same application/image version that
@@ -79,10 +81,14 @@ Repeat script regressions with `bash scripts/test-operations.sh` and
 `python scripts/test-monitoring.py` from `retrocast/`.
 
 Performance (SYS-NFR-001/002/007): on an isolated disposable stack configured for
-open registration, run `go run ./cmd/perf -base http://localhost -duration 10m`
+open registration and Caddy configured for the URL under test, run
+`go run ./cmd/perf -base http://localhost:18300 -duration 10m`
 from `retrocast/`, or the same command in `golang:1.26.11` with that directory
 mounted at `/app`, `-w /app`, and the stack's compose network, using
-`-base http://caddy`. The HTTP and gateway traffic goes through real Caddy.
+`-base http://caddy`. For that isolated HTTP fixture set Caddy environment
+`DOMAIN: ":80"` in a compose override (the default localhost site uses HTTPS).
+The complete measurement override is in docs/operations/performance.md. The HTTP
+and gateway traffic goes through real Caddy.
 It creates 20 unique users and one guild, accepts invites, seeds 1000 messages
 through REST, waits for 20 READY events, measures 100 random-cursor pages of 50
 (seed 1), and runs 20 simultaneous senders every 10 seconds for 10 minutes.
@@ -91,7 +97,11 @@ receipts, disconnects and loss fail the command, as do p95 >1s or history >300ms
 Latency starts before POST and ends when each peer receives MESSAGE_CREATE,
 including HTTP and gateway time; the sender's own echo is excluded. A 5s final
 drain counts late receipts in latency. Setup honors 429 Retry-After, distributes
-seed writes across users and waits a minute before measured load. Measured calls
-never retry or change server limits. An additional 100-message phase from one sender, spaced 1.3s apart after a minute cooldown, checks SYS-NFR-002 explicitly. Credential refresh before measurement also honors Retry-After; the single sender refreshes again before its separate phase. Default setup plus load takes about 23
+seed writes across users and refreshes credentials before measurement. Setup rejects credentials whose
+remaining lifetime cannot cover the measured run plus one minute. Measured calls
+never retry or change server limits. An additional 100-message phase from one
+sender, spaced 1.3s apart after a minute cooldown, checks SYS-NFR-002 explicitly.
+Credential refresh before measurement also honors Retry-After; the single sender
+refreshes again before its separate phase. Default setup plus load takes about 23
 minutes. Use a fresh stack for repeated runs: fixture users/data are left behind.
 Results and limitations belong in `docs/operations/performance.md`.

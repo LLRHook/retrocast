@@ -7,8 +7,11 @@ Components are in [ARCHITECTURE.md §5](../ARCHITECTURE.md#5-components-c4-level
 Conventions for this file:
 - **Evidence** paths are relative to the repository root.
 - **Delivery** comes from reading the repository at commit `6bc385e`, re-read at `origin/main`
-  55e50eb in rev 2 and checked against the compose smoke run of 2026-11-23. No load, latency
-  or restore measurement exists, so no quality target here is met yet.
+  55e50eb in rev 2 and checked against the compose smoke run of 2026-11-23. B5c adds operator
+  procedures and the recorded restore drill in
+  docs/operations/restore-drills.md; measured capacity and latency are recorded in
+  docs/operations/performance.md. Delivery describes the available evidence, not a
+  promise that a host scheduler has already been installed.
 - Rev 2 records the owner's answers Q-001, Q-030, Q-031 and Q-003 (operator health and
   backups are in the MVP).
 
@@ -20,18 +23,18 @@ Client and server functions are in [server.md](server.md), [web.md](web.md) and
 
 | ID | Priority | Requirement | Acceptance | Verification | Delivery | UI | Traces | Source | Evidence |
 |---|---|---|---|---|---|---|---|---|---|
-| SYS-FR-001 | Must | The system shall scrape the server's metrics every 15 seconds and show them on a provisioned dashboard. | Given a fresh compose stack, when the operator opens Grafana on `127.0.0.1:3000` and signs in, then the "Retrocast API" dashboard shows request rate by status code, latency percentiles (p50, p95, p99), error rate and request rate by handler without manual setup. | Demonstration | Implemented | none (operator dashboard: Grafana "Retrocast API") | CMP-011, SV-NFR-013 | CAP-035 | Added rev 2 (Q-003; TBD-039 resolved). retrocast/prometheus.yml (`scrape_interval: 15s`, target `api:8080`); retrocast/grafana/provisioning/; docker-compose.yml (`GRAFANA_ADMIN_PASSWORD`) PR #53: Grafana loopback binding and internal Prometheus target confirmed. |
-| SYS-FR-002 | Must | The system shall back up the database and the stored files once a day without operator action after setup. | Given the documented host schedule installed, when 24 hours pass, then a new `backup_<timestamp>.sql.gz` and `minio_<timestamp>.tar.gz` exist in `BACKUP_DIR`. | Demonstration | Partial (retrocast/scripts/backup.sh makes both archives; nothing schedules it) | none (operator: host cron or launchd) | CMP-012, CMP-004, CMP-006 | CAP-036, RISK-004 | Added rev 2 (Q-030; TBD-040 resolved). ADR-018: a host cron (Linux) or launchd (macOS) job runs backup.sh; Redis is not backed up because it holds only sessions, presence, typing and counters. |
-| SYS-FR-003 | Must | The system shall delete backup archives older than 30 days when a backup runs. | Given archives dated 31 and 29 days ago in `BACKUP_DIR`, when backup.sh runs, then the 31-day-old ones are gone and the 29-day-old ones remain. | Test | Implemented | none (operator script) | CMP-012 | CAP-036, RISK-004 | Added rev 2 (Q-030). retrocast/scripts/backup.sh:6 (`RETENTION_DAYS=30`), :24–25 (`find -mtime +30 -delete`) |
-| SYS-FR-004 | Must | The system shall restore the database and stored files from one backup into a freshly started stack. | Given a backup taken from a stack with messages and attachments, when the operator starts a new stack with empty volumes and runs restore.sh with that backup, then the messages and files are back and `/health` returns 200. | Demonstration | Partial (retrocast/scripts/restore.sh restores both archives; no restore has been run or recorded) | none (operator script) | CMP-012, CMP-004, CMP-006 | CAP-036, RISK-004 | Added rev 2 (Q-030). retrocast/scripts/restore.sh |
+| SYS-FR-001 | Must | The system shall scrape the server's metrics every 15 seconds and show them on a provisioned dashboard. | Given a fresh compose stack, when the operator opens Grafana on `127.0.0.1:3000` and signs in, then the "Retrocast API" dashboard shows request rate by status code, latency percentiles (p50, p95, p99), error rate and request rate by handler without manual setup. | Demonstration | Implemented | none (operator dashboard: Grafana "Retrocast API") | CMP-011, SV-NFR-013 | CAP-035 | B5c: internal 15s scrape is up; provisioned dashboard datasource queries return live data; handler panel groups by the exported url label. See docs/operations/performance.md. |
+| SYS-FR-002 | Must | The system shall back up the database and the stored files once a day without operator action after setup. | Given the documented host schedule installed, when 24 hours pass, then a new `backup_<timestamp>.sql.gz` and `minio_<timestamp>.tar.gz` exist in `BACKUP_DIR`. | Demonstration | Implemented | none (operator: host cron or launchd) | CMP-012, CMP-004, CMP-006 | CAP-036, RISK-004 | B5c: scripts/scheduled-backup.sh, cron command and launchd plist in docs/OPERATIONS.md; exact wrapper executed successfully on Windows Git Bash. Host schedule installation remains an operator setup step. |
+| SYS-FR-003 | Must | The system shall delete backup archives older than 30 days when a backup runs. | Given archives dated 31 and 29 days ago in `BACKUP_DIR`, when backup.sh runs, then the 31-day-old ones are gone and the 29-day-old ones remain. | Test | Verified | none (operator script) | CMP-012 | CAP-036, RISK-004 | B5c: both 31-day-old archive types removed and both 29-day-old types retained in live run and scripts/test-operations.sh. |
+| SYS-FR-004 | Must | The system shall restore the database and stored files from one backup into a freshly started stack. | Given a backup taken from a stack with messages and attachments, when the operator starts a new stack with empty volumes and runs restore.sh with that backup, then the messages and files are back and `/health` returns 200. | Demonstration | Verified | none (operator script) | CMP-012, CMP-004, CMP-006 | CAP-036, RISK-004 | B5c: API stopped, migrated target database replaced, ON_ERROR_STOP restore, MinIO archive helper, restart and health check. Matching counts and authenticated object download in docs/operations/restore-drills.md; D-10 client URL limitation remains. |
 
 ### 3.2 Performance requirements
 
 | ID | Priority | Requirement | Acceptance | Verification | Delivery | UI | Traces | Source | Evidence |
 |---|---|---|---|---|---|---|---|---|---|
-| SYS-NFR-001 | Must | Capacity: the system shall serve 20 members connected to the gateway at once on one host. Measure: messages lost under a 10-minute load of 20 clients, each sending one message every 10 seconds (target 0, with SYS-NFR-002 holding). | Given the compose stack on the operator's machine and 20 connected clients each sending one message every 10 s, when the load runs for 10 minutes, then every message reaches every other client and SYS-NFR-002 holds. | Analysis | Not started (no load harness exists; Stack Profile "Perf harness: none") | none (infra) | CMP-001, CMP-002, CMP-004, CMP-005 | GOAL-001 | SYSTEM_DESIGN.md:27 ("5–20 friends"). Changed: rev 2 — measure from Q-031 (TBD-031 resolved); the load profile (one message per client every 10 s) is the spec lead's assumption. |
-| SYS-NFR-002 | Must | Latency: the system shall deliver a sent message to the other connected members of its channel within 1 second at the 95th percentile. Measure: send-to-receive time with 20 members connected (p95 ≤ 1 s). | Given 20 connected members on the operator's machine, when one sends 100 messages, then the 95th-percentile time from send to receipt at each other member is at most 1 s. | Analysis | Not started (no measurement exists) | none (infra) | API-022, EVT-009, CMP-002 | GOAL-001 | SYSTEM_DESIGN.md:63 ("Simple, fast, focused"). Changed: rev 2 — target from Q-031 (TBD-031 resolved). |
-| SYS-NFR-007 | Must | Latency: the system shall return a page of 50 history messages within 300 ms at the 95th percentile. Measure: API-023 response time with 20 members connected (p95 ≤ 300 ms). | Given a channel with 1 000 messages and 20 connected members, when API-023 is called 100 times with `limit=50` at random cursors, then the 95th-percentile response time is at most 300 ms. | Analysis | Not started (no measurement exists) | none (infra) | API-023, ENT-008, CMP-001, CMP-004 | GOAL-001 | Added rev 2 (Q-031). |
+| SYS-NFR-001 | Must | Capacity: the system shall serve 20 members connected to the gateway at once on one host. Measure: messages lost under a 10-minute load of 20 clients, each sending one message every 10 seconds (target 0, with SYS-NFR-002 holding). | Given the compose stack on the operator's machine and 20 connected clients each sending one message every 10 s, when the load runs for 10 minutes, then every message reaches every other client and SYS-NFR-002 holds. | Analysis | Verified | none (infra) | CMP-001, CMP-002, CMP-004, CMP-005 | GOAL-001 | B5c: docs/operations/performance.md, fixed API fdd8fa0; 20 clients for 600s, 1200 sends, 22800/22800 peer receipts, loss 0, load p95 8.706ms. Windows 11 / Docker Desktop. #58 read-deadline fix; no rate limits raised. |
+| SYS-NFR-002 | Must | Latency: the system shall deliver a sent message to the other connected members of its channel within 1 second at the 95th percentile. Measure: send-to-receive time with 20 members connected (p95 ≤ 1 s). | Given 20 connected members on the operator's machine, when one sends 100 messages, then the 95th-percentile time from send to receipt at each other member is at most 1 s. | Analysis | Verified | none (infra) | API-022, EVT-009, CMP-002 | GOAL-001 | B5c: docs/operations/performance.md; 100 messages from one sender with 20 gateways, 1900/1900 receipts, p95 3.882ms; concurrent-load p95 8.706ms. Unfixed run retained separately; #58 fixed. |
+| SYS-NFR-007 | Must | Latency: the system shall return a page of 50 history messages within 300 ms at the 95th percentile. Measure: API-023 response time with 20 members connected (p95 ≤ 300 ms). | Given a channel with 1 000 messages and 20 connected members, when API-023 is called 100 times with `limit=50` at random cursors, then the 95th-percentile response time is at most 300 ms. | Analysis | Verified | none (infra) | API-023, ENT-008, CMP-001, CMP-004 | GOAL-001 | B5c: docs/operations/performance.md; 100 random-cursor API-023 calls, 50 rows each, 1000 seeded messages and 20 READY members, p95 1.571ms. Through real Caddy on Windows 11 / Docker Desktop. |
 
 ### 3.3 Usability requirements
 Usability and platform targets are on the clients: WEB-NFR-001, WEB-NFR-002 and IOS-NFR-001
@@ -62,8 +65,8 @@ Recovery is covered by SYS-NFR-005.
 
 | ID | Priority | Requirement | Acceptance | Verification | Delivery | UI | Traces | Source | Evidence |
 |---|---|---|---|---|---|---|---|---|---|
-| SYS-NFR-005 | Must | Recoverability: the operator shall be able to restore the database and stored files from a backup with at most 24 hours of data lost. Measure: recovery point objective 24 h; no recovery time target (best effort). | Given a stack with messages and files, when the operator runs `scripts/backup.sh`, resets the volumes and runs `scripts/restore.sh`, then the messages and files return and only data newer than the last daily backup is lost. | Demonstration | Partial (backup and restore scripts exist for PostgreSQL and MinIO; no schedule, SYS-FR-002; no restore drill is recorded, SYS-NFR-006) | none (infra) | CMP-004, CMP-006, CMP-012 | RISK-004 | retrocast/scripts/backup.sh:6 (30-day retention), :13, :19; retrocast/scripts/restore.sh. Changed: rev 2 — recovery point from Q-030 (TBD-030 resolved); Redis is not backed up (ADR-018). |
-| SYS-NFR-006 | Must | Recoverability: a restore drill shall be run and recorded before each release. Measure: one recorded drill per release (backup file name, date, row counts of users, guilds and messages before and after). | Given a release candidate, when the release is prepared, then a drill record for that release exists with matching row counts before and after the restore. | Inspection | Not started (no drill is recorded) | none (operator procedure) | CMP-012 | CAP-036, RISK-004 | Added rev 2 (Q-030). |
+| SYS-NFR-005 | Must | Recoverability: the operator shall be able to restore the database and stored files from a backup with at most 24 hours of data lost. Measure: recovery point objective 24 h; no recovery time target (best effort). | Given a stack with messages and files, when the operator runs `scripts/backup.sh`, resets the volumes and runs `scripts/restore.sh`, then the messages and files return and only data newer than the last daily backup is lost. | Demonstration | Implemented | none (infra) | CMP-004, CMP-006, CMP-012 | RISK-004 | B5c: documented daily host schedules plus matching DB and file restore drill. RPO depends on installing and monitoring the daily job; no 24-hour wall-clock schedule test was run. |
+| SYS-NFR-006 | Must | Recoverability: a restore drill shall be run and recorded before each release. Measure: one recorded drill per release (backup file name, date, row counts of users, guilds and messages before and after). | Given a release candidate, when the release is prepared, then a drill record for that release exists with matching row counts before and after the restore. | Inspection | Verified | none (operator procedure) | CMP-012 | CAP-036, RISK-004 | B5c: docs/operations/restore-drills.md records paired archive names, date, users/guilds/messages counts, health and stored attachment retrieval. Repeat before each release. |
 
 #### 3.7.3 Security
 Security requirements are on the server: SV-NFR-001–SV-NFR-003 and SV-NFR-008.
@@ -100,20 +103,20 @@ Server logging is SV-NFR-006; metrics are SV-NFR-013; scraping and dashboards ar
 | Req | Priority | Delivery | Entities | APIs / Events | Components | Verification |
 |---|---|---|---|---|---|---|
 | SYS-FR-001 | Must | Implemented | — | `/metrics` | CMP-011 | Demonstration |
-| SYS-FR-002 | Must | Partial | ENT-001–ENT-018, ENT-022 | — | CMP-012, CMP-004, CMP-006 | Demonstration |
-| SYS-FR-003 | Must | Implemented | — | — | CMP-012 | Test |
-| SYS-FR-004 | Must | Partial | ENT-001–ENT-018, ENT-022 | — | CMP-012, CMP-004, CMP-006 | Demonstration |
-| SYS-NFR-001 | Must | Not started | — | EVT-009 | CMP-001, CMP-002, CMP-004, CMP-005 | Analysis |
-| SYS-NFR-002 | Must | Not started | ENT-008 | API-022, EVT-009 | CMP-002 | Analysis |
+| SYS-FR-002 | Must | Implemented | ENT-001–ENT-018, ENT-022 | — | CMP-012, CMP-004, CMP-006 | Demonstration |
+| SYS-FR-003 | Must | Verified | — | — | CMP-012 | Test |
+| SYS-FR-004 | Must | Verified | ENT-001–ENT-018, ENT-022 | — | CMP-012, CMP-004, CMP-006 | Demonstration |
+| SYS-NFR-001 | Must | Verified | — | EVT-009 | CMP-001, CMP-002, CMP-004, CMP-005 | Analysis |
+| SYS-NFR-002 | Must | Verified | ENT-008 | API-022, EVT-009 | CMP-002 | Analysis |
 | SYS-CON-001 | Must | Implemented | — | — | CMP-001–CMP-012 | Inspection |
 | SYS-CON-002 | Must | Implemented | ENT-001 | API-001 | CMP-001 | Test |
 | SYS-CON-003 | Must | Implemented | — | — | CMP-001–CMP-012 | Inspection |
 | SYS-CON-004 | Must | Implemented | — | — | — | Inspection |
 | SYS-NFR-003 | Must | Implemented | — | — | CMP-001–CMP-010 | Demonstration |
 | SYS-NFR-004 | Should | Partial | — | — | CMP-001–CMP-011 | Demonstration |
-| SYS-NFR-005 | Must | Partial | ENT-001–ENT-018, ENT-022 | — | CMP-004, CMP-006, CMP-012 | Demonstration |
-| SYS-NFR-006 | Must | Not started | — | — | CMP-012 | Inspection |
-| SYS-NFR-007 | Must | Not started | ENT-008 | API-023 | CMP-001, CMP-004 | Analysis |
+| SYS-NFR-005 | Must | Implemented | ENT-001–ENT-018, ENT-022 | — | CMP-004, CMP-006, CMP-012 | Demonstration |
+| SYS-NFR-006 | Must | Verified | — | — | CMP-012 | Inspection |
+| SYS-NFR-007 | Must | Verified | ENT-008 | API-023 | CMP-001, CMP-004 | Analysis |
 
 ## Revision history
 | Rev | Date | Commit | Mode | Summary |
