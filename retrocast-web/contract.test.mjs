@@ -351,6 +351,55 @@ test('password token write waits for the shared session lock',async()=>{
  } finally {release();reset()}
 });
 
+test('second replacement ends in error and retains token',async()=>{
+ const reset=installLocks(undefined);try{sharedSession();const a=await authTab();let k=0;
+ globalThis.fetch=async()=>{storage.set('refreshToken','other'+(++k));return rejectedToken()};
+ await a.getState().restore();assert.equal(a.getState().restoreState,'error');assert.equal(storage.get('refreshToken'),'other2');assert.equal(k,2);
+ }finally{reset()}
+});
+test('request rejection tracks its attempted token despite in-memory replacement',async()=>{
+ const reset=installLocks(undefined);try{sharedSession();const a=await authTab();let k=0;
+ globalThis.fetch=async url=>{if(!url.endsWith('/auth/refresh'))return Response.json({data:{id:'u'}});
+ if(++k===1){storage.set('refreshToken','winner');a.setState({refreshToken:'winner'});return rejectedToken()}return pairResponse('retried')};
+ await a.getState().restore();assert.equal(a.getState().isAuthenticated,true);assert.equal(storage.get('refreshToken'),'retried');
+ }finally{reset()}
+});
+test('delayed winning tab is checked before clearing on 401',async()=>{
+ const reset=installLocks(undefined);try{sharedSession();const a=await authTab();let k=0;
+ globalThis.fetch=async url=>{if(!url.endsWith('/auth/refresh'))return Response.json({data:{id:'u'}});
+ if(++k===1){setTimeout(()=>storage.set('refreshToken','winner'),80);return rejectedToken()}return pairResponse('retried')};
+ await a.getState().restore();assert.equal(a.getState().isAuthenticated,true);assert.equal(storage.get('refreshToken'),'retried');
+ }finally{reset()}
+});
+test('late refresh cannot overwrite a password-change token without locks',async()=>{
+ const reset=installLocks(undefined);try{sharedSession();const a=await authTab(),b=await authTab();let release;const gate=new Promise(r=>release=r);
+ globalThis.fetch=async url=>{if(url.endsWith('/auth/refresh')){await gate;return pairResponse('revoked')}
+ return Response.json({data:{user:{id:'u'},access_token:'changed',refresh_token:'password'}})};
+ const rotation=b.getState().refreshAccessToken();await new Promise(setImmediate);await a.getState().changePassword('old','newpassword');release();await rotation;
+ assert.equal(storage.get('refreshToken'),'password');
+ }finally{reset()}
+});
+test('moderation popover gates actions, sends reason, and explains hierarchy',async()=>{
+ const modUrl=compile('export let value={kick:true,ban:true,userId:"mod"};export function useModeration(){return value};export function setValue(v){value=v}','moderation-mock');const mod=await import(modUrl);
+ const presence=await storeModule('usePresenceStore',{presences:new Map()});const roles=await storeModule('useRolesStore',{rolesByGuild:new Map()});
+ const {default:Popover}=await component('UserProfilePopover',{'@/lib/api':apiUrl,'@/hooks/useModeration':modUrl,'@/stores/presence':presence.url,'@/stores/roles':roles.url});
+ const prev=globalThis.window;globalThis.window={innerWidth:1200,innerHeight:900};
+ const props={member:{user_id:'target',roles:[],joined_at:'2026-01-01'},displayName:'Target',username:'target',guildId:'guild',x:10,y:10,onClose(){}};
+ try{
+ hooks.reset();let tree=Popover(props);assert.ok(nodes(tree).some(n=>n.props?.children==='Kick'));assert.ok(nodes(tree).some(n=>n.props?.children==='Ban'));
+ mod.setValue({kick:false,ban:false,userId:'plain'});hooks.reset();tree=Popover(props);assert.ok(!nodes(tree).some(n=>n.props?.children==='Ban'||n.props?.children==='Kick'));
+ mod.setValue({kick:true,ban:true,userId:'mod'});hooks.reset(['ban','spam',false,'']);tree=Popover(props);
+ let sent;globalThis.fetch=async(url,o)=>{sent={url,body:JSON.parse(o.body)};return new Response(null,{status:204})};
+ await element(tree,n=>n.props?.children==='Confirm Ban').props.onClick();assert.ok(sent.url.endsWith('/guilds/guild/bans/target'));assert.deepEqual(sent.body,{reason:'spam'});
+ globalThis.fetch=async()=>Response.json({error:{code:'ROLE_HIERARCHY',message:'too high'}},{status:403});await element(tree,n=>n.props?.children==='Confirm Ban').props.onClick();assert.match(hooks.values[3],/ranks too high/);
+ hooks.reset(['kick','',false,'']);tree=Popover(props);globalThis.fetch=async(url,o)=>{sent={url,method:o.method};return new Response(null,{status:204})};await element(tree,n=>n.props?.children==='Confirm Kick').props.onClick();assert.ok(sent.url.endsWith('/members/target'));assert.equal(sent.method,'DELETE');
+ }finally{globalThis.window=prev}
+});
+test('Bans tab renders reasons and unbans the selected user only',async()=>{
+ const {default:Bans}=await component('BansTab',{'@/lib/api':apiUrl});const bans=[{user_id:'a',reason:'spam'},{user_id:'b',reason:'abuse'}];hooks.reset([bans,false,'',null,0]);const tree=Bans({guildId:'guild'});
+ assert.ok(nodes(tree).some(n=>n.props?.children==='spam'));assert.ok(nodes(tree).some(n=>n.props?.children==='abuse'));
+ let sent;globalThis.fetch=async(url,o)=>{sent={url,method:o.method};return new Response(null,{status:204})};await element(tree,n=>n.props?.children==='Unban').props.onClick();assert.ok(sent.url.endsWith('/bans/a'));assert.equal(sent.method,'DELETE');assert.deepEqual(hooks.values[0],[bans[1]]);
+});
 } catch (error) {
  cleanup();
  throw error;
