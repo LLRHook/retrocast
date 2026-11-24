@@ -97,6 +97,12 @@ The instance's own external origin and native clients without Origin are always
 served. Direct Go development requires an explicitly configured local dependency
 stack; the default compose deliberately keeps dependency ports internal.
 
+### Registration
+
+Registration defaults to `REGISTRATION_MODE=invite`, including upgrades that omit the key. On an empty instance, register the first account without an invite, sign in, create a server, then create invites for friends. Further registrations must send `invite_code` to `/api/v1/auth/register`; account creation, invite consumption and guild membership commit together. Set `open` for unrestricted registration or `closed` to disable registration while preserving sign-in. Unknown mode values stop startup. The web invite-code field is pending WEB-FR-020 (B5); use the API for invited registrations until then. `retrocast/scripts/demo.sh` bootstraps alice and registers bob using her guild invite, and can run again with those existing accounts.
+
+In `open` mode the server ignores `invite_code`; use API-050 after registering to join its guild. `closed` admits nobody even on an empty instance. To prepare a closed instance, bootstrap its first account in `invite` mode, then switch to `closed`.
+
 ### Environment variables
 
 | Variable | Default | Description |
@@ -104,6 +110,7 @@ stack; the default compose deliberately keeps dependency ports internal.
 | `DATABASE_URL` | `postgres://retrocast:password@localhost:5432/retrocast?sslmode=disable` | PostgreSQL connection string |
 | `REDIS_URL` | `redis://localhost:6379` | Redis connection string |
 | `JWT_SECRET` | `change-me-in-production` | Secret for signing JWT tokens |
+| `REGISTRATION_MODE` | `invite` | `open`, `invite` or `closed`; unknown values stop startup |
 | `ALLOWED_ORIGINS` | empty | Comma-separated additional browser origins, e.g. `http://localhost:5173` |
 | `SERVER_ADDR` | `:8080` | HTTP listen address |
 | `MINIO_ENDPOINT` | — | MinIO S3-compatible endpoint |
@@ -127,5 +134,3 @@ All changes to `main` must go through a pull request with at least one approved 
 ## License
 
 This project is unlicensed. All rights reserved.
-
-Registration defaults to `REGISTRATION_MODE=invite`, including upgrades that omit the key. On an empty instance, register the first account without an invite, sign in, create a server, then create invites for friends. Further registrations must send `invite_code` to `/api/v1/auth/register`; account creation, invite consumption and guild membership commit together. Set `open` for unrestricted registration or `closed` to disable registration while preserving sign-in. Unknown mode values stop startup. The web invite-code field is pending WEB-FR-020 (B5); use the API for invited registrations until then. `retrocast/scripts/demo.sh` bootstraps alice and registers bob using her guild invite, and can run again with those existing accounts.

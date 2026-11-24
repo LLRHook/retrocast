@@ -180,19 +180,32 @@ sequenceDiagram
   participant G as Gateway manager
   C->>A: POST /api/v1/auth/register (username, password, invite_code)
   A->>A: read REGISTRATION_MODE
-  alt closed
+  alt closed (including an empty instance)
     A-->>C: 403 REGISTRATION_CLOSED
-  else invite, instance has no users
-    A->>P: BEGIN, lock, count users = 0, INSERT user, COMMIT
-    A-->>C: 200 data (tokens, user)
-  else invite with a code
-    A->>P: BEGIN, lock invite row, check expiry and uses
-    A->>P: INSERT user, member, @everyone row, uses + 1, COMMIT
-    A->>G: DispatchToGuild(GUILD_MEMBER_ADD)
-    A-->>C: 200 data (tokens, user)
-  else open
-    A->>P: INSERT user
-    A-->>C: 200 data (tokens, user)
+  else open or invite
+    A->>P: BEGIN, advisory lock, check whether users exist
+    alt invite without code and no users
+      A->>P: INSERT user, COMMIT
+      A-->>C: 200 data (tokens, user)
+    else invite without code and users exist
+      A->>P: ROLLBACK
+      A-->>C: 403 INVITE_REQUIRED
+    else invite with a code (including an empty instance)
+      A->>P: INSERT user, read invite guild_id
+      A->>P: lock guild FOR KEY SHARE, lock invite FOR UPDATE
+      A->>P: re-check guild, expiry and uses
+      alt valid invite
+        A->>P: INSERT member, uses + 1, COMMIT
+        A->>G: SubscribeToGuild and DispatchToGuild(GUILD_MEMBER_ADD)
+        A-->>C: 200 data (tokens, user)
+      else invalid invite or deleted guild
+        A->>P: ROLLBACK user and membership
+        A-->>C: 403 INVALID_INVITE
+      end
+    else open (ignore invite_code)
+      A->>P: INSERT user, COMMIT
+      A-->>C: 200 data (tokens, user); join separately with API-050
+    end
   end
 ```
 
@@ -309,7 +322,7 @@ spec lead's.
 | ADR-011 | Single-host Docker Compose deployment | Kubernetes; managed cloud | Accepted | No high availability (SYS-CON-001) | SYSTEM_DESIGN.md:196; retrocast/docker-compose.yml |
 | ADR-012 | Handlers call services, services call repositories behind interfaces | Handlers calling the database | Accepted | Handler tests run on mock repositories; `internal/service` has no tests of its own | retrocast/internal |
 | ADR-013 | Every REST success body is `{"data": …}` and errors stay `{"error": {code, message}}`; the path stays `/api/v1`; OpenAPI `info.version` becomes 2.0.0; no parallel old-shape API is served | The owner chose one wrapped shape as a new major version (Q-010). For the version itself the alternatives were a `/api/v2` path served beside v1, or a negotiated version header. Both keep a second shape alive for clients that do not exist: nothing is released, the web client already reads `data`, and the iOS client follows the web client (Q-004), so it is updated when it is scheduled. A major version number in OpenAPI marks the break without a second route tree | Implemented (rev 7; Q-010) | Breaking for any client reading bare bodies (DATA_CONTRACTS §9); the web client must stop parsing 204 bodies (D-29); the iOS update to v2.0.0 waits for its schedule | Q-010; driver; SV-IR-007, SV-IR-008 |
-| ADR-014 | Registration modes `open`, `invite` and `closed` from `REGISTRATION_MODE`, default `invite`; registering with an invite also joins its guild in the same transaction; the first account on an empty instance may register without an invite | The owner chose operator-set modes with invite-only as the default (Q-012). Without a bootstrap rule an invite-only instance with no users could never get its first user; the alternatives (a first user created with the CLI, or a one-time setup token) add an operator step. Joining on registration saves a friend holding a link a second step | Built (PR #54; accepted Q-012) | The first registration must be serialised (SV-FR-065); an operator who wants nobody to register uses `closed` and seeds users with the CLI | Q-012; SV-FR-062–SV-FR-065 |
+| ADR-014 | Registration modes `open`, `invite` and `closed` from `REGISTRATION_MODE`, default `invite`; in `invite` mode registering with a valid invite also joins its guild in the same transaction; `open` ignores `invite_code` (join separately with API-050); the first account on an empty instance may register without an invite | The owner chose operator-set modes with invite-only as the default (Q-012). Without a bootstrap rule an invite-only instance with no users could never get its first user; the alternatives (a new CLI user-create command, or a one-time setup token) add an operator step. Joining on registration saves a friend holding a link a second step | Built (PR #54; accepted Q-012) | The first registration must be serialised (SV-FR-065); `closed` admits nobody even on an empty instance; bootstrap the first account in `invite` mode, then switch to `closed`. There is no CLI user-create command | Q-012; SV-FR-062–SV-FR-065 |
 | ADR-015 | Client IP comes from `X-Forwarded-For` only as written by the Caddy hop; unauthenticated routes (including the invite lookup) are limited per client IP and authenticated routes per user; when Redis is unreachable, unauthenticated routes fail closed with 503 and authenticated routes fail open | The owner chose the proxy trust and the limit keys (Q-015). The failure policy is the spec lead's: guessing and enumeration happen on sign-in, registration and the invite lookup; sign-in already needs Redis for refresh tokens, so failing closed there costs no extra availability; access tokens are checked without Redis, so members already signed in keep chatting; the 15-minute token lifetime and a small trusted group bound the abuse. Failing open everywhere (today) lets guessing run unthrottled during an outage; failing closed everywhere stops all chat when an ephemeral store fails | Accepted, built (PR #23 and PR #53) | Port 8080 is unpublished (PR #53) | Q-015; SV-NFR-003, SV-NFR-009, SV-NFR-010 |
 | ADR-016 | Browsers are served only for the same origin and `ALLOWED_ORIGINS`, for CORS and gateway upgrades; requests without an Origin header (native clients) are served. Compose publishes only Caddy 80 and 443 and LiveKit 7880, 7881 and UDP 50000–50100; Grafana binds to 127.0.0.1:3000; 8080, 9000, 9001 and 9090 are not published | The owner chose the same origin plus an operator list, and only Caddy's ports (Q-016). LiveKit's ports stay because WebRTC media does not pass through Caddy; Grafana on loopback keeps the operator's dashboard (CAP-035) without exposing it (spec lead's details) | Accepted, built (PR #53) | `retrocast-cli health` needs `SERVER_URL` set to the public address; MinIO is reachable only inside the network until pre-signed URLs go through Caddy (ADR-019) | Q-016; SV-NFR-008, SV-NFR-011, SV-NFR-012 |
 | ADR-017 | A user may hold several gateway connections; each receives every event for the user; presence turns offline 10 s after the last one closes; there is no per-user cap | The owner chose several devices at once (Q-009). No cap is set because the group is 5–20 trusted people (spec lead's assumption) | Built (PR #50) | The manager's per-user entry is a set of connections; READY and RESUME stay per connection; EVT-007 is not sent for a second IDENTIFY | Q-009; SV-FR-071, SV-FR-072 |

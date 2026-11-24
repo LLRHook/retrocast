@@ -159,7 +159,7 @@ are as documented in OpenAPI; where the code differs, the Notes column says so.
 
 | ID | Operation | Method and path | Success | Wrapped today | Notes | Requirements |
 |---|---|---|---|---|---|---|
-| API-001 | register | POST /auth/register | 200 tokens + user | yes | the legacy api.md said 201; optional `invite_code` (rev 2, used in mode `invite`); 403 `INVITE_REQUIRED`, `INVALID_INVITE` or `REGISTRATION_CLOSED` by mode | SV-FR-001–SV-FR-003, SV-FR-062–SV-FR-065, SYS-CON-002 |
+| API-001 | register | POST /auth/register | 200 tokens + user | yes | the legacy api.md said 201; optional `invite_code` (rev 2, used in mode `invite`; ignored in `open`, where joining requires API-050); 403 `INVITE_REQUIRED`, `INVALID_INVITE` or `REGISTRATION_CLOSED` by mode | SV-FR-001–SV-FR-003, SV-FR-062–SV-FR-065, SYS-CON-002 |
 | API-002 | login | POST /auth/login | 200 tokens + user | yes | | SV-FR-004 |
 | API-003 | refreshToken | POST /auth/refresh | 200 token pair | yes | | SV-FR-005 |
 | API-004 | logout | POST /auth/logout | 204 | — | | SV-FR-006 |
@@ -259,7 +259,7 @@ Codes in use: `UNAUTHORIZED`, `BAD_REQUEST`, `METHOD_NOT_ALLOWED`, `PAYLOAD_TOO_
 
 `INVALID_POSITION` is 400 for a negative role position or an attempt to move @everyone away from position 0 (SV-FR-008, SV-FR-078). Grant-limit failures return 403 `MISSING_PERMISSIONS`.
 
-Codes added in rev 2 (specified; CANNOT_KICK_SELF implemented in PR #44):
+Codes added in rev 2 (registration codes implemented in PR #54; CANNOT_KICK_SELF implemented in PR #44):
 
 | Code | Status | Meaning | Requirement |
 |---|---|---|---|
