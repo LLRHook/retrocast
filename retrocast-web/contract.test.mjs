@@ -118,7 +118,7 @@ function storeModule(name, state) {
 }
 let componentSequence=0;
 async function component(file, replacements, suffix='') {
- if ((file==='ServerList'||file==='AppLayout') && !replacements['@/lib/invite']) replacements['@/lib/invite']=compile(readFileSync('src/lib/invite.ts','utf8').replaceAll('"@/lib/api"',JSON.stringify(replacements['@/lib/api']??apiUrl)).replaceAll('"@/stores/guilds"',JSON.stringify(replacements['@/stores/guilds'])).replaceAll('"@/stores/channels"',JSON.stringify(replacements['@/stores/channels'])),'selection-'+(++componentSequence));
+ if ((file==='ServerList'||file==='AppLayout') && readFileSync(resolve(file==='AppLayout'?'src/layouts/AppLayout.tsx':'src/components/ServerList.tsx'),'utf8').includes('selectGuildChannels') && !replacements['@/lib/invite']) replacements['@/lib/invite']=compile(readFileSync('src/lib/invite.ts','utf8').replaceAll('"@/lib/api"',JSON.stringify(replacements['@/lib/api']??apiUrl)).replaceAll('"@/stores/guilds"',JSON.stringify(replacements['@/stores/guilds'])).replaceAll('"@/stores/channels"',JSON.stringify(replacements['@/stores/channels'])),'selection-'+(++componentSequence));
  let source=readFileSync(resolve((file==='AppLayout'?'src/layouts/':['InvitePage','LoginPage','RegisterPage','ServerAddressPage'].includes(file)?'src/pages/':'src/components/')+file+'.tsx'),'utf8')+suffix;
  source=source.replace(/from "([^"]+)"/g,(whole,name)=>{
   const target=name==='react'?(replacements.react??hooksUrl):replacements[name]??(name.startsWith('@/components/')?emptyComponentUrl:undefined);
