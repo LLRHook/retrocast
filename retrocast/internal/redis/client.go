@@ -72,6 +72,15 @@ func (c *Client) GetRefreshTokenUserID(ctx context.Context, token string) (int64
 	return userID, nil
 }
 
+// ConsumeRefreshTokenUserID atomically retrieves and removes a single-use token.
+func (c *Client) ConsumeRefreshTokenUserID(ctx context.Context, token string) (int64, error) {
+	val, err := c.rdb.GetDel(ctx, refreshTokenPrefix+token).Result()
+	if err != nil {
+		return 0, fmt.Errorf("consuming refresh token: %w", err)
+	}
+	return strconv.ParseInt(val, 10, 64)
+}
+
 // DeleteRefreshToken removes a refresh token from Redis.
 func (c *Client) DeleteRefreshToken(ctx context.Context, token string) error {
 	return c.rdb.Del(ctx, refreshTokenPrefix+token).Err()

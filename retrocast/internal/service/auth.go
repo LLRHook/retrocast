@@ -111,14 +111,11 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (*Refres
 		return nil, BadRequest("MISSING_TOKEN", "refresh_token is required")
 	}
 
-	userID, err := s.redis.GetRefreshTokenUserID(ctx, refreshToken)
+	userID, err := s.redis.ConsumeRefreshTokenUserID(ctx, refreshToken)
 	if err != nil {
 		return nil, Unauthorized("INVALID_TOKEN", "invalid or expired refresh token")
 	}
 
-	if err := s.redis.DeleteRefreshToken(ctx, refreshToken); err != nil {
-		return nil, Internal("INTERNAL", "internal server error")
-	}
 
 	accessToken, err := s.tokens.GenerateAccessToken(userID)
 	if err != nil {
