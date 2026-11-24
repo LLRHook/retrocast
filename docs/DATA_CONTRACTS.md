@@ -25,17 +25,17 @@ server stops at start with an error naming the keys.
 | `DATABASE_URL` | yes | PostgreSQL connection string |
 | `JWT_SECRET` | yes | HMAC key for access tokens (no minimum length is enforced) |
 | `REDIS_URL` | no | Redis connection (default `redis://localhost:6379`) |
-| `SERVER_ADDR` | no | Listen address (default `:8080`; compose publishes 8080 until SV-NFR-008 ships) |
+| `SERVER_ADDR` | no | Listen address (default `:8080`; compose keeps it internal) |
 | `LOG_LEVEL` | no | slog level (default `info`) |
 | `REGISTRATION_MODE` | no | `open`, `invite` or `closed` (default `invite`); any other value stops the server at start (SV-FR-062). Specified in rev 2, not yet read by the code |
-| `ALLOWED_ORIGINS` | no | Comma-separated browser origins allowed besides the server's own (SV-NFR-011). Specified in rev 2, not yet read by the code |
+| `ALLOWED_ORIGINS` | no | Comma-separated browser origins allowed besides the server's own (SV-NFR-011). Read from environment or config file; empty by default; exact scheme/host/effective-port match, no wildcards |
 | `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY` | yes for uploads | Object store; bucket `retrocast` is created at start |
 | `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | yes for voice | Token minting (§7.1) |
 | `POSTGRES_PASSWORD`, `MINIO_ROOT_PASSWORD` | compose only | Service passwords used by `docker-compose.yml` |
 | `DOMAIN` | Caddy only | Site address in `retrocast/Caddyfile` (default `localhost`) |
 | `GRAFANA_ADMIN_PASSWORD` | compose only | Grafana admin password (`docker-compose.yml` falls back to a development default) |
 | `BACKUP_DIR` | backup script only | Where `scripts/backup.sh` writes archives (default the current directory) |
-| `SERVER_URL` | CLI only | Base URL for `retrocast-cli health` (default `http://localhost:8080`; set it to the public `https://` address once 8080 is unpublished) |
+| `SERVER_URL` | CLI only | Base URL for `retrocast-cli health` (default `http://localhost:8080`; set it to the public `https://` address for compose) |
 
 Values come from `retrocast/.env` (template `retrocast/.env.example`). The example files hold
 development defaults; they are not repeated here.
@@ -207,7 +207,7 @@ are as documented in OpenAPI; where the code differs, the Notes column says so.
 | API-046 | deleteChannelOverride | DELETE /channels/{channelId}/permissions/{roleId} | 204 | — | channel MANAGE_ROLES and same-guild role required | SV-FR-047 |
 | API-047 | createInvite | POST /guilds/{guildId}/invites | 201 invite | yes | `max_age_seconds` default 86 400, `max_uses` default 0 | SV-FR-018 |
 | API-048 | listInvites | GET /guilds/{guildId}/invites | 200 invites | yes | | SV-FR-021 |
-| API-049 | getInvite | GET /invites/{code} | 200 invite preview | yes | public; expired gives 404 `EXPIRED`; no rate limit today | SV-FR-019, SV-NFR-003 |
+| API-049 | getInvite | GET /invites/{code} | 200 invite preview | yes | public; expired gives 404 `EXPIRED`; 5 requests per minute per client IP; Redis outage returns 503 | SV-FR-019, SV-NFR-003 |
 | API-050 | acceptInvite | POST /invites/{code} | 200 guild | yes | code also returns 410 and 403 `BANNED`, which OpenAPI omits | SV-FR-020 |
 | API-051 | revokeInvite | DELETE /invites/{code} | 204 | — | | SV-FR-021 |
 | API-052 | listBans | GET /guilds/{guildId}/bans | 200 bans | yes | | SV-FR-068 |
@@ -394,3 +394,5 @@ together with the iOS client (Q-025); APNs is the one optional outside service G
 | 11 | 2026-11-23T20:32:22-05:00 | c2f7642e7b8c | REVISION | PR #50: live subscriptions, VIEW_CHANNEL fan-out, multiple connections, session replay/fresh READY fallback and presence snapshot/TTL; ADR-017 built |
 | 12 | 2026-11-23T21:36:57-05:00 | 42acac2a86f3 | REVISION | PR #50 round 2: fault-driven READY resynchronization, membership epoch retries, guild-wide channel create/delete metadata; SV-FR-031 delivery corrected |
 | 13 | 2026-11-23T22:26:18-05:00 | e2467ea2f2de | REVISION | PR #50 round 3: join epochs, away-device READY after joins, resync invalidation regression; corrected this PR's contract revision numbering |
+| 14 | 2026-11-23T22:54:35-05:00 | f4e6409e92a2 | REVISION | PR #53: deployment exposure, origins, outage policy, invite limit, LiveKit defaults and raw OpenAPI; D-10 and API-059 remain separate |
+| 15 | 2026-11-23T23:28:58-05:00 | 2f78d18e5e62 | REVISION | PR #53 round 2: supported LiveKit UDP range; local demo TLS and standalone proxy; deployment drift and requirement provenance repaired; Redis deadline regression |

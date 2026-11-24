@@ -85,6 +85,7 @@ func TestRateLimit_Allowed(t *testing.T) {
 	wrapped := mw(handler)
 
 	c, rec := newTestContext(http.MethodGet, "/api/v1/test", nil)
+	setAuthUser(c, 1)
 
 	if err := wrapped(c); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -157,7 +158,7 @@ func TestRateLimit_Exceeded(t *testing.T) {
 	}
 }
 
-func TestRateLimit_FailOpen(t *testing.T) {
+func TestRateLimit_AuthenticatedFailOpen(t *testing.T) {
 	// Start miniredis, then close it immediately to simulate Redis failure.
 	mr := miniredis.RunT(t)
 	rdb, err := redisclient.NewClient("redis://" + mr.Addr())
@@ -177,6 +178,7 @@ func TestRateLimit_FailOpen(t *testing.T) {
 	wrapped := mw(handler)
 
 	c, rec := newTestContext(http.MethodGet, "/api/v1/test", nil)
+	setAuthUser(c, 1)
 
 	if err := wrapped(c); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -228,5 +230,23 @@ func TestRateLimit_AuthenticatedUser(t *testing.T) {
 	}
 	if rec3.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, rec3.Code)
+	}
+}
+
+func TestRateLimit_UnauthenticatedFailClosed(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb, err := redisclient.NewClient("redis://" + mr.Addr())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rdb.Close() }()
+	mr.Close()
+	c, rec := newTestContext(http.MethodPost, "/api/v1/auth/login", nil)
+	err = RateLimitMiddleware(rdb, 5, time.Minute)(func(c echo.Context) error { t.Error("handler called during outage"); return c.NoContent(200) })(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != 503 {
+		t.Fatalf("got %d, want 503", rec.Code)
 	}
 }

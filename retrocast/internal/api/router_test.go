@@ -1,8 +1,12 @@
 package api
 
 import (
+	"context"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/victorivanov/retrocast/internal/models"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/labstack/echo/v4"
@@ -13,6 +17,7 @@ import (
 // without it every client behind the reverse proxy shares one rate-limit key.
 func TestSetupRouter_ResolvesClientIPThroughProxy(t *testing.T) {
 	e := echo.New()
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
 	SetupRouter(e, &Dependencies{TokenService: auth.NewTokenService("router-test")})
 	if e.IPExtractor == nil {
 		t.Fatal("SetupRouter did not set an IP extractor")
@@ -28,5 +33,67 @@ func TestSetupRouter_ResolvesClientIPThroughProxy(t *testing.T) {
 	req.RemoteAddr = "198.51.100.7:5000" // direct client on a public address
 	if got := e.IPExtractor(req); got != "198.51.100.7" {
 		t.Fatalf("direct public client: got %q, want %q", got, "198.51.100.7")
+	}
+}
+
+func TestInviteLookupLimit(t *testing.T) {
+	e := echo.New()
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+	SetupRouter(e, &Dependencies{TokenService: auth.NewTokenService("test"), Redis: newTestRedis(t), Invites: newInviteHandler(&mockInviteRepo{GetByCodeFn: func(context.Context, string) (*models.Invite, error) { return nil, nil }}, &mockGuildRepo{}, &mockMemberRepo{}, &mockRoleRepo{}, &mockBanRepo{}, &mockGateway{})})
+	for i := 0; i < 6; i++ {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/api/v1/invites/test", nil)
+		e.ServeHTTP(rec, req)
+		want := 404
+		if i == 5 {
+			want = 429
+		}
+		if rec.Code != want {
+			t.Fatalf("request %d: got %d want %d", i+1, rec.Code, want)
+		}
+	}
+}
+func TestDocsOffline(t *testing.T) {
+	e := echo.New()
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+	SetupRouter(e, &Dependencies{TokenService: auth.NewTokenService("test")})
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest("GET", "/docs", nil))
+	if rec.Code != 200 || strings.Contains(rec.Body.String(), "unpkg.com") || !strings.Contains(rec.Body.String(), "openapi:") {
+		t.Fatalf("docs must serve embedded raw OpenAPI")
+	}
+}
+
+func TestRouterOriginPolicy(t *testing.T) {
+	for _, tc := range []struct {
+		origin string
+		allow  bool
+	}{
+		{"", true}, {"https://instance.test", true}, {"https://instance.test:443", true},
+		{"http://instance.test", false}, {"https://instance.test:444", false}, {"https://foreign.test", false},
+		{"http://localhost:5173", true}, {"null", false},
+	} {
+		t.Run(tc.origin, func(t *testing.T) {
+			e := echo.New()
+			prometheus.DefaultRegisterer = prometheus.NewRegistry()
+			SetupRouter(e, &Dependencies{TokenService: auth.NewTokenService("test"), AllowedOrigins: "http://localhost:5173"})
+			for _, method := range []string{"GET", "OPTIONS"} {
+				req := httptest.NewRequest(method, "http://instance.test/docs", nil)
+				req.Header.Set("Origin", tc.origin)
+				req.Header.Set("X-Forwarded-Proto", "https")
+				if method == "OPTIONS" {
+					req.Header.Set("Access-Control-Request-Method", "GET")
+				}
+				rec := httptest.NewRecorder()
+				e.ServeHTTP(rec, req)
+				got := rec.Header().Get("Access-Control-Allow-Origin")
+				if got == "*" || (tc.origin != "" && (got == tc.origin) != tc.allow) {
+					t.Fatalf("%s origin %q: ACAO %q", method, tc.origin, got)
+				}
+				if tc.origin == "" && method == "GET" && rec.Code != 200 {
+					t.Fatalf("native request: %d", rec.Code)
+				}
+			}
+		})
 	}
 }

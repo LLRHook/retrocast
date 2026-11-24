@@ -1,8 +1,6 @@
 services:
   api:
     build: .
-    ports:
-      - "8080:8080"
     env_file: .env
     environment:
       - DATABASE_URL=postgres://retrocast:${POSTGRES_PASSWORD}@db:5432/retrocast?sslmode=disable
@@ -47,9 +45,6 @@ services:
   minio:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
-    ports:
-      - "9000:9000"
-      - "9001:9001"
     volumes:
       - minio-data:/data
     env_file: .env
@@ -59,13 +54,14 @@ services:
 
   livekit:
     image: livekit/livekit-server:latest
+    command: --bind 0.0.0.0 --udp-port 50000-50100
     ports:
       - "7880:7880"
       - "7881:7881"
       - "50000-50100:50000-50100/udp"
     env_file: .env
     environment:
-      - LIVEKIT_KEYS=${LIVEKIT_API_KEY}:${LIVEKIT_API_SECRET}
+      - "LIVEKIT_KEYS=${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
     restart: unless-stopped
 
   web:
@@ -92,8 +88,6 @@ services:
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus-data:/prometheus
-    ports:
-      - "9090:9090"
     depends_on:
       - api
     restart: unless-stopped
@@ -101,7 +95,7 @@ services:
   grafana:
     image: grafana/grafana:latest
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     volumes:
       - grafana-data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning

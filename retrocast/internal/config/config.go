@@ -23,6 +23,7 @@ import (
 )
 
 type Config struct {
+	AllowedOrigins   string
 	DatabaseURL      string
 	RedisURL         string
 	JWTSecret        string
@@ -40,6 +41,7 @@ func Load() *Config {
 	fileVals := loadConfigFile()
 
 	cfg := &Config{
+		AllowedOrigins:   resolve("ALLOWED_ORIGINS", fileVals, ""),
 		DatabaseURL:      resolve("DATABASE_URL", fileVals, ""),
 		RedisURL:         resolve("REDIS_URL", fileVals, "redis://localhost:6379"),
 		JWTSecret:        resolve("JWT_SECRET", fileVals, ""),

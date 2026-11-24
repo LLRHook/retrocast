@@ -7,53 +7,33 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo-contrib/echoprometheus"
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 	"github.com/victorivanov/retrocast/docs"
 	"github.com/victorivanov/retrocast/internal/auth"
 	"github.com/victorivanov/retrocast/internal/gateway"
+	"github.com/victorivanov/retrocast/internal/origin"
 	"github.com/victorivanov/retrocast/internal/redis"
 )
 
-const swaggerUIHTML = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Retrocast API</title>
-  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
-  <style>html{box-sizing:border-box;overflow-y:scroll}*,*::before,*::after{box-sizing:inherit}body{margin:0;background:#fafafa}</style>
-</head>
-<body>
-  <div id="swagger-ui"></div>
-  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
-  <script>
-    SwaggerUIBundle({
-      url: "/docs/openapi.yaml",
-      dom_id: "#swagger-ui",
-      deepLinking: true,
-      presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
-      layout: "BaseLayout",
-    });
-  </script>
-</body>
-</html>`
-
 // Dependencies holds all handler instances and middleware for route wiring.
 type Dependencies struct {
-	Auth       *AuthHandler
-	Guilds     *GuildHandler
-	Channels   *ChannelHandler
-	Members    *MemberHandler
-	Users      *UserHandler
-	Messages   *MessageHandler
-	Invites    *InviteHandler
-	Roles      *RoleHandler
-	Uploads    *UploadHandler
-	Bans       *BanHandler
-	DMs        *DMHandler
-	ReadStates *ReadStateHandler
-	Reactions  *ReactionHandler
-	Search     *SearchHandler
-	Voice      *VoiceHandler
-	Gateway    *gateway.Manager
+	AllowedOrigins string
+	Auth           *AuthHandler
+	Guilds         *GuildHandler
+	Channels       *ChannelHandler
+	Members        *MemberHandler
+	Users          *UserHandler
+	Messages       *MessageHandler
+	Invites        *InviteHandler
+	Roles          *RoleHandler
+	Uploads        *UploadHandler
+	Bans           *BanHandler
+	DMs            *DMHandler
+	ReadStates     *ReadStateHandler
+	Reactions      *ReactionHandler
+	Search         *SearchHandler
+	Voice          *VoiceHandler
+	Gateway        *gateway.Manager
 
 	TokenService *auth.TokenService
 	Pool         *pgxpool.Pool
@@ -62,6 +42,21 @@ type Dependencies struct {
 
 // SetupRouter registers all API routes on the Echo instance.
 func SetupRouter(e *echo.Echo, deps *Dependencies) {
+	policy := origin.Policy{Allowed: deps.AllowedOrigins}
+	// Capture the request for own-origin checks; Echo's AllowOriginFunc only receives the Origin.
+	e.Pre(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			cors := middleware.CORSWithConfig(middleware.CORSConfig{
+				AllowOriginFunc: func(string) (bool, error) { return policy.Check(c.Request()), nil },
+				AllowMethods:    []string{http.MethodGet, http.MethodPost, http.MethodPatch, http.MethodPut, http.MethodDelete, http.MethodOptions},
+				AllowHeaders:    []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, echo.HeaderAuthorization},
+			})
+			return cors(next)(c)
+		}
+	})
+	if deps.Gateway != nil {
+		deps.Gateway.SetAllowedOrigins(deps.AllowedOrigins)
+	}
 	// Resolve client IPs (used for unauthenticated rate limiting) through the
 	// reverse proxy's X-Forwarded-For header; see ClientIPExtractor.
 	e.IPExtractor = ClientIPExtractor()
@@ -93,7 +88,7 @@ func SetupRouter(e *echo.Echo, deps *Dependencies) {
 
 	// Swagger UI — serves the embedded OpenAPI spec
 	e.GET("/docs", func(c echo.Context) error {
-		return c.HTML(http.StatusOK, swaggerUIHTML)
+		return c.Blob(http.StatusOK, "text/plain; charset=utf-8", docs.OpenAPISpec)
 	})
 	e.GET("/docs/openapi.yaml", func(c echo.Context) error {
 		return c.Blob(http.StatusOK, "application/yaml", docs.OpenAPISpec)
@@ -113,7 +108,7 @@ func SetupRouter(e *echo.Echo, deps *Dependencies) {
 	authGroup.POST("/refresh", deps.Auth.Refresh)
 
 	// Public invite info — no auth required
-	v1.GET("/invites/:code", deps.Invites.GetInvite)
+	v1.GET("/invites/:code", deps.Invites.GetInvite, RateLimitMiddleware(deps.Redis, 5, time.Minute))
 
 	// Protected routes — require JWT auth + general rate limit
 	authMw := deps.TokenService.Middleware()
