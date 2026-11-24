@@ -447,3 +447,4 @@ See [SRS §1.3](SRS.md) and §5.3.
 | 20 | 2026-11-24T04:24:31-05:00 | 73cb40662507 | REVISION | PR 56 round 2: clear removed guild channel state; document session 503 and late-winner residual; strengthen moderation transaction evidence |
 | 21 | 2026-11-24T05:50:46-05:00 | 591c4747c5e7 | REVISION | B5c: host schedules, MinIO archive helper, restore drill, live monitoring, gateway deadline fix #58 and measured capacity/latency |
 | 22 | 2026-11-24T07:02:55-05:00 | 0f5851ab8ae2 | REVISION | PR #59 round 2: fail-fast retention/restore regressions, complete archive and compose preflight, transactional restore and evidence corrections |
+| 23 | 2026-11-24T08:06:57-05:00 | 23eea2497fd6 | REVISION | B6: atomic keyboard role ordering (API-060) and public HTTPS signed downloads (D-10); transactional and Caddy regressions plus owned browser evidence |
