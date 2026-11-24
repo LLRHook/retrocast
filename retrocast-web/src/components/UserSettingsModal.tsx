@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { api } from "@/lib/api";
+import { api, ApiClientError } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth";
 import { gateway } from "@/lib/gateway";
 import type { User } from "@/types";
@@ -14,6 +14,25 @@ export default function UserSettingsModal({ onClose }: UserSettingsModalProps) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [passwordMessage, setPasswordMessage] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+  async function changePassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (newPassword !== confirmation) { setPasswordMessage("New passwords do not match"); return; }
+    setChangingPassword(true);
+    setPasswordMessage("");
+    try {
+      await useAuthStore.getState().changePassword(currentPassword, newPassword);
+      setCurrentPassword(""); setNewPassword(""); setConfirmation("");
+      setPasswordMessage("Password changed successfully. Other sessions have been signed out.");
+    } catch (err) {
+      setPasswordMessage(err instanceof ApiClientError && err.code === "INVALID_CREDENTIALS" ? "Current password is incorrect" : err instanceof Error ? err.message : "Could not change password");
+    } finally { setChangingPassword(false); }
+  }
 
   if (!user) return null;
 
@@ -111,6 +130,17 @@ export default function UserSettingsModal({ onClose }: UserSettingsModalProps) {
           </div>
         </form>
 
+        <form onSubmit={changePassword} className="mb-4 border-t border-border pt-4">
+          <h3 className="mb-3 font-bold text-text-primary">Password</h3>
+          {passwordMessage && <p role="status" className="mb-3 text-sm text-text-primary">{passwordMessage}</p>}
+          <label htmlFor="current-password" className="block text-text-secondary">Current password</label>
+          <input id="current-password" type="password" autoComplete="current-password" required value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} className="mb-3 w-full rounded bg-bg-input p-2 text-text-primary" />
+          <label htmlFor="new-password" className="block text-text-secondary">New password</label>
+          <input id="new-password" type="password" autoComplete="new-password" required minLength={6} maxLength={128} value={newPassword} onChange={e => setNewPassword(e.target.value)} className="mb-3 w-full rounded bg-bg-input p-2 text-text-primary" />
+          <label htmlFor="confirm-password" className="block text-text-secondary">Confirm new password</label>
+          <input id="confirm-password" type="password" autoComplete="new-password" required value={confirmation} onChange={e => setConfirmation(e.target.value)} className="mb-3 w-full rounded bg-bg-input p-2 text-text-primary" />
+          <button disabled={changingPassword} className="rounded bg-accent px-4 py-2 text-white disabled:opacity-50">{changingPassword ? "Changing..." : "Change Password"}</button>
+        </form>
         <div className="border-t border-border pt-4">
           <button
             onClick={handleLogout}

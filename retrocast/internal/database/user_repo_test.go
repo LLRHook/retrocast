@@ -149,6 +149,11 @@ func TestUserRepo_Update(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = repo.Delete(ctx, user.ID) })
 
+	if ok, err := repo.(interface {
+		CompareAndSwapPassword(context.Context, int64, string, string) (bool, error)
+	}).CompareAndSwapPassword(ctx, user.ID, user.PasswordHash, "changed-hash"); err != nil || !ok {
+		t.Fatal("password CAS failed")
+	}
 	user.DisplayName = "After Update"
 	if err := repo.Update(ctx, user); err != nil {
 		t.Fatalf("Update: %v", err)
@@ -157,6 +162,9 @@ func TestUserRepo_Update(t *testing.T) {
 	got, err := repo.GetByID(ctx, user.ID)
 	if err != nil {
 		t.Fatalf("GetByID: %v", err)
+	}
+	if got.PasswordHash != "changed-hash" {
+		t.Fatal("profile update reverted the password CAS")
 	}
 	if got.DisplayName != "After Update" {
 		t.Errorf("DisplayName = %q, want %q", got.DisplayName, "After Update")

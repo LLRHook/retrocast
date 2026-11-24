@@ -133,6 +133,27 @@ func TestStorageParentIntegrityAndLocks(t *testing.T) {
 	user := createTestUserSimple(t, NewUserRepository(pool))
 	guild := createTestGuild(t, NewGuildRepository(pool), user.ID)
 	ch := createTestChannel(t, NewChannelRepository(pool), guild.ID)
+	// Wait for PostgreSQL itself to refuse the blocked statement before the
+	// holder releases its row lock. A client deadline can return before the
+	// cancellation reaches PostgreSQL, allowing a late DELETE to erase the fixture.
+	assertBlocked := func(t *testing.T, query string, args ...any) {
+		t.Helper()
+		blockedCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		blockedTx, err := pool.Begin(blockedCtx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = blockedTx.Rollback(context.Background()) }()
+		if _, err = blockedTx.Exec(blockedCtx, "SET LOCAL lock_timeout = '100ms'"); err != nil {
+			t.Fatal(err)
+		}
+		_, err = blockedTx.Exec(blockedCtx, query, args...)
+		var pgerr *pgconn.PgError
+		if !errors.As(err, &pgerr) || pgerr.Code != "55P03" {
+			t.Fatalf("expected server lock timeout before releasing holder: %v", err)
+		}
+	}
 	for _, table := range []string{"channels", "dm_channels"} {
 		t.Run(table, func(t *testing.T) {
 			parent := ch.ID
@@ -153,12 +174,7 @@ func TestStorageParentIntegrityAndLocks(t *testing.T) {
 			if _, err = tx.Exec(ctx, insert, nextID(), parent, user.ID); err != nil {
 				t.Fatal(err)
 			}
-			blocked, cancel := context.WithTimeout(ctx, 150*time.Millisecond)
-			_, err = pool.Exec(blocked, "DELETE FROM "+table+" WHERE id=$1", parent)
-			cancel()
-			if err == nil {
-				t.Fatal("parent delete bypassed message key-share lock")
-			}
+			assertBlocked(t, "DELETE FROM "+table+" WHERE id=$1", parent)
 			if err = tx.Rollback(ctx); err != nil {
 				t.Fatal(err)
 			}
@@ -171,12 +187,7 @@ func TestStorageParentIntegrityAndLocks(t *testing.T) {
 			if _, err = tx.Exec(ctx, "DELETE FROM "+table+" WHERE id=$1", parent); err != nil {
 				t.Fatal(err)
 			}
-			blocked, cancel = context.WithTimeout(ctx, 150*time.Millisecond)
-			_, err = pool.Exec(blocked, insert, nextID(), parent, user.ID)
-			cancel()
-			if err == nil {
-				t.Fatal("message insert bypassed parent deletion lock")
-			}
+			assertBlocked(t, insert, nextID(), parent, user.ID)
 			if err = tx.Rollback(ctx); err != nil {
 				t.Fatal(err)
 			}

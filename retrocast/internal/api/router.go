@@ -120,6 +120,7 @@ func SetupRouter(e *echo.Echo, deps *Dependencies) {
 	protected.POST("/auth/logout", deps.Auth.Logout)
 
 	// Users
+	v1.PUT("/users/@me/password", deps.Auth.ChangePassword, authMw, RateLimitMiddleware(deps.Redis, 5, time.Minute))
 	protected.GET("/users/@me", deps.Users.GetMe)
 	protected.PATCH("/users/@me", deps.Users.UpdateMe)
 	protected.GET("/users/@me/guilds", deps.Guilds.ListMyGuilds)

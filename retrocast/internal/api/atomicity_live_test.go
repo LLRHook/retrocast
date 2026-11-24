@@ -463,4 +463,75 @@ func TestRegistrationAtomicityLive(t *testing.T) {
 		}
 		check(t, r, 200, "")
 	})
+	t.Run("password session revocation", func(t *testing.T) {
+		change := func(current, next string) *httptest.ResponseRecorder {
+			c, r := newTestContext(http.MethodPut, "/api/v1/users/@me/password", strings.NewReader(fmt.Sprintf(`{"current_password":%q,"new_password":%q}`, current, next)))
+			c.Set("user_id", ownerID)
+			if err := h.ChangePassword(c); err != nil {
+				t.Error(err)
+			}
+			return r
+		}
+		first, err := as.Login(ctx, "owner", "password123")
+		if err != nil {
+			t.Fatal(err)
+		}
+		other, err := as.Login(ctx, "owner", "password123")
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, change("wrong-password", "newpassword123"), 403, "INVALID_CREDENTIALS")
+		check(t, change("password123", "tiny"), 400, "INVALID_PASSWORD")
+		if _, err := rdb.GetRefreshTokenUserID(ctx, other.RefreshToken); err != nil {
+			t.Fatal("negative cases revoked a session")
+		}
+		tokens := make([]string, 32)
+		for i := range tokens {
+			v, e := as.Login(ctx, "owner", "password123")
+			if e != nil {
+				t.Fatal(e)
+			}
+			tokens[i] = v.RefreshToken
+		}
+		var wg sync.WaitGroup
+		rotated := make(chan string, len(tokens))
+		start := make(chan struct{})
+		for _, token := range tokens {
+			wg.Add(1)
+			go func(token string) {
+				defer wg.Done()
+				<-start
+				if v, e := as.Refresh(ctx, token); e == nil {
+					rotated <- v.RefreshToken
+				}
+			}(token)
+		}
+		close(start)
+		check(t, change("password123", "newpassword123"), 200, "")
+		wg.Wait()
+		close(rotated)
+		for token := range rotated {
+			if _, err := as.Refresh(ctx, token); err == nil {
+				t.Fatal("raced refresh survived password change")
+			}
+		}
+		for _, token := range []string{first.RefreshToken, other.RefreshToken} {
+			c, r := newTestContext(http.MethodPost, "/api/v1/auth/refresh", strings.NewReader(fmt.Sprintf(`{"refresh_token":%q}`, token)))
+			if err := h.Refresh(c); err != nil {
+				t.Fatal(err)
+			}
+			check(t, r, 401, "INVALID_TOKEN")
+		}
+		if _, err := as.Login(ctx, "owner", "password123"); err == nil {
+			t.Fatal("old password accepted")
+		}
+		if _, err := as.Login(ctx, "owner", "newpassword123"); err != nil {
+			t.Fatal(err)
+		}
+		counts := concurrent(2, func(i int) int { return change("newpassword123", fmt.Sprintf("concurrent%d", i)).Code })
+		if counts[200] != 1 || counts[403] != 1 {
+			t.Fatalf("concurrent password changes: %v", counts)
+		}
+	})
+
 }

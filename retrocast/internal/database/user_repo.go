@@ -51,9 +51,9 @@ func (r *userRepo) GetByUsername(ctx context.Context, username string) (*models.
 
 func (r *userRepo) Update(ctx context.Context, user *models.User) error {
 	_, err := queryDB(ctx, r.pool).Exec(ctx,
-		`UPDATE users SET username = $2, display_name = $3, avatar_hash = $4, password_hash = $5
+		`UPDATE users SET username = $2, display_name = $3, avatar_hash = $4
 		 WHERE id = $1`,
-		user.ID, user.Username, user.DisplayName, user.AvatarHash, user.PasswordHash,
+		user.ID, user.Username, user.DisplayName, user.AvatarHash,
 	)
 	return err
 }
@@ -64,3 +64,9 @@ func (r *userRepo) Delete(ctx context.Context, id int64) error {
 }
 
 func (r *userRepo) transactionPool() *pgxpool.Pool { return r.pool }
+
+// CompareAndSwapPassword prevents concurrent password changes from both succeeding.
+func (r *userRepo) CompareAndSwapPassword(ctx context.Context, id int64, old, next string) (bool, error) {
+	tag, err := queryDB(ctx, r.pool).Exec(ctx, `UPDATE users SET password_hash=$3 WHERE id=$1 AND password_hash=$2`, id, old, next)
+	return tag.RowsAffected() == 1, err
+}

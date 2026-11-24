@@ -385,6 +385,16 @@ components:
           type: string
 
   responses:
+    RateLimited:
+      description: Rate limit exceeded
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
     BadRequest:
       description: Bad request
       content:
@@ -565,6 +575,48 @@ paths:
   # ════════════════════════════════════════════════════════════
   #  USERS
   # ════════════════════════════════════════════════════════════
+  /users/@me/password:
+    put:
+      operationId: changePassword
+      tags: [Users]
+      summary: Change password and revoke all refresh sessions (API-059)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_password, new_password]
+              properties:
+                current_password:
+                  type: string
+                new_password:
+                  type: string
+                  minLength: 6
+                  maxLength: 128
+      responses:
+        "200":
+          description: New token pair and user
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                additionalProperties: false
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
   /users/@me:
     get:
       operationId: getMe
@@ -743,7 +795,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ErrorResponse"
 
     delete:
       operationId: removeGroupDMMember

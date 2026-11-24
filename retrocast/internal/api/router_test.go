@@ -97,3 +97,31 @@ func TestRouterOriginPolicy(t *testing.T) {
 		})
 	}
 }
+
+func TestPasswordCredentialLimit(t *testing.T) {
+	e := echo.New()
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+	tokens := auth.NewTokenService("password-limit-fixture")
+	rdb := newTestRedis(t)
+	SetupRouter(e, &Dependencies{TokenService: tokens, Redis: rdb, Auth: newTestAuthHandler(t, &mockUserRepo{})})
+	token, err := tokens.GenerateAccessToken(25)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 6; i++ {
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/users/@me/password", strings.NewReader(`{"current_password":"wrong","new_password":"tiny"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		if i < 5 {
+			if rec.Code != 400 || !strings.Contains(rec.Body.String(), "INVALID_PASSWORD") {
+				t.Fatalf("attempt %d status %d", i+1, rec.Code)
+			}
+		} else {
+			if rec.Code != 429 || !strings.Contains(rec.Body.String(), "RATE_LIMITED") || rec.Header().Get("Retry-After") == "" {
+				t.Fatal("sixth credential attempt must be rate limited with Retry-After")
+			}
+		}
+	}
+}

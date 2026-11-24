@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/victorivanov/retrocast/internal/auth"
@@ -151,6 +152,9 @@ func TestLogin_Success(t *testing.T) {
 	}
 
 	users := &mockUserRepo{
+		GetByIDFn: func(_ context.Context, id int64) (*models.User, error) {
+			return &models.User{ID: id, Username: "testuser", PasswordHash: hash}, nil
+		},
 		GetByUsernameFn: func(_ context.Context, username string) (*models.User, error) {
 			if username == "testuser" {
 				return &models.User{ID: 100, Username: "testuser", PasswordHash: hash}, nil
@@ -238,5 +242,30 @@ func TestLogin_UserNotFound(t *testing.T) {
 	}
 	if errResp.Error.Code != "INVALID_CREDENTIALS" {
 		t.Errorf("expected error code 'INVALID_CREDENTIALS', got %q", errResp.Error.Code)
+	}
+}
+
+func TestLogoutRedisDeadline(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb, err := redisclient.NewClient("redis://" + mr.Addr())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rdb.Close() }()
+	svc := service.NewAuthService(&mockUserRepo{}, auth.NewTokenService("logout-deadline-fixture"), rdb, testSnowflake())
+	mr.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+	defer cancel()
+	c, rec := newTestContext(http.MethodPost, "/api/v1/auth/logout", strings.NewReader(`{"refresh_token":"fixture"}`))
+	c.SetRequest(c.Request().WithContext(ctx))
+	start := time.Now()
+	if err := NewAuthHandler(svc).Logout(c); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != 204 {
+		t.Fatal("logout must remain best effort")
+	}
+	if elapsed := time.Since(start); elapsed > 3*time.Second {
+		t.Fatalf("logout Redis deadline exceeded: %s", elapsed)
 	}
 }

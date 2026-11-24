@@ -229,10 +229,27 @@ sequenceDiagram
 ```
 
 Changing a password (SV-FR-060, SV-FR-061): the client sends API-059 with the current and the
-new password; the server checks the current Argon2id hash, stores the new hash, deletes every
-refresh token of the user and returns a new pair. Deleting them all needs a per-user index of
-refresh tokens in Redis (for example a set per user), which ENT-019 lacks today. Access tokens
-already issued expire within 15 minutes.
+new password; the server verifies the current Argon2id hash, advances the Redis refresh
+generation, updates the hash with a PostgreSQL compare-and-swap, advances the generation
+again after the CAS commits, and issues a new pair at the current generation.
+The epoch advance fails closed: a later CAS/database failure leaves sessions revoked and
+returns an error; a CAS loser receives 403 INVALID_CREDENTIALS. Refresh and logout use
+one Lua script to check generation and consume/replace atomically. ENT-019 accepts legacy
+bare user ids as generation zero. Login pins its generation before re-reading and verifying
+the hash. The post-CAS advance revokes logins that read the old hash while the CAS was
+waiting; the pinned generation rejects a delayed store after that advance. Either advance
+failing returns an error; no successful password-change response is sent. Profile updates
+do not write the hash. Session Redis reads, epoch advances, stores and consumes each have
+a two-second deadline; logout still returns 204 if revocation fails. Access tokens already
+issued expire within 15 minutes.
+
+The web auth store restores a saved session before routing, coalesces concurrent refreshes,
+and uses Web Locks across tabs to read and rotate the latest stored token. A refresh 401
+clears only the token that failed: when another tab has replaced it, restore retries once
+with that replacement. A second replacement is preserved for Retry. This also protects
+shared storage when Web Locks are unavailable. Password-change token writes hold the
+same lock. A network error preserves the session and presents Retry. Logout drains the local
+refresh and uses the same tab lock through revocation and local clearing.
 
 Backing up and restoring (SYS-FR-002–SYS-FR-004, ADR-018): a cron or launchd job on the host
 runs `scripts/backup.sh` daily from `retrocast/`; it writes `backup_<time>.sql.gz` (pg_dump)
@@ -385,6 +402,7 @@ they affect stay Later.
 | D-29 | The web client parses every successful response as JSON, so an empty 204 body rejects: deleting a server or channel, leaving a server and other 204 calls report failure although the server succeeded | retrocast-web/src/lib/api.ts:97–114; components/GuildSettingsModal.tsx:56–74; components/ChannelModal.tsx:56–65 | WEB-FR-006, WEB-FR-014, WEB-FR-021, WEB-FR-022, WEB-FR-024 | Pilot | [#41](https://github.com/LLRHook/retrocast/issues/41) Fixed in [PR #45](https://github.com/LLRHook/retrocast/pull/45). |
 | D-30 | Web sign-out clears the local tokens without calling API-004, so the refresh token stays valid for up to 7 days | retrocast-web/src/stores/auth.ts:68–75 | WEB-FR-024 | Pilot | [#42](https://github.com/LLRHook/retrocast/issues/42) Fixed in [PR #45](https://github.com/LLRHook/retrocast/pull/45). |
 | D-31 | Fixed: reaction remove/list verify that the message exists in the route channel before repository access | retrocast/internal/service/reaction.go; internal/api/reaction_handler_test.go (TestReactionRouteBinding) | SV-FR-074, SV-FR-075 | Fixed | [#47](https://github.com/LLRHook/retrocast/issues/47) |
+| D-32 | Fixed: web reload restores a saved session before routing; offline retry preserves the refresh token | retrocast-web/src/stores/auth.ts; src/App.tsx; contract.test.mjs | WEB-FR-001, WEB-FR-002, WEB-FR-003 | Fixed | [#49](https://github.com/LLRHook/retrocast/issues/49), [PR #55](https://github.com/LLRHook/retrocast/pull/55) |
 
 Other debt: the `refresh_tokens` and `device_tokens` tables have no code; op 4 is defined
 but unhandled; username uniqueness is case-sensitive; invite codes carry 32 random bits;
@@ -417,3 +435,5 @@ See [SRS §1.3](SRS.md) and §5.3.
 | 14 | 2026-11-23T23:28:58-05:00 | 2f78d18e5e62 | REVISION | PR #53 round 2: supported LiveKit UDP range; local demo TLS and standalone proxy; deployment drift and requirement provenance repaired; Redis deadline regression |
 | 15 | 2026-11-23T23:44:31-05:00 | ad03a1a80f06 | REVISION | PR #54: registration modes and bootstrap; atomic guild creation, invite acceptance and refresh consumption; delivery and evidence aligned |
 | 16 | 2026-11-24T00:33:25-05:00 | 4bfa82018aa4 | REVISION | PR #54 round 2: restore requirement evidence, correct registration diagram and operator guidance, parent-first invite locks and stronger concurrency/commit regressions |
+| 17 | 2026-11-24T00:51:47-05:00 | 03b5c35200c3 | REVISION | PR #55: API-059, refresh generations, web session restoration, invite registration and password settings |
+| 18 | 2026-11-24T01:58:10-05:00 | 76ad98d47a9d | REVISION | PR #55 round 2: post-CAS session revocation, conditional restore clearing, contract and evidence corrections |
