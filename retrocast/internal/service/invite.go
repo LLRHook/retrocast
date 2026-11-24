@@ -207,6 +207,9 @@ func (s *InviteService) acceptInvite(ctx context.Context, code string, userID in
 		return nil, nil, Internal("INTERNAL", "internal server error")
 	}
 
+	if err := s.members.HydrateUsers(ctx, []*models.Member{member}); err != nil {
+		return nil, nil, Internal("INTERNAL", "internal server error")
+	}
 	return guild, member, nil
 }
 

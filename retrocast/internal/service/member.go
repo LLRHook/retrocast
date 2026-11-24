@@ -60,6 +60,13 @@ func (s *MemberService) ListMembers(ctx context.Context, guildID, userID int64, 
 	if members == nil {
 		members = []models.Member{}
 	}
+	pointers := make([]*models.Member, len(members))
+	for i := range members {
+		pointers[i] = &members[i]
+	}
+	if err := s.members.HydrateUsers(ctx, pointers); err != nil {
+		return nil, Internal("INTERNAL", "internal server error")
+	}
 	return members, nil
 }
 
@@ -81,6 +88,9 @@ func (s *MemberService) GetMember(ctx context.Context, guildID, callerID, target
 		return nil, NotFound("NOT_FOUND", "member not found")
 	}
 
+	if err := s.members.HydrateUsers(ctx, []*models.Member{member}); err != nil {
+		return nil, Internal("INTERNAL", "internal server error")
+	}
 	return member, nil
 }
 
@@ -109,6 +119,9 @@ func (s *MemberService) UpdateSelf(ctx context.Context, guildID, userID int64, n
 		return nil, Internal("INTERNAL", "internal server error")
 	}
 
+	if err := s.members.HydrateUsers(ctx, []*models.Member{member}); err != nil {
+		return nil, Internal("INTERNAL", "internal server error")
+	}
 	s.gateway.DispatchToGuild(guildID, gateway.EventGuildMemberUpdate, member)
 	return member, nil
 }
@@ -219,6 +232,9 @@ func (s *MemberService) UpdateMember(ctx context.Context, guildID, callerID, tar
 		}
 	}
 
+	if err := s.members.HydrateUsers(ctx, []*models.Member{member}); err != nil {
+		return nil, Internal("INTERNAL", "internal server error")
+	}
 	s.gateway.DispatchToGuild(guildID, gateway.EventGuildMemberUpdate, member)
 	return member, nil
 }

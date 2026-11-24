@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	"github.com/prometheus/client_golang/prometheus"
@@ -19,6 +20,10 @@ import (
 // pilotContractServer seeds a fresh database for each operation. No handler or
 // response writer is stubbed; only object storage is an in-memory fixture.
 func pilotContractServer(t *testing.T) (*echo.Echo, string, *pgxpool.Pool) {
+	return pilotContractServerWithTracer(t, nil)
+}
+
+func pilotContractServerWithTracer(t *testing.T, tracer pgx.QueryTracer) (*echo.Echo, string, *pgxpool.Pool) {
 	t.Helper()
 	ctx := context.Background()
 	if os.Getenv("DATABASE_URL") == "" {
@@ -37,6 +42,7 @@ func pilotContractServer(t *testing.T) (*echo.Echo, string, *pgxpool.Pool) {
 		t.Fatal(err)
 	}
 	cfg.ConnConfig.Database = name
+	cfg.ConnConfig.Tracer = tracer
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -70,6 +76,13 @@ func pilotContractServer(t *testing.T) (*echo.Echo, string, *pgxpool.Pool) {
 	exec("INSERT INTO dm_channels(id,type,owner_id) VALUES(12,3,100)")
 	exec("INSERT INTO dm_recipients(channel_id,user_id) VALUES(12,100),(12,200)")
 	exec("INSERT INTO voice_states(guild_id,channel_id,user_id,session_id) VALUES(1,11,100,'pilot')")
+	exec("INSERT INTO users(id,username,display_name,password_hash) VALUES(400,'banned','Banned','fixture')")
+	exec("UPDATE users SET avatar_hash='fixture-avatar' WHERE id IN (100,200)")
+	exec("INSERT INTO member_roles(guild_id,user_id,role_id) VALUES(1,100,30),(1,100,31),(1,200,30)")
+	exec("INSERT INTO reactions(message_id,user_id,emoji) VALUES(20,100,'smile')")
+	exec("INSERT INTO read_states(user_id,channel_id,last_message_id,mention_count) VALUES(100,10,20,1)")
+	exec("INSERT INTO bans(guild_id,user_id,reason,created_by) VALUES(1,400,'spam',100)")
+	exec("INSERT INTO attachments(id,message_id,filename,content_type,size,storage_key,uploader_id,channel_id) VALUES(40,20,'photo.png','image/png',4,'fixture/linked',100,10),(41,NULL,'pending.png','image/png',4,'fixture/pending',100,10)")
 	rdb := newTestRedis(t)
 	tokenSvc := auth.NewTokenService("pilot-contract-fixture")
 	sf := testSnowflake()

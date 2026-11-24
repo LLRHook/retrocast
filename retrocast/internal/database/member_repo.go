@@ -22,10 +22,7 @@ func (r *memberRepo) Create(ctx context.Context, member *models.Member) error {
 		 VALUES ($1, $2, $3, $4)`,
 		member.GuildID, member.UserID, member.Nickname, member.JoinedAt,
 	)
-	if err != nil {
-		return err
-	}
-	return r.hydrateUsers(ctx, []*models.Member{member})
+	return err
 }
 
 func (r *memberRepo) GetByGuildAndUser(ctx context.Context, guildID, userID int64) (*models.Member, error) {
@@ -46,9 +43,6 @@ func (r *memberRepo) GetByGuildAndUser(ctx context.Context, guildID, userID int6
 		return nil, err
 	}
 	m.Roles = roles
-	if err := r.hydrateUsers(ctx, []*models.Member{m}); err != nil {
-		return nil, err
-	}
 	return m, nil
 }
 
@@ -78,13 +72,6 @@ func (r *memberRepo) GetByGuildID(ctx context.Context, guildID int64, limit, off
 		members = append(members, m)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	pointers := make([]*models.Member, len(members))
-	for i := range members {
-		pointers[i] = &members[i]
-	}
-	if err := r.hydrateUsers(ctx, pointers); err != nil {
 		return nil, err
 	}
 	return members, nil
@@ -147,9 +134,9 @@ func (r *memberRepo) getMemberRoles(ctx context.Context, guildID, userID int64) 
 
 func (r *memberRepo) transactionPool() *pgxpool.Pool { return r.pool }
 
-// hydrateUsers performs one identity query for the whole page. Missing users
+// HydrateUsers performs one identity query for the whole page. Missing users
 // retain an absent projection (useful for incomplete imported member records).
-func (r *memberRepo) hydrateUsers(ctx context.Context, members []*models.Member) error {
+func (r *memberRepo) HydrateUsers(ctx context.Context, members []*models.Member) error {
 	if len(members) == 0 {
 		return nil
 	}

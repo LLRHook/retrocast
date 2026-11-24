@@ -39,7 +39,7 @@ func TestMemberPublicIdentityBatch(t *testing.T) {
 	u := createTestUserSimple(t, users)
 	u2 := createTestUserSimple(t, users)
 	members := []*models.Member{{UserID: u.ID}, {UserID: u2.ID}, {UserID: -1}}
-	if err := (&memberRepo{pool: pool}).hydrateUsers(context.Background(), members); err != nil {
+	if err := (&memberRepo{pool: pool}).HydrateUsers(context.Background(), members); err != nil {
 		t.Fatal(err)
 	}
 	if tracer.queries != 1 {
