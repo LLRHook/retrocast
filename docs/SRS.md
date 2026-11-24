@@ -39,8 +39,9 @@ Grafana, with host-scheduled backups. Context diagram:
 
 #### 1.3.1 System interfaces
 Clients reach the server only through Caddy: REST under `/api/v1`, the gateway at `/gateway`
-(WebSocket) and `/health`. Compose still publishes the API on 8080 and other internal ports
-until SV-NFR-008 ships. The server calls PostgreSQL, Redis and MinIO, and mints LiveKit access
+(WebSocket), `/health` and the raw specification at `/docs`. Compose publishes only
+Caddy 80/443 and LiveKit 7880/7881 plus UDP 50000-50100; Grafana binds to
+127.0.0.1:3000. API 8080, MinIO and Prometheus stay internal (ADR-016, PR #53). The server calls PostgreSQL, Redis and MinIO, and mints LiveKit access
 tokens that clients present to LiveKit (DATA_CONTRACTS §7).
 
 #### 1.3.2 User interfaces

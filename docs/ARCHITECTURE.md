@@ -240,7 +240,8 @@ fresh stack and records the file, the date and the row counts before and after
   `/migrations` and a `HEALTHCHECK` on `/health` every 30 s. Redis runs with the append-only
   file on. At start the server loads configuration, connects to PostgreSQL, applies pending
   migrations, connects to Redis and MinIO, then serves HTTP.
-- LiveKit uses valid YAML key syntax and the published RTC port range (PR #53).
+- LiveKit uses valid YAML key syntax and `--udp-port 50000-50100` (hyphen form),
+  providing UDP mux listeners within the published range (PR #53 round 2).
 - CI (`.github/workflows/ci.yml`) builds and pushes the api and web images to GHCR on `main`.
   No deploy job exists. The product is self-hosted only (Q-002); there is no public demo
   (Q-005).
@@ -364,8 +365,8 @@ they affect stay Later.
 | D-22 | Fixed: Q-017 exact content-type allowlist; SVG and unknown image subtypes refused | retrocast/internal/service/upload.go; internal/service/upload_test.go | SV-FR-051 | Later | — |
 | D-23 | LiveKit tokens last 24 hours and do not reflect `SPEAK`; no webhook clears stale voice states | retrocast/internal/service/voice.go:178–197 | SV-FR-048, SV-FR-049 | — | — |
 | D-24 | Users cannot be deleted while they own a guild, have messages, or have linked/pending attachments as uploader (attachments.uploader_id REFERENCES users(id), without ON DELETE) | retrocast/migrations/000002_create_guilds.up.sql; 000007_create_messages.up.sql; 000020_dm_messages_and_pending_attachments.up.sql | CAP-038 (account deletion, Later) | Later | — |
-| D-25 | LiveKit key mapping and RTC port range corrected | retrocast/internal/api; internal/origin; internal/gateway; docker-compose.yml; Caddyfile | SYS-CON-001; voice (Later) | Fixed | [PR #53](https://github.com/LLRHook/retrocast/pull/53) |
-| D-26 | Only Caddy/LiveKit public ports and loopback Grafana; API, MinIO and Prometheus internal | retrocast/internal/api; internal/origin; internal/gateway; docker-compose.yml; Caddyfile | SV-NFR-008, SV-NFR-009, SV-NFR-012, SYS-FR-001 | Fixed | [PR #53](https://github.com/LLRHook/retrocast/pull/53) |
+| D-25 | LiveKit uses valid YAML keys and a hyphen-delimited UDP mux range 50000-50100 (round 2 corrects the ignored colon form) | retrocast/docker-compose.yml (livekit command and LIVEKIT_KEYS) | SYS-CON-001; voice (Later) | Fixed | [PR #53](https://github.com/LLRHook/retrocast/pull/53) |
+| D-26 | Only Caddy/LiveKit public ports and loopback Grafana; API, MinIO and Prometheus internal | retrocast/docker-compose.yml (service port bindings); retrocast/Caddyfile (/metrics) | SV-NFR-008, SV-NFR-009, SV-NFR-012, SYS-FR-001 | Fixed | [PR #53](https://github.com/LLRHook/retrocast/pull/53) |
 | D-27 | Fixed in [PR #44](https://github.com/LLRHook/retrocast/pull/44). Previous defect: New guilds give `@everyone` 32771 (View, Send, Read history) instead of `DefaultEveryonePerms` (230147) | retrocast/internal/service/guild.go:68 | SV-FR-008 | Pilot | [#39](https://github.com/LLRHook/retrocast/issues/39) |
 | D-28 | Fixed in [PR #44](https://github.com/LLRHook/retrocast/pull/44). Previous defect: Kick checks `KICK_MEMBERS` and the owner only: no role-hierarchy check and no self check (ban has both) | retrocast/internal/service/member.go:226 | SV-FR-066, SV-FR-070 | Pilot | [#40](https://github.com/LLRHook/retrocast/issues/40) |
 | D-29 | The web client parses every successful response as JSON, so an empty 204 body rejects: deleting a server or channel, leaving a server and other 204 calls report failure although the server succeeded | retrocast-web/src/lib/api.ts:97–114; components/GuildSettingsModal.tsx:56–74; components/ChannelModal.tsx:56–65 | WEB-FR-006, WEB-FR-014, WEB-FR-021, WEB-FR-022, WEB-FR-024 | Pilot | [#41](https://github.com/LLRHook/retrocast/issues/41) Fixed in [PR #45](https://github.com/LLRHook/retrocast/pull/45). |

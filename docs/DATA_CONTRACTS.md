@@ -27,7 +27,7 @@ server stops at start with an error naming the keys.
 | `REDIS_URL` | no | Redis connection (default `redis://localhost:6379`) |
 | `SERVER_ADDR` | no | Listen address (default `:8080`; compose keeps it internal) |
 | `LOG_LEVEL` | no | slog level (default `info`) |
-| `REGISTRATION_MODE` | no | `open`, `invite` or `closed` (default `invite`); any other value stops the server at start (SV-FR-062). Read from environment or config file; empty by default; exact scheme/host/effective-port match, no wildcards |
+| `REGISTRATION_MODE` | no | `open`, `invite` or `closed` (default `invite`); any other value stops the server at start (SV-FR-062). Specified in rev 2, not yet read by the code |
 | `ALLOWED_ORIGINS` | no | Comma-separated browser origins allowed besides the server's own (SV-NFR-011). Read from environment or config file; empty by default; exact scheme/host/effective-port match, no wildcards |
 | `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY` | yes for uploads | Object store; bucket `retrocast` is created at start |
 | `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | yes for voice | Token minting (§7.1) |
