@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -18,9 +17,9 @@ import (
 // ---------------------------------------------------------------------------
 
 const (
-	testRecipient2ID    int64 = 4001
-	testRecipient3ID    int64 = 4002
-	testGroupDMID       int64 = 8000
+	testRecipient2ID int64 = 4001
+	testRecipient3ID int64 = 4002
+	testGroupDMID    int64 = 8000
 )
 
 func newGroupDMChannel(id, ownerID int64, recipientIDs ...int64) *models.DMChannel {
@@ -94,7 +93,7 @@ func TestCreateGroupDM_Success(t *testing.T) {
 	}
 
 	var result models.DMChannel
-	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+	if err := decodeResponse(rec, &result); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 	if result.Type != models.DMTypeGroupDM {
@@ -153,7 +152,7 @@ func TestCreateGroupDM_TooManyRecipients(t *testing.T) {
 	}
 
 	var errResp ErrorResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
+	if err := decodeResponse(rec, &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error response: %v", err)
 	}
 	if errResp.Error.Code != "INVALID_RECIPIENTS" {
@@ -178,7 +177,7 @@ func TestCreateGroupDM_DuplicateRecipient(t *testing.T) {
 	}
 
 	var errResp ErrorResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
+	if err := decodeResponse(rec, &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error response: %v", err)
 	}
 	if errResp.Error.Code != "INVALID_RECIPIENTS" {
@@ -204,7 +203,7 @@ func TestCreateGroupDM_SelfInRecipients(t *testing.T) {
 	}
 
 	var errResp ErrorResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
+	if err := decodeResponse(rec, &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error response: %v", err)
 	}
 	if errResp.Error.Code != "INVALID_RECIPIENTS" {
@@ -325,7 +324,7 @@ func TestAddGroupDMMember_NotOwner(t *testing.T) {
 	}
 
 	var errResp ErrorResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
+	if err := decodeResponse(rec, &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error response: %v", err)
 	}
 	if errResp.Error.Code != "FORBIDDEN" {
@@ -362,7 +361,7 @@ func TestAddGroupDMMember_NotGroupDM(t *testing.T) {
 	}
 
 	var errResp ErrorResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
+	if err := decodeResponse(rec, &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error response: %v", err)
 	}
 	if errResp.Error.Code != "INVALID_CHANNEL" {
@@ -401,7 +400,7 @@ func TestAddGroupDMMember_AlreadyMember(t *testing.T) {
 	}
 
 	var errResp ErrorResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
+	if err := decodeResponse(rec, &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error response: %v", err)
 	}
 	if errResp.Error.Code != "ALREADY_MEMBER" {
@@ -444,7 +443,7 @@ func TestAddGroupDMMember_MaxMembers(t *testing.T) {
 	}
 
 	var errResp ErrorResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
+	if err := decodeResponse(rec, &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error response: %v", err)
 	}
 	if errResp.Error.Code != "MAX_MEMBERS" {
@@ -607,7 +606,7 @@ func TestRemoveGroupDMMember_NonOwnerCannotRemoveOther(t *testing.T) {
 	}
 
 	var errResp ErrorResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
+	if err := decodeResponse(rec, &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error response: %v", err)
 	}
 	if errResp.Error.Code != "FORBIDDEN" {
@@ -734,7 +733,7 @@ func TestRemoveGroupDMMember_TargetNotMember(t *testing.T) {
 	}
 
 	var errResp ErrorResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
+	if err := decodeResponse(rec, &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error response: %v", err)
 	}
 	if errResp.Error.Code != "NOT_FOUND" {

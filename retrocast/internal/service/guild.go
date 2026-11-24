@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/victorivanov/retrocast/internal/database"
@@ -122,6 +123,7 @@ func (s *GuildService) CreateGuild(ctx context.Context, userID int64, name strin
 		return nil, Internal("INTERNAL", "internal server error")
 	}
 
+	s.gateway.SubscribeToGuild(userID, guild.ID)
 	s.gateway.DispatchToUser(userID, gateway.EventGuildCreate, guild)
 	return guild, nil
 }
@@ -196,7 +198,7 @@ func (s *GuildService) DeleteGuild(ctx context.Context, guildID, userID int64) e
 		return Internal("INTERNAL", "internal server error")
 	}
 
-	s.gateway.DispatchToGuild(guildID, gateway.EventGuildDelete, map[string]any{"id": guildID})
+	s.gateway.DispatchToGuild(guildID, gateway.EventGuildDelete, map[string]any{"id": strconv.FormatInt(guildID, 10)})
 	return nil
 }
 

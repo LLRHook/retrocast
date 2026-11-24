@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/victorivanov/retrocast/internal/database"
 	"github.com/victorivanov/retrocast/internal/gateway"
@@ -270,7 +271,7 @@ func (s *MemberService) KickMember(ctx context.Context, guildID, callerID, targe
 		return Internal("INTERNAL", "internal server error")
 	}
 
-	s.gateway.DispatchToGuild(guildID, gateway.EventGuildMemberRemove, map[string]any{"guild_id": guildID, "user_id": targetUserID})
+	s.gateway.DispatchToGuild(guildID, gateway.EventGuildMemberRemove, map[string]any{"guild_id": strconv.FormatInt(guildID, 10), "user_id": strconv.FormatInt(targetUserID, 10)})
 	return nil
 }
 
@@ -296,6 +297,6 @@ func (s *MemberService) LeaveGuild(ctx context.Context, guildID, userID int64) e
 		return Internal("INTERNAL", "internal server error")
 	}
 
-	s.gateway.DispatchToGuild(guildID, gateway.EventGuildMemberRemove, map[string]any{"guild_id": guildID, "user_id": userID})
+	s.gateway.DispatchToGuild(guildID, gateway.EventGuildMemberRemove, map[string]any{"guild_id": strconv.FormatInt(guildID, 10), "user_id": strconv.FormatInt(userID, 10)})
 	return nil
 }

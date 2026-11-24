@@ -34,7 +34,7 @@ export default function UserProfilePopover({
   const status = usePresenceStore(
     (s) => s.presences.get(member.user_id) || "offline",
   );
-  const roles = useRolesStore((s) => s.rolesByGuild.get(guildId) || []);
+  const roles = (useRolesStore((s) => s.rolesByGuild.get(guildId)) || []);
 
   const memberRoles = roles.filter(
     (r) => !r.is_default && member.roles.includes(r.id),

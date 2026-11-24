@@ -41,7 +41,7 @@ func (h *DMHandler) CreateDM(c echo.Context) error {
 		if err != nil {
 			return mapServiceError(c, err)
 		}
-		return c.JSON(http.StatusOK, dm)
+		return Success(c, http.StatusOK, dm)
 	}
 
 	// 1-on-1 DM path.
@@ -50,7 +50,7 @@ func (h *DMHandler) CreateDM(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, dm)
+	return Success(c, http.StatusOK, dm)
 }
 
 // ListDMs handles GET /users/@me/channels.
@@ -62,7 +62,7 @@ func (h *DMHandler) ListDMs(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, channels)
+	return Success(c, http.StatusOK, channels)
 }
 
 // AddGroupDMMember handles PUT /channels/:id/recipients/:user_id.

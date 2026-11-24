@@ -2,9 +2,13 @@ package api
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"io"
 	"net/http/httptest"
+	"reflect"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -47,8 +51,9 @@ type dispatchedEvent struct {
 }
 
 type mockGateway struct {
-	mu     sync.Mutex
-	events []dispatchedEvent
+	mu            sync.Mutex
+	events        []dispatchedEvent
+	subscriptions [][2]int64
 }
 
 func (m *mockGateway) DispatchToGuild(guildID int64, event string, data interface{}) {
@@ -69,7 +74,11 @@ func (m *mockGateway) DispatchToGuildExcept(guildID int64, exceptUserID int64, e
 	m.events = append(m.events, dispatchedEvent{GuildID: guildID, ExceptUserID: exceptUserID, Event: event, Data: data})
 }
 
-func (m *mockGateway) SubscribeToGuild(userID, guildID int64) {}
+func (m *mockGateway) SubscribeToGuild(userID, guildID int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.subscriptions = append(m.subscriptions, [2]int64{userID, guildID})
+}
 
 func (m *mockGateway) UnsubscribeFromGuild(userID, guildID int64) {}
 
@@ -79,11 +88,11 @@ func (m *mockGateway) UnsubscribeFromGuild(userID, guildID int64) {}
 
 // mockUserRepo implements database.UserRepository.
 type mockUserRepo struct {
-	CreateFn      func(ctx context.Context, user *models.User) error
-	GetByIDFn     func(ctx context.Context, id int64) (*models.User, error)
+	CreateFn        func(ctx context.Context, user *models.User) error
+	GetByIDFn       func(ctx context.Context, id int64) (*models.User, error)
 	GetByUsernameFn func(ctx context.Context, username string) (*models.User, error)
-	UpdateFn      func(ctx context.Context, user *models.User) error
-	DeleteFn      func(ctx context.Context, id int64) error
+	UpdateFn        func(ctx context.Context, user *models.User) error
+	DeleteFn        func(ctx context.Context, id int64) error
 }
 
 func (m *mockUserRepo) Create(ctx context.Context, user *models.User) error {
@@ -123,10 +132,10 @@ func (m *mockUserRepo) Delete(ctx context.Context, id int64) error {
 
 // mockGuildRepo implements database.GuildRepository.
 type mockGuildRepo struct {
-	CreateFn    func(ctx context.Context, guild *models.Guild) error
-	GetByIDFn   func(ctx context.Context, id int64) (*models.Guild, error)
-	UpdateFn    func(ctx context.Context, guild *models.Guild) error
-	DeleteFn    func(ctx context.Context, id int64) error
+	CreateFn      func(ctx context.Context, guild *models.Guild) error
+	GetByIDFn     func(ctx context.Context, id int64) (*models.Guild, error)
+	UpdateFn      func(ctx context.Context, guild *models.Guild) error
+	DeleteFn      func(ctx context.Context, id int64) error
 	GetByUserIDFn func(ctx context.Context, userID int64) ([]models.Guild, error)
 }
 
@@ -167,11 +176,11 @@ func (m *mockGuildRepo) GetByUserID(ctx context.Context, userID int64) ([]models
 
 // mockChannelRepo implements database.ChannelRepository.
 type mockChannelRepo struct {
-	CreateFn     func(ctx context.Context, channel *models.Channel) error
-	GetByIDFn    func(ctx context.Context, id int64) (*models.Channel, error)
+	CreateFn       func(ctx context.Context, channel *models.Channel) error
+	GetByIDFn      func(ctx context.Context, id int64) (*models.Channel, error)
 	GetByGuildIDFn func(ctx context.Context, guildID int64) ([]models.Channel, error)
-	UpdateFn     func(ctx context.Context, channel *models.Channel) error
-	DeleteFn     func(ctx context.Context, id int64) error
+	UpdateFn       func(ctx context.Context, channel *models.Channel) error
+	DeleteFn       func(ctx context.Context, id int64) error
 }
 
 func (m *mockChannelRepo) Create(ctx context.Context, channel *models.Channel) error {
@@ -211,12 +220,12 @@ func (m *mockChannelRepo) Delete(ctx context.Context, id int64) error {
 
 // mockRoleRepo implements database.RoleRepository.
 type mockRoleRepo struct {
-	CreateFn     func(ctx context.Context, role *models.Role) error
-	GetByIDFn    func(ctx context.Context, id int64) (*models.Role, error)
+	CreateFn       func(ctx context.Context, role *models.Role) error
+	GetByIDFn      func(ctx context.Context, id int64) (*models.Role, error)
 	GetByGuildIDFn func(ctx context.Context, guildID int64) ([]models.Role, error)
-	UpdateFn     func(ctx context.Context, role *models.Role) error
-	DeleteFn     func(ctx context.Context, id int64) error
-	GetByMemberFn func(ctx context.Context, guildID, userID int64) ([]models.Role, error)
+	UpdateFn       func(ctx context.Context, role *models.Role) error
+	DeleteFn       func(ctx context.Context, id int64) error
+	GetByMemberFn  func(ctx context.Context, guildID, userID int64) ([]models.Role, error)
 }
 
 func (m *mockRoleRepo) Create(ctx context.Context, role *models.Role) error {
@@ -263,13 +272,13 @@ func (m *mockRoleRepo) GetByMember(ctx context.Context, guildID, userID int64) (
 
 // mockMemberRepo implements database.MemberRepository.
 type mockMemberRepo struct {
-	CreateFn         func(ctx context.Context, member *models.Member) error
+	CreateFn            func(ctx context.Context, member *models.Member) error
 	GetByGuildAndUserFn func(ctx context.Context, guildID, userID int64) (*models.Member, error)
-	GetByGuildIDFn   func(ctx context.Context, guildID int64, limit, offset int) ([]models.Member, error)
-	UpdateFn         func(ctx context.Context, member *models.Member) error
-	DeleteFn         func(ctx context.Context, guildID, userID int64) error
-	AddRoleFn        func(ctx context.Context, guildID, userID, roleID int64) error
-	RemoveRoleFn     func(ctx context.Context, guildID, userID, roleID int64) error
+	GetByGuildIDFn      func(ctx context.Context, guildID int64, limit, offset int) ([]models.Member, error)
+	UpdateFn            func(ctx context.Context, member *models.Member) error
+	DeleteFn            func(ctx context.Context, guildID, userID int64) error
+	AddRoleFn           func(ctx context.Context, guildID, userID, roleID int64) error
+	RemoveRoleFn        func(ctx context.Context, guildID, userID, roleID int64) error
 }
 
 func (m *mockMemberRepo) Create(ctx context.Context, member *models.Member) error {
@@ -447,10 +456,10 @@ func (m *mockChannelOverrideRepo) Delete(ctx context.Context, channelID, roleID 
 
 // mockBanRepo implements database.BanRepository.
 type mockBanRepo struct {
-	CreateFn         func(ctx context.Context, ban *models.Ban) error
+	CreateFn            func(ctx context.Context, ban *models.Ban) error
 	GetByGuildAndUserFn func(ctx context.Context, guildID, userID int64) (*models.Ban, error)
-	GetByGuildIDFn   func(ctx context.Context, guildID int64) ([]models.Ban, error)
-	DeleteFn         func(ctx context.Context, guildID, userID int64) error
+	GetByGuildIDFn      func(ctx context.Context, guildID int64) ([]models.Ban, error)
+	DeleteFn            func(ctx context.Context, guildID, userID int64) error
 }
 
 func (m *mockBanRepo) Create(ctx context.Context, ban *models.Ban) error {
@@ -495,9 +504,9 @@ type mockDMChannelRepo struct {
 
 // mockReadStateRepo implements database.ReadStateRepository.
 type mockReadStateRepo struct {
-	UpsertFn              func(ctx context.Context, userID, channelID, lastMessageID int64) error
-	GetByUserFn           func(ctx context.Context, userID int64) ([]models.ReadState, error)
-	GetByUserAndChannelFn func(ctx context.Context, userID, channelID int64) (*models.ReadState, error)
+	UpsertFn                func(ctx context.Context, userID, channelID, lastMessageID int64) error
+	GetByUserFn             func(ctx context.Context, userID int64) ([]models.ReadState, error)
+	GetByUserAndChannelFn   func(ctx context.Context, userID, channelID int64) (*models.ReadState, error)
 	IncrementMentionCountFn func(ctx context.Context, userID, channelID int64) error
 }
 
@@ -671,4 +680,49 @@ func (m *mockVoiceStateRepo) GetByUser(ctx context.Context, guildID, userID int6
 		return m.GetByUserFn(ctx, guildID, userID)
 	}
 	return nil, nil
+}
+
+// decodeResponse validates the wire envelope before decoding the domain payload.
+func decodeResponse(rec *httptest.ResponseRecorder, value any) error {
+	if rec.Code >= 400 {
+		return json.Unmarshal(rec.Body.Bytes(), value)
+	}
+	var envelope map[string]json.RawMessage
+	if err := json.Unmarshal(rec.Body.Bytes(), &envelope); err != nil {
+		return err
+	}
+	data, ok := envelope["data"]
+	if !ok || len(envelope) != 1 {
+		return fmt.Errorf("success must contain only data")
+	}
+	return json.Unmarshal(data, value)
+}
+
+func assertGatewayPayload(t *testing.T, gw *mockGateway, event string, expected map[string]any) any {
+	t.Helper()
+	for _, captured := range gw.events {
+		if captured.Event == event {
+			assertPayloadJSON(t, captured.Data, expected)
+			return captured.Data
+		}
+	}
+	t.Fatalf("gateway event %s missing", event)
+	return nil
+}
+func assertPayloadJSON(t *testing.T, payload any, expected map[string]any) {
+	t.Helper()
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatal(err)
+	}
+	for field, want := range expected {
+		value, ok := got[field]
+		if !ok || !reflect.DeepEqual(value, want) {
+			t.Errorf("%s JSON = %v (%T), want %v (%T)", field, value, value, want, want)
+		}
+	}
 }

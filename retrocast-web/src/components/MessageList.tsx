@@ -9,6 +9,8 @@ import MessageContextMenu from "@/components/MessageContextMenu";
 import AvatarView from "@/components/AvatarView";
 import UserProfilePopover from "@/components/UserProfilePopover";
 
+const EMPTY_MESSAGES: MessageType[] = [];
+
 function formatTimestamp(iso: string): string {
   const date = new Date(iso);
   const now = new Date();
@@ -310,7 +312,7 @@ export default function MessageList({
   channelId: string;
 }) {
   const messages = useMessagesStore(
-    (s) => s.messagesByChannel.get(channelId) || [],
+    (s) => s.messagesByChannel.get(channelId) || EMPTY_MESSAGES,
   );
   const hasMore = useMessagesStore(
     (s) => s.hasMore.get(channelId) ?? true,

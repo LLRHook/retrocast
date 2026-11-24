@@ -21,7 +21,7 @@ export interface Channel {
   type: number;
   position: number;
   topic: string | null;
-  parent_id: string | null;
+  parent_id?: string | null;
 }
 
 export interface Message {

@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -50,7 +49,7 @@ func TestRegister_Success(t *testing.T) {
 	}
 
 	var resp authResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+	if err := decodeResponse(rec, &resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 	if resp.AccessToken == "" {
@@ -92,7 +91,7 @@ func TestRegister_DuplicateUsername(t *testing.T) {
 	}
 
 	var errResp ErrorResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
+	if err := decodeResponse(rec, &errResp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 	if errResp.Error.Code != "USERNAME_TAKEN" {
@@ -134,7 +133,7 @@ func TestRegister_InvalidInput(t *testing.T) {
 			}
 
 			var errResp ErrorResponse
-			if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
+			if err := decodeResponse(rec, &errResp); err != nil {
 				t.Fatalf("failed to decode response: %v", err)
 			}
 			if errResp.Error.Code != tt.wantCode {
@@ -172,7 +171,7 @@ func TestLogin_Success(t *testing.T) {
 	}
 
 	var resp authResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+	if err := decodeResponse(rec, &resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 	if resp.AccessToken == "" {
@@ -209,7 +208,7 @@ func TestLogin_WrongPassword(t *testing.T) {
 	}
 
 	var errResp ErrorResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
+	if err := decodeResponse(rec, &errResp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 	if errResp.Error.Code != "INVALID_CREDENTIALS" {
@@ -233,7 +232,7 @@ func TestLogin_UserNotFound(t *testing.T) {
 	}
 
 	var errResp ErrorResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
+	if err := decodeResponse(rec, &errResp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 	if errResp.Error.Code != "INVALID_CREDENTIALS" {

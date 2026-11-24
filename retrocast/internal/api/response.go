@@ -54,3 +54,51 @@ func mapServiceError(c echo.Context, err error) error {
 	}
 	return Error(c, http.StatusInternalServerError, "INTERNAL", "internal server error")
 }
+
+// Success writes the REST v2 envelope. Empty operations use NoContent instead.
+func Success(c echo.Context, status int, data any) error {
+	return c.JSON(status, struct {
+		Data any `json:"data"`
+	}{data})
+}
+
+// HTTPErrorHandler normalizes errors raised by Echo and middleware too.
+func HTTPErrorHandler(err error, c echo.Context) {
+	if c.Response().Committed {
+		return
+	}
+	status := http.StatusInternalServerError
+	message := "internal server error"
+	var he *echo.HTTPError
+	if errors.As(err, &he) {
+		status = he.Code
+		if status < 500 {
+			if m, ok := he.Message.(string); ok {
+				message = m
+			}
+		}
+	}
+	code := "INTERNAL"
+	if status >= 400 && status < 500 {
+		code = "BAD_REQUEST"
+	}
+	switch status {
+	case 400:
+		code = "BAD_REQUEST"
+	case 401:
+		code = "UNAUTHORIZED"
+	case 403:
+		code = "FORBIDDEN"
+	case 404:
+		code = "NOT_FOUND"
+	case 405:
+		code = "METHOD_NOT_ALLOWED"
+	case 413:
+		code = "PAYLOAD_TOO_LARGE"
+	case 429:
+		code = "RATE_LIMITED"
+	}
+	if err := Error(c, status, code, message); err != nil {
+		c.Logger().Error(err)
+	}
+}

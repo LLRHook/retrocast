@@ -46,5 +46,5 @@ func (h *UploadHandler) Upload(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusCreated, attachment)
+	return Success(c, http.StatusCreated, attachment)
 }

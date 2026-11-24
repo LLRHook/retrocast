@@ -40,9 +40,17 @@ export default function UserSettingsModal({ onClose }: UserSettingsModalProps) {
   }
 
   async function handleLogout() {
-    gateway.disconnect();
-    await useAuthStore.getState().logout();
-    window.location.href = "/server";
+    try {
+      try {
+        gateway.disconnect();
+      } finally {
+        await useAuthStore.getState().logout();
+      }
+    } catch {
+      console.warn("Could not finish server sign-out");
+    } finally {
+      window.location.href = "/server";
+    }
   }
 
   return (

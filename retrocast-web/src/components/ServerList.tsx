@@ -140,12 +140,13 @@ function JoinGuildModal({ onClose }: { onClose: () => void }) {
     setLoading(true);
     setError("");
     try {
-      const result = await api.post<{ guild_id: string }>(
+      const result = await api.post<{ id: string }>(
         `/api/v1/invites/${code.trim()}`,
       );
       // Refresh guild list
       await useGuildsStore.getState().fetchGuilds();
-      selectGuild(result.guild_id);
+      await useChannelsStore.getState().fetchChannels(result.id);
+      selectGuild(result.id);
       onClose();
     } catch {
       setError("Invalid or expired invite code");

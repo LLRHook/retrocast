@@ -3,7 +3,6 @@ package api
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -24,9 +23,9 @@ import (
 // ---------------------------------------------------------------------------
 
 type mockStorage struct {
-	UploadFn  func(ctx context.Context, key string, reader io.Reader, size int64, contentType string) error
-	GetURLFn  func(key string) string
-	DeleteFn  func(ctx context.Context, key string) error
+	UploadFn func(ctx context.Context, key string, reader io.Reader, size int64, contentType string) error
+	GetURLFn func(key string) string
+	DeleteFn func(ctx context.Context, key string) error
 }
 
 func (m *mockStorage) Upload(ctx context.Context, key string, reader io.Reader, size int64, contentType string) error {
@@ -151,7 +150,7 @@ func TestUpload_Success(t *testing.T) {
 	}
 
 	var result models.Attachment
-	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+	if err := decodeResponse(rec, &result); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 	if result.Filename != "photo.png" {
@@ -184,7 +183,7 @@ func TestUpload_FileTooLarge(t *testing.T) {
 	}
 
 	var errResp ErrorResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
+	if err := decodeResponse(rec, &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error: %v", err)
 	}
 	if errResp.Error.Code != "FILE_TOO_LARGE" {
@@ -229,7 +228,7 @@ func TestUpload_InvalidContentType(t *testing.T) {
 	}
 
 	var errResp ErrorResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
+	if err := decodeResponse(rec, &errResp); err != nil {
 		t.Fatalf("failed to unmarshal error: %v", err)
 	}
 	if errResp.Error.Code != "INVALID_CONTENT_TYPE" {

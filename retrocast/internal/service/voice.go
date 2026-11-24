@@ -135,7 +135,7 @@ func (s *VoiceService) LeaveChannel(ctx context.Context, channelID, userID int64
 
 	leavePayload := struct {
 		GuildID   int64  `json:"guild_id,string"`
-		ChannelID *int64 `json:"channel_id"`
+		ChannelID *int64 `json:"channel_id,string"`
 		UserID    int64  `json:"user_id,string"`
 	}{
 		GuildID:   channel.GuildID,
@@ -180,12 +180,12 @@ func (s *VoiceService) generateLiveKitToken(roomName string, userID int64, usern
 	identity := fmt.Sprintf("%d", userID)
 
 	claims := jwt.MapClaims{
-		"iss":   s.apiKey,
-		"sub":   identity,
-		"iat":   now.Unix(),
-		"nbf":   now.Unix(),
-		"exp":   now.Add(24 * time.Hour).Unix(),
-		"name":  username,
+		"iss":  s.apiKey,
+		"sub":  identity,
+		"iat":  now.Unix(),
+		"nbf":  now.Unix(),
+		"exp":  now.Add(24 * time.Hour).Unix(),
+		"name": username,
 		"video": map[string]interface{}{
 			"roomJoin": true,
 			"room":     roomName,

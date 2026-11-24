@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -50,7 +49,7 @@ func TestCreateRole_Success(t *testing.T) {
 	}
 
 	var role models.Role
-	if err := json.Unmarshal(rec.Body.Bytes(), &role); err != nil {
+	if err := decodeResponse(rec, &role); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 	if role.Name != "Moderator" {
@@ -94,7 +93,7 @@ func TestCreateRole_HierarchyViolation(t *testing.T) {
 	}
 
 	var resp ErrorResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+	if err := decodeResponse(rec, &resp); err != nil {
 		t.Fatalf("failed to unmarshal: %v", err)
 	}
 	if resp.Error.Code != "ROLE_HIERARCHY" {
@@ -157,7 +156,7 @@ func TestUpdateRole_Success(t *testing.T) {
 	}
 
 	var role models.Role
-	if err := json.Unmarshal(rec.Body.Bytes(), &role); err != nil {
+	if err := decodeResponse(rec, &role); err != nil {
 		t.Fatalf("failed to unmarshal: %v", err)
 	}
 	if role.Name != "NewName" {
@@ -261,7 +260,7 @@ func TestDeleteRole_EveryoneRole(t *testing.T) {
 	}
 
 	var resp ErrorResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+	if err := decodeResponse(rec, &resp); err != nil {
 		t.Fatalf("failed to unmarshal: %v", err)
 	}
 	if resp.Error.Code != "CANNOT_DELETE" {

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"github.com/victorivanov/retrocast/internal/permissions"
+	"strconv"
 
 	"github.com/victorivanov/retrocast/internal/database"
 	"github.com/victorivanov/retrocast/internal/gateway"
@@ -88,7 +89,7 @@ func (s *RoleService) CreateRole(ctx context.Context, guildID, actorID int64, na
 		return nil, Internal("INTERNAL", "internal server error")
 	}
 
-	s.gateway.DispatchToGuild(guildID, gateway.EventGuildRoleCreate, map[string]any{"guild_id": guildID, "role": role})
+	s.gateway.DispatchToGuild(guildID, gateway.EventGuildRoleCreate, map[string]any{"guild_id": strconv.FormatInt(guildID, 10), "role": role})
 	return role, nil
 }
 
@@ -173,7 +174,7 @@ func (s *RoleService) UpdateRole(ctx context.Context, guildID, actorID, roleID i
 		return nil, Internal("INTERNAL", "internal server error")
 	}
 
-	s.gateway.DispatchToGuild(guildID, gateway.EventGuildRoleUpdate, map[string]any{"guild_id": guildID, "role": role})
+	s.gateway.DispatchToGuild(guildID, gateway.EventGuildRoleUpdate, map[string]any{"guild_id": strconv.FormatInt(guildID, 10), "role": role})
 	return role, nil
 }
 
@@ -215,7 +216,7 @@ func (s *RoleService) DeleteRole(ctx context.Context, guildID, actorID, roleID i
 		return Internal("INTERNAL", "internal server error")
 	}
 
-	s.gateway.DispatchToGuild(guildID, gateway.EventGuildRoleDelete, map[string]any{"guild_id": guildID, "role_id": roleID})
+	s.gateway.DispatchToGuild(guildID, gateway.EventGuildRoleDelete, map[string]any{"guild_id": strconv.FormatInt(guildID, 10), "role_id": strconv.FormatInt(roleID, 10)})
 	return nil
 }
 

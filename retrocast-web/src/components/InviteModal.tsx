@@ -39,7 +39,7 @@ export default function InviteModal({ guildId, onClose }: InviteModalProps) {
 
   async function handleRevoke(code: string) {
     try {
-      await api.delete(`/invites/${code}`);
+      await api.delete(`/api/v1/invites/${code}`);
       setInvites((prev) => prev.filter((i) => i.code !== code));
     } catch {
       // ignore

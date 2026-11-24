@@ -37,7 +37,7 @@ func (h *GuildHandler) CreateGuild(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusCreated, map[string]any{"data": guild})
+	return Success(c, http.StatusCreated, guild)
 }
 
 // GetGuild handles GET /api/v1/guilds/:id.
@@ -54,7 +54,7 @@ func (h *GuildHandler) GetGuild(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, map[string]any{"data": guild})
+	return Success(c, http.StatusOK, guild)
 }
 
 type updateGuildRequest struct {
@@ -81,7 +81,7 @@ func (h *GuildHandler) UpdateGuild(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, map[string]any{"data": guild})
+	return Success(c, http.StatusOK, guild)
 }
 
 // DeleteGuild handles DELETE /api/v1/guilds/:id.
@@ -109,5 +109,5 @@ func (h *GuildHandler) ListMyGuilds(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, map[string]any{"data": guilds})
+	return Success(c, http.StatusOK, guilds)
 }

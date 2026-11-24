@@ -41,7 +41,7 @@ func (h *AuthHandler) Register(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, authResponse{
+	return Success(c, http.StatusOK, authResponse{
 		AccessToken:  result.AccessToken,
 		RefreshToken: result.RefreshToken,
 		User:         result.User,
@@ -65,7 +65,7 @@ func (h *AuthHandler) Login(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, authResponse{
+	return Success(c, http.StatusOK, authResponse{
 		AccessToken:  result.AccessToken,
 		RefreshToken: result.RefreshToken,
 		User:         result.User,
@@ -93,7 +93,7 @@ func (h *AuthHandler) Refresh(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, refreshResponse{
+	return Success(c, http.StatusOK, refreshResponse{
 		AccessToken:  result.AccessToken,
 		RefreshToken: result.RefreshToken,
 	})

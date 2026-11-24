@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -136,7 +135,7 @@ func TestBanMember_CannotBanOwner(t *testing.T) {
 	}
 
 	var resp ErrorResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+	if err := decodeResponse(rec, &resp); err != nil {
 		t.Fatalf("failed to unmarshal: %v", err)
 	}
 	if resp.Error.Code != "FORBIDDEN" {
@@ -168,7 +167,7 @@ func TestBanMember_CannotBanSelf(t *testing.T) {
 	}
 
 	var resp ErrorResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+	if err := decodeResponse(rec, &resp); err != nil {
 		t.Fatalf("failed to unmarshal: %v", err)
 	}
 	if resp.Error.Code != "CANNOT_BAN_SELF" {
@@ -215,7 +214,7 @@ func TestBanMember_MissingPermission(t *testing.T) {
 	}
 
 	var resp ErrorResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+	if err := decodeResponse(rec, &resp); err != nil {
 		t.Fatalf("failed to unmarshal: %v", err)
 	}
 	if resp.Error.Code != "MISSING_PERMISSIONS" {
@@ -303,7 +302,7 @@ func TestListBans(t *testing.T) {
 	}
 
 	var banList []models.Ban
-	if err := json.Unmarshal(rec.Body.Bytes(), &banList); err != nil {
+	if err := decodeResponse(rec, &banList); err != nil {
 		t.Fatalf("failed to unmarshal: %v", err)
 	}
 	if len(banList) != 2 {

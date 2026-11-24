@@ -34,7 +34,7 @@ export const useChannelsStore = create<ChannelsState>()((set) => ({
       const existing = channelsByGuild.get(channel.guild_id) || [];
       channelsByGuild.set(
         channel.guild_id,
-        [...existing, channel].sort((a, b) => a.position - b.position),
+        [...existing.filter((c) => c.id !== channel.id), channel].sort((a, b) => a.position - b.position),
       );
       return { channelsByGuild };
     });

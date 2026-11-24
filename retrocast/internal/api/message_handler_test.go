@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -290,7 +289,7 @@ func TestGetMessages_Success(t *testing.T) {
 	}
 
 	var result []models.MessageWithAuthor
-	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+	if err := decodeResponse(rec, &result); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 	if len(result) != 1 {

@@ -263,7 +263,7 @@ export default function ChannelSidebar() {
   // Group channels: categories contain their children, ungrouped at top
   const categories = channels.filter((c) => c.type === CHANNEL_TYPE_CATEGORY);
   const ungrouped = channels.filter(
-    (c) => c.type !== CHANNEL_TYPE_CATEGORY && c.parent_id === null,
+    (c) => c.type !== CHANNEL_TYPE_CATEGORY && c.parent_id == null,
   );
 
   return (

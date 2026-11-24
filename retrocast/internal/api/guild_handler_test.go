@@ -18,8 +18,12 @@ func newTestGuildHandler(
 	channels *mockChannelRepo,
 	members *mockMemberRepo,
 	roles *mockRoleRepo,
+	dispatchers ...*mockGateway,
 ) *GuildHandler {
 	gw := &mockGateway{}
+	if len(dispatchers) > 0 {
+		gw = dispatchers[0]
+	}
 	sf := testSnowflake()
 	perms := service.NewPermissionChecker(guilds, members, roles, &mockChannelOverrideRepo{})
 	svc := service.NewGuildService(guilds, channels, members, roles, sf, gw, perms)
@@ -54,7 +58,8 @@ func TestCreateGuild_Success(t *testing.T) {
 		},
 	}
 
-	h := newTestGuildHandler(guilds, channels, members, roles)
+	gw := &mockGateway{}
+	h := newTestGuildHandler(guilds, channels, members, roles, gw)
 
 	body := strings.NewReader(`{"name":"My Guild"}`)
 	c, rec := newTestContext(http.MethodPost, "/api/v1/guilds", body)
@@ -88,6 +93,15 @@ func TestCreateGuild_Success(t *testing.T) {
 		t.Errorf("expected 2 channels created, got %d", channelsCreated.Load())
 	}
 
+	var guild struct {
+		Data models.Guild `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &guild); err != nil {
+		t.Fatal(err)
+	}
+	if len(gw.subscriptions) != 1 || gw.subscriptions[0] != [2]int64{1000, guild.Data.ID} {
+		t.Fatal("creator must be subscribed to its new guild")
+	}
 	// Verify response body.
 	var resp map[string]json.RawMessage
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {

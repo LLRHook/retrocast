@@ -42,7 +42,7 @@ func (h *MessageHandler) SendMessage(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusCreated, full)
+	return Success(c, http.StatusCreated, full)
 }
 
 // GetMessages handles GET /api/v1/channels/:id/messages.
@@ -77,7 +77,7 @@ func (h *MessageHandler) GetMessages(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, messages)
+	return Success(c, http.StatusOK, messages)
 }
 
 // GetMessage handles GET /api/v1/channels/:id/messages/:message_id.
@@ -99,7 +99,7 @@ func (h *MessageHandler) GetMessage(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, msg)
+	return Success(c, http.StatusOK, msg)
 }
 
 type editMessageRequest struct {
@@ -130,7 +130,7 @@ func (h *MessageHandler) EditMessage(c echo.Context) error {
 		return mapServiceError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, full)
+	return Success(c, http.StatusOK, full)
 }
 
 // DeleteMessage handles DELETE /api/v1/channels/:id/messages/:message_id.

@@ -232,7 +232,7 @@ func TestUpdateMember_Roles(t *testing.T) {
 	}
 	h := newMemberHandlerOwner(members, roles, gw)
 
-	body := `{"roles":[10,20]}`
+	body := `{"roles":["10","20"]}`
 	c, rec := newTestContext(http.MethodPatch, "/api/v1/guilds/1/members/200", strings.NewReader(body))
 	c.SetParamNames("id", "user_id")
 	c.SetParamValues("1", "200")
@@ -285,6 +285,7 @@ func TestKickMember_Success(t *testing.T) {
 	if !deleted {
 		t.Error("expected member to be deleted")
 	}
+	assertGatewayPayload(t, gw, "GUILD_MEMBER_REMOVE", map[string]any{"guild_id": "1", "user_id": "200"})
 }
 
 func TestKickMember_Owner(t *testing.T) {
@@ -394,6 +395,7 @@ func TestLeaveGuild_Success(t *testing.T) {
 	if !deleted {
 		t.Error("expected member to be deleted")
 	}
+	assertGatewayPayload(t, gw, "GUILD_MEMBER_REMOVE", map[string]any{"guild_id": "1", "user_id": "100"})
 }
 
 func TestLeaveGuild_AsOwner(t *testing.T) {

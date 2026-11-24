@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { api } from "@/lib/api";
+import { api, ApiClientError } from "@/lib/api";
 import type { User } from "@/types";
 
 interface AuthResponse {
@@ -10,6 +10,7 @@ interface AuthResponse {
 
 interface RefreshResponse {
   access_token: string;
+  refresh_token: string;
 }
 
 interface AuthState {
@@ -66,13 +67,29 @@ export const useAuthStore = create<AuthState>()((set, get) => {
     },
 
     logout: async () => {
-      localStorage.removeItem("refreshToken");
-      set({
-        user: null,
-        accessToken: null,
-        refreshToken: null,
-        isAuthenticated: false,
-      });
+      try {
+        const { refreshToken } = get();
+        if (refreshToken) {
+          try {
+            await api.post("/api/v1/auth/logout", { refresh_token: refreshToken });
+          } catch (err) {
+            if (!(err instanceof ApiClientError) || err.status !== 401) throw err;
+            // Refresh can rotate the token; revoke the current pair on retry.
+            await get().refreshAccessToken();
+            await api.post("/api/v1/auth/logout", { refresh_token: get().refreshToken });
+          }
+        }
+      } catch {
+        console.warn("Could not revoke the server session while signing out");
+      } finally {
+        localStorage.removeItem("refreshToken");
+        set({
+          user: null,
+          accessToken: null,
+          refreshToken: null,
+          isAuthenticated: false,
+        });
+      }
     },
 
     setServerUrl: (url) => {
@@ -88,7 +105,8 @@ export const useAuthStore = create<AuthState>()((set, get) => {
       const data = await api.post<RefreshResponse>("/api/v1/auth/refresh", {
         refresh_token: refreshToken,
       });
-      set({ accessToken: data.access_token });
+      localStorage.setItem("refreshToken", data.refresh_token);
+      set({ accessToken: data.access_token, refreshToken: data.refresh_token });
       return data.access_token;
     },
   };
