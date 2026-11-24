@@ -2,7 +2,7 @@
 
 Conforms to the SRS content outline of ISO/IEC/IEEE 29148:2018 §9.6.
 Related: [Product Brief](PRODUCT_BRIEF.md) · [Data Contracts](DATA_CONTRACTS.md) · [Architecture](ARCHITECTURE.md)
-Status: Baselined (rev 5)
+Status: Baselined (rev 6)
 
 > **Rev 2 (2026-11-23).** Rev 1 was written unattended from repository evidence. On
 > 2026-11-23 Victor Ivanov accepted every recommendation of the product brief (Q-001–Q-034,
@@ -126,7 +126,7 @@ The operator sets secrets and endpoints in `retrocast/.env` (template `.env.exam
 ### 1.8 Apportioning of requirements
 | Phase | Scope (FR/NFR ids) | Exit criteria |
 |---|---|---|
-| Pilot (MVP: the owner's group; SYSTEM_DESIGN Phase 1 on the web client, Q-003) | SV-FR-078, SV-FR-001–SV-FR-016, SV-FR-018–SV-FR-028, SV-FR-031–SV-FR-038, SV-FR-040–SV-FR-046, SV-FR-060–SV-FR-073; SV-IR-001–SV-IR-005, SV-IR-007, SV-IR-008; SV-NFR-001–SV-NFR-013; WEB-FR-001–WEB-FR-014, WEB-FR-019–WEB-FR-024; WEB-NFR-001, WEB-NFR-002 (Should); SYS-FR-001–SYS-FR-004; SYS-CON-001–SYS-CON-004; SYS-NFR-001–SYS-NFR-007 | Every Must requirement in this row Verified; the ARCHITECTURE §9 defects marked "Blocks Pilot" closed (they include D-08 and D-09, so RISK-002 is fixed as Q-003 requires); one restore drill recorded (SYS-NFR-006) |
+| Pilot (MVP: the owner's group; SYSTEM_DESIGN Phase 1 on the web client, Q-003) | SV-FR-078, SV-FR-001–SV-FR-016, SV-FR-018–SV-FR-028, SV-FR-031–SV-FR-038, SV-FR-040–SV-FR-046, SV-FR-060–SV-FR-073; SV-IR-001–SV-IR-005, SV-IR-007, SV-IR-008; SV-NFR-001–SV-NFR-013; WEB-FR-001–WEB-FR-014, WEB-FR-019–WEB-FR-024; WEB-NFR-001, WEB-NFR-002 (Should); SYS-FR-001–SYS-FR-004; SYS-CON-001–SYS-CON-004; SYS-NFR-001–SYS-NFR-007 | Every Must requirement in this row Verified; the ARCHITECTURE §9 defects marked "Blocks Pilot" closed (D-08 and D-09 storage paths are repaired by migration 000020; RISK-002 still requires the complete Phase 1 paths as Q-003 requires); one restore drill recorded (SYS-NFR-006) |
 | Production | No separate tier: the product stays a self-hosted instance for one private group (Q-001, Q-002), so the Pilot exit is the release | — |
 | Later — iOS client (follows the web, Q-004) | IOS-FR-001–IOS-FR-008, IOS-FR-012, IOS-NFR-001; the iOS update to REST contract v2.0.0 | Scheduled by the owner |
 | Later — Phase 2, voice and media | CAP-003, CAP-017 (web voice, audio only), CAP-018, CAP-019: SV-FR-048–SV-FR-053, SV-IR-006, WEB-FR-015, WEB-FR-017, IOS-FR-011 | Scheduled by the owner |

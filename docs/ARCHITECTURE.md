@@ -1,6 +1,6 @@
 # Retrocast — Architecture
 
-Status: Baselined (rev 6)
+Status: Baselined (rev 8)
 Related: [SRS](SRS.md) · [Data Contracts](DATA_CONTRACTS.md) · [Product Brief](PRODUCT_BRIEF.md)
 
 It describes the system as built at commit `6bc385e`, re-read at `origin/main` 55e50eb
@@ -351,8 +351,8 @@ they affect stay Later.
 | D-05 | `SubscribeToGuild` and `UnsubscribeFromGuild` have no callers: members who create or join a guild after connecting get no events, and removed members keep receiving them | retrocast/internal/gateway/manager.go:130–140 | SV-FR-026, SV-FR-020, SV-FR-066, SV-FR-071 | Pilot | [#30](https://github.com/LLRHook/retrocast/issues/30) |
 | D-06 | Partial: search now filters VIEW_CHANNEL and READ_MESSAGE_HISTORY (PR #44); event fan-out still ignores channel VIEW_CHANNEL overrides (B3) | retrocast/internal/service/search.go:57; retrocast/internal/gateway/manager.go:159 | SV-FR-026, SV-FR-059, SV-FR-016 | Pilot | [#31](https://github.com/LLRHook/retrocast/issues/31) |
 | D-07 | RESUME replays a per-guild buffer using the client's per-connection sequence, does not check the session id, and sends no RECONNECT when events were lost | retrocast/internal/gateway/manager.go:287–336, :395–458 | SV-FR-038 | Pilot | — |
-| D-08 | DM messages violate `messages_channel_id_fkey` (DM channels are not in `channels`) | retrocast/migrations/000007_create_messages.up.sql; 000014_create_dm_channels.up.sql | SV-FR-055, WEB-FR-016, IOS-FR-009; RISK-002 | Pilot (RISK-002, Q-003) | [#37](https://github.com/LLRHook/retrocast/issues/37) |
-| D-09 | Upload inserts the attachment with `message_id` 0, violating `attachments_message_id_fkey`; no API links an attachment to a message | retrocast/internal/service/upload.go:92 | SV-FR-051, WEB-FR-017; RISK-002 | Pilot (RISK-002, Q-003) | [#24](https://github.com/LLRHook/retrocast/issues/24) |
+| D-08 | Fixed: migration 000020 validates and key-share-locks guild/DM message parents and deletes messages on parent deletion | retrocast/migrations/000020_dm_messages_and_pending_attachments.up.sql; internal/service/storage_integration_test.go; internal/database/storage_migration_test.go | SV-FR-055, WEB-FR-016, IOS-FR-009; RISK-002 | Pilot (RISK-002, Q-003) | [#37](https://github.com/LLRHook/retrocast/issues/37) |
+| D-09 | Fixed: pending uploads carry uploader/channel ownership and are atomically claimed through API-022; batched hydration returns attachments | retrocast/migrations/000020_dm_messages_and_pending_attachments.up.sql; internal/service/storage_integration_test.go; internal/database/storage_migration_test.go | SV-FR-051, WEB-FR-017; RISK-002 | Pilot (RISK-002, Q-003) | [#24](https://github.com/LLRHook/retrocast/issues/24) |
 | D-10 | Attachment URLs use the compose-internal MinIO address over `http://` | retrocast/internal/storage/minio.go:56–58 | SV-FR-052, SV-NFR-008 | Later | — |
 | D-11 | `Member.roles`, READY `guilds` and reaction user lists (API-032) serialise ids as JSON numbers; JavaScript loses precision above 2^53 | retrocast/internal/models/member.go:10; internal/gateway/events.go:78; internal/service/reaction.go | SV-IR-004, SV-FR-075 | Pilot | [#36](https://github.com/LLRHook/retrocast/issues/36) Fixed in [PR #45](https://github.com/LLRHook/retrocast/pull/45). |
 | D-12 | Guild creation runs eight writes without a transaction | retrocast/internal/service/guild.go:47–128 | SV-FR-007 | — | — |
@@ -365,7 +365,7 @@ they affect stay Later.
 | D-19 | READY has no presence snapshot, and heartbeats do not extend the 5-minute presence TTL | retrocast/internal/gateway/events.go:75–80; internal/redis/client.go:48 | SV-FR-032 | Pilot | — |
 | D-20 | Invite `uses` is checked and incremented without a lock, so concurrent accepts can pass `max_uses` | retrocast/internal/service/invite.go:153, :183 | SV-FR-020 | — | — |
 | D-21 | Refresh rotation reads then deletes the token in two commands, so two concurrent refreshes can both succeed | retrocast/internal/redis/client.go:58, :75 | SV-FR-005, SV-NFR-002 | Pilot | [#43](https://github.com/LLRHook/retrocast/issues/43) |
-| D-22 | Any `image/*` type is accepted, including SVG, which can carry script when opened directly; Q-017 excludes SVG | retrocast/internal/service/upload.go:107–115 | SV-FR-051 | Later | — |
+| D-22 | Fixed: Q-017 exact content-type allowlist; SVG and unknown image subtypes refused | retrocast/internal/service/upload.go; internal/service/upload_test.go | SV-FR-051 | Later | — |
 | D-23 | LiveKit tokens last 24 hours and do not reflect `SPEAK`; no webhook clears stale voice states | retrocast/internal/service/voice.go:178–197 | SV-FR-048, SV-FR-049 | — | — |
 | D-24 | Users cannot be deleted while they own a guild or have messages (foreign keys without ON DELETE) | retrocast/migrations/000002_create_guilds.up.sql; 000007_create_messages.up.sql | CAP-038 (account deletion, Later) | Later | — |
 | D-25 | With the `.env.example` values, LiveKit rejects the `LIVEKIT_KEYS` value that compose builds (`${LIVEKIT_API_KEY}:${LIVEKIT_API_SECRET}`) as not in its key/secret format and restarts in a loop (11 restarts in the compose smoke run of 2026-11-23 on 55e50eb's tree) | retrocast/docker-compose.yml:68 | SYS-CON-001; voice (Later) | Pilot | [#35](https://github.com/LLRHook/retrocast/issues/35) |
@@ -374,6 +374,8 @@ they affect stay Later.
 | D-28 | Fixed in [PR #44](https://github.com/LLRHook/retrocast/pull/44). Previous defect: Kick checks `KICK_MEMBERS` and the owner only: no role-hierarchy check and no self check (ban has both) | retrocast/internal/service/member.go:226 | SV-FR-066, SV-FR-070 | Pilot | [#40](https://github.com/LLRHook/retrocast/issues/40) |
 | D-29 | The web client parses every successful response as JSON, so an empty 204 body rejects: deleting a server or channel, leaving a server and other 204 calls report failure although the server succeeded | retrocast-web/src/lib/api.ts:97–114; components/GuildSettingsModal.tsx:56–74; components/ChannelModal.tsx:56–65 | WEB-FR-006, WEB-FR-014, WEB-FR-021, WEB-FR-022, WEB-FR-024 | Pilot | [#41](https://github.com/LLRHook/retrocast/issues/41) Fixed in [PR #45](https://github.com/LLRHook/retrocast/pull/45). |
 | D-30 | Web sign-out clears the local tokens without calling API-004, so the refresh token stays valid for up to 7 days | retrocast-web/src/stores/auth.ts:68–75 | WEB-FR-024 | Pilot | [#42](https://github.com/LLRHook/retrocast/issues/42) Fixed in [PR #45](https://github.com/LLRHook/retrocast/pull/45). |
+
+| D-31 | Fixed: reaction remove/list verify that the message exists in the route channel before repository access | retrocast/internal/service/reaction.go; internal/api/reaction_handler_test.go (TestReactionRouteBinding) | SV-FR-074, SV-FR-075 | Fixed | [#47](https://github.com/LLRHook/retrocast/issues/47) |
 
 Other debt: the `refresh_tokens` and `device_tokens` tables have no code; op 4 is defined
 but unhandled; username uniqueness is case-sensitive; invite codes carry 32 random bits;

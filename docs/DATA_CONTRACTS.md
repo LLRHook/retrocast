@@ -1,14 +1,14 @@
 # Retrocast — Data Contracts
 
-Status: Baselined (rev 8)
+Status: Baselined (rev 9)
 Related: [SRS](SRS.md) · [Architecture](ARCHITECTURE.md) · [Product Brief](PRODUCT_BRIEF.md)
 
 This document records the data and interface contracts as they exist at commit `6bc385e`
 (re-read at `origin/main` 55e50eb in rev 2) and the contract changes rev 2 decides.
-Sources: `retrocast/migrations/000001–000019`, `retrocast/internal/models/`,
+Sources: `retrocast/migrations/000001–000020`, `retrocast/internal/models/`,
 `retrocast/internal/gateway/events.go`, `retrocast/internal/redis/client.go`,
 `retrocast/docs/openapi.yaml` (OpenAPI 3.0.3, 58 operations; `info.version` 2.0.0 from rev 2).
-Entities and gateway events are version `v1.0.0`. The REST operations are `v2.0.0` from rev 2:
+Entities and gateway events retain their existing version unless noted per entity. The REST envelope is v2; API-022/API-027 are `v2.1.0` for storage/linking, with the other operations `v2.0.0` from rev 2:
 every success body is wrapped in `data` (§4, §9; SV-IR-007, ADR-013). The code has no
 versioning beyond the `/api/v1` prefix, and nothing has been released (Q-003).
 
@@ -54,9 +54,12 @@ erDiagram
   CHANNEL ||--o{ CHANNEL_OVERRIDE : has
   ROLE ||--o{ CHANNEL_OVERRIDE : targets
   CHANNEL ||--o{ CHANNEL : "parent of"
-  CHANNEL ||--o{ MESSAGE : contains
+  CHANNEL ||--o{ MESSAGE : "contains (trigger)"
+  DM_CHANNEL ||--o{ MESSAGE : "contains (trigger)"
   USER ||--o{ MESSAGE : writes
-  MESSAGE ||--o{ ATTACHMENT : carries
+  MESSAGE |o--o{ ATTACHMENT : carries
+  USER ||--o{ ATTACHMENT : uploads
+  CHANNEL ||--o{ ATTACHMENT : scopes
   GUILD ||--o{ INVITE : has
   GUILD ||--o{ BAN : has
   DM_CHANNEL ||--o{ DM_RECIPIENT : has
@@ -66,9 +69,7 @@ erDiagram
   CHANNEL ||--o{ VOICE_STATE : "occupied by (no FK)"
 ```
 
-`messages.channel_id` references `channels` only, so a message cannot belong to a DM channel
-(D-08). `attachments.message_id` is required, so an attachment cannot exist before its
-message (D-09).
+`messages.channel_id` is validated against guild or DM parents by locking write triggers (000020); deletion of either parent deletes its messages. Attachments may be pending (`message_id: null`) until API-022 claims them atomically. Guild search excludes DMs.
 
 ## 3. Entities
 
@@ -84,12 +85,12 @@ strings (SV-IR-004; D-11 fixed in B2).
 | ENT-005 | MemberRole | PostgreSQL `member_roles` | PK (guild_id, user_id, role_id); role_id FK roles cascade; (guild_id, user_id) FK members cascade | No check that the role belongs to the same guild at the database level | Internal | SV-FR-008, SV-FR-043, SV-FR-045 | v1.0.0 |
 | ENT-006 | Role | PostgreSQL `roles` | id PK; guild_id FK cascade; name VARCHAR(100); color INT; permissions BIGINT bitfield (§3.1); position INT; is_default BOOL (`@everyone`) | — | Internal | SV-FR-008, SV-FR-040–SV-FR-046 | v1.0.0 |
 | ENT-007 | ChannelOverride | PostgreSQL `channel_overrides` | PK (channel_id, role_id), both FK cascade; allow_perms BIGINT; deny_perms BIGINT | No check that the role and channel share a guild | Internal | SV-FR-045, SV-FR-047 | v1.0.0 |
-| ENT-008 | Message | PostgreSQL `messages` | id PK; channel_id FK channels cascade; author_id FK users; content TEXT (1–2000 bytes in service); created_at; edited_at null; search_vector tsvector (English, trigger-maintained, GIN index) | Index (channel_id, id DESC) for paging | Personal (content) | SV-FR-025–SV-FR-030, SV-FR-055, SV-FR-059 | v1.0.0 |
-| ENT-009 | Attachment | PostgreSQL `attachments` | id PK; message_id FK messages cascade, NOT NULL; filename VARCHAR(256); content_type VARCHAR(128); size BIGINT; storage_key TEXT (never serialised); JSON adds `url` | Upload writes message_id 0, which the FK rejects (D-09) | Personal (file content) | SV-FR-051, SV-FR-052 | v1.0.0 |
+| ENT-008 | Message | PostgreSQL `messages` | id PK; channel_id (guild or DM parent, key-share-locking trigger); author_id FK users; content TEXT (1–2000 bytes in service); created_at; edited_at null; search_vector tsvector (English, trigger-maintained, GIN index) | Paging index (channel_id, id DESC); missing parents rejected with 23503; parent delete triggers preserve message/attachment cleanup (D-08 fixed, 000020) | Personal (content) | SV-FR-025–SV-FR-030, SV-FR-055, SV-FR-059 | v1.1.0 |
+| ENT-009 | Attachment | PostgreSQL `attachments` | id PK; message_id nullable FK messages cascade; uploader_id FK users NOT NULL; channel_id FK channels cascade NOT NULL; filename, content_type, size, storage_key (never serialised); JSON adds url | Atomic API-022 claim checks uploader, channel and unlinked state; invalid claims roll back with INVALID_ATTACHMENTS. Unlinked rows and objects remain indefinitely; no garbage collector. Index on message_id. D-09 fixed (000020). | Personal (file content) | SV-FR-051, SV-FR-052 | v1.1.0 |
 | ENT-010 | Invite | PostgreSQL `invites` | code VARCHAR(8) PK (8 hex characters, 32 random bits); guild_id FK cascade; channel_id FK channels null; creator_id FK users; max_uses INT (0 unlimited); uses INT; expires_at null; created_at | `uses` is incremented without a lock against `max_uses` | Internal | SV-FR-018–SV-FR-021, SV-FR-063 | v1.0.0 |
 | ENT-011 | Ban | PostgreSQL `bans` | PK (guild_id, user_id); reason TEXT null; created_by FK users; created_at | — | Personal (reason) | SV-FR-067–SV-FR-069 | v1.0.0 |
-| ENT-012 | DMChannel | PostgreSQL `dm_channels` | id PK; type INT (1 DM, 3 group DM); created_at; owner_id BIGINT null (migration 000019, no FK) | Not referenced by messages (D-08) | Internal | SV-FR-054–SV-FR-058 | v1.0.0 |
-| ENT-013 | DMRecipient | PostgreSQL `dm_recipients` | PK (channel_id, user_id), both FK cascade | At most 10 participants per group DM (service) | Internal | SV-FR-054, SV-FR-056, SV-FR-057 | v1.0.0 |
+| ENT-012 | DMChannel | PostgreSQL `dm_channels` | id PK; type INT (1 DM, 3 group DM); created_at; owner_id BIGINT null (migration 000019, no FK) | Referenced by locking message-parent trigger; delete trigger removes DM messages (000020, D-08 fixed) | Internal | SV-FR-054–SV-FR-058 | v1.0.0 |
+| ENT-013 | DMRecipient | PostgreSQL `dm_recipients` | PK (channel_id, user_id), both FK cascade | At most 10 participants per group DM (service); only current recipients can access messages or receive DM message events | Internal | SV-FR-054, SV-FR-056, SV-FR-057 | v1.0.0 |
 | ENT-014 | Reaction | PostgreSQL `reactions` | PK (message_id, user_id, emoji); created_at | No foreign keys: rows outlive deleted messages and users | Personal | SV-FR-074, SV-FR-075 | v1.0.0 |
 | ENT-015 | ReadState | PostgreSQL `read_states` | PK (user_id, channel_id); last_message_id BIGINT default 0; mention_count INT; updated_at | No foreign keys | Personal | SV-FR-076 | v1.0.0 |
 | ENT-016 | VoiceState | PostgreSQL `voice_states` | PK (guild_id, user_id); channel_id; session_id TEXT; self_mute BOOL; self_deaf BOOL; joined_at | No foreign keys; rows stay when a client disconnects without leaving | Personal (presence in a room) | SV-FR-048–SV-FR-050 | v1.0.0 |
@@ -98,7 +99,7 @@ strings (SV-IR-004; D-11 fixed in B2).
 | ENT-019 | RefreshToken | Redis | key `refresh:{token}` (token = 32 random bytes, hex); value user id; TTL 7 days | Read then deleted on refresh (two commands, not atomic); no per-user index, which SV-FR-061 needs | Secret | SV-FR-005, SV-FR-006, SV-FR-061, SV-NFR-002 | v1.0.0 |
 | ENT-020 | Presence | Redis | key `presence:{user id}`; value status; TTL 5 minutes | Set on IDENTIFY and op 3; heartbeats do not extend the TTL | Personal | SV-FR-032–SV-FR-034 | v1.0.0 |
 | ENT-021 | RateLimitCounter and TypingMarker | Redis | `rl:user:{user id}:{route}` or `rl:ip:{client ip}:{route}`, one-minute window (Lua script); `typing:{channel id}:{user id}`, TTL 10 s | Ephemeral; the client IP is Echo's `RealIP` (SV-NFR-009) | Internal | SV-NFR-003, SV-NFR-009, SV-NFR-010, SV-FR-031 | v1.0.0 |
-| ENT-022 | StoredObject | MinIO bucket `retrocast` | key `attachments/{channel id}/{attachment id}/{filename}`; content type from upload | Objects remain when the attachment row insert fails (D-09) | Personal (file content) | SV-FR-051, SV-FR-052 | v1.0.0 |
+| ENT-022 | StoredObject | MinIO bucket `retrocast` | key `attachments/{channel id}/{attachment id}/{filename}`; content type from upload | Unlinked uploads and objects remain indefinitely; linked-message deletion removes metadata but does not remove objects. Metadata insert failure triggers best-effort object deletion, which can leave an orphan if cleanup fails. | Personal (file content) | SV-FR-051, SV-FR-052 | v1.1.0 |
 
 ### 3.1 Permission bits (ENT-006, ENT-007)
 Source: `retrocast/internal/permissions/bitfield.go`.
@@ -179,12 +180,12 @@ are as documented in OpenAPI; where the code differs, the Notes column says so.
 | API-019 | getChannel | GET /channels/{channelId} | 200 channel | yes | | SV-FR-016 |
 | API-020 | updateChannel | PATCH /channels/{channelId} | 200 channel | yes | | SV-FR-015 |
 | API-021 | deleteChannel | DELETE /channels/{channelId} | 204 | — | | SV-FR-015 |
-| API-022 | sendMessage | POST /channels/{channelId}/messages | 201 message | yes | DM channels fail (D-08) | SV-FR-025, SV-FR-055 |
-| API-023 | getMessages | GET /channels/{channelId}/messages | 200 messages | yes | `limit` 1–100 (50), `before` | SV-FR-027, SV-FR-052 |
+| API-022 | sendMessage | POST /channels/{channelId}/messages | 201 message | yes | Optional attachment_ids: decimal-string upload ids; requires ATTACH_FILES when supplied; atomic owner/channel/unlinked claim; 400 INVALID_ATTACHMENTS on invalid claims; content remains 1–2000 bytes | SV-FR-025, SV-FR-055 |
+| API-023 | getMessages | GET /channels/{channelId}/messages | 200 messages | yes | Attachments batched with each page; empty attachments is []; existing internal URLs (D-10) | SV-FR-027, SV-FR-052 |
 | API-024 | getMessage | GET /channels/{channelId}/messages/{messageId} | 200 message | yes | | SV-FR-028 |
 | API-025 | editMessage | PATCH /channels/{channelId}/messages/{messageId} | 200 message | yes | | SV-FR-029 |
 | API-026 | deleteMessage | DELETE /channels/{channelId}/messages/{messageId} | 204 | — | | SV-FR-030 |
-| API-027 | uploadAttachment | POST /channels/{channelId}/attachments | 201 attachment | yes | multipart; ≤10 MB; JPEG, PNG, GIF, WebP, PDF, plain text, and any `image/*` type (SVG included). Rev 2 target (Later): pre-signed upload, no SVG (SV-FR-051, ADR-019) | SV-FR-051 |
+| API-027 | uploadAttachment | POST /channels/{channelId}/attachments | 201 attachment | yes | Guild upload; Q-017 types only, at most 10 MB; returns pending attachment (message_id null); link through API-022 attachment_ids | SV-FR-051 |
 | API-028 | triggerTyping | POST /channels/{channelId}/typing | 204 | — | MessageService.Typing: guild SEND_MESSAGES after overrides; DM participants only; 403 for unauthorized callers, 404 for unknown channels; writes Redis marker before dispatch | SV-FR-031 |
 | API-029 | ackMessage | PUT /channels/{channelId}/ack/{messageId} | 204 | — | | SV-FR-076 |
 | API-030 | addReaction | PUT /channels/{channelId}/messages/{messageId}/reactions/{emoji}/@me | 204 | — | | SV-FR-074 |
@@ -220,6 +221,8 @@ are as documented in OpenAPI; where the code differs, the Notes column says so.
 
 Routes outside `/api/v1`: `GET /health`, `GET /metrics` (Prometheus), `GET /docs`,
 `GET /docs/openapi.yaml`, `GET /gateway` (WebSocket upgrade).
+
+API-022 and API-027 storage/link additions are contract v2.1.0 (driver E116); linked ids remain strings and pending message_id is null. REST v2 envelopes and /api/v1 remain unchanged.
 
 ## 5. Error model
 Handler errors use `{"error": {"code": "<CODE>", "message": "<text>"}}`
@@ -266,6 +269,8 @@ Codes added in rev 2 (specified; CANNOT_KICK_SELF implemented in PR #44):
 | `CANNOT_KICK_SELF` | 400 | A member tried to kick themself | SV-FR-070 |
 | `SERVICE_UNAVAILABLE` | 503 | Redis is unreachable on a rate-limited unauthenticated route | SV-NFR-010 |
 | `NO_SHARED_GUILD` | 403 | A DM or group DM names a user who shares no guild with the caller | SV-FR-054, SV-FR-056, SV-FR-057 |
+
+`INVALID_ATTACHMENTS` (400): one generic API-022 refusal for unknown, duplicate, foreign-owner, wrong-channel or already-linked attachment ids; no ownership details are returned.
 
 ## 6. Gateway events
 
@@ -350,7 +355,7 @@ together with the iOS client (Q-025); APNs is the one optional outside service G
   a restore signs every user out.
 
 ## 9. Migrations and deprecations
-- 19 numbered pairs in `retrocast/migrations` (golang-migrate, `file://migrations`), applied at
+- 20 numbered pairs in `retrocast/migrations` (golang-migrate, `file://migrations`), applied at
   server start and by CI before the tests (SV-NFR-007).
 - `docs/legacy/database.md` describes 14 migrations; it predates 000015–000019.
 - Changing a contract above means a new migration and a revision of this document.
@@ -360,6 +365,8 @@ together with the iOS client (Q-025); APNs is the one optional outside service G
 | 2 | REST operations (§4) | v1.0.0 | v2.0.0 (breaking) | Every success body is `{"data": …}`; the formerly bare auth, DM, read-state, message, upload, reaction-list, role, override, invite, ban-list, search and voice operations change shape; 204 responses have no body; error bodies are unchanged; the path stays `/api/v1` | No parallel v1 shape is served. The web client already reads `data` (empty 204 handling fixed in B2, D-29). The iOS client accepts both shapes except on refresh, which v2.0.0 fixes; its update is tracked when the iOS client is scheduled | Q-010 (owner); ADR-013 (driver); implemented in PR #45 |
 | 2 | API-001 register | v1.0.0 | v2.0.0 | Optional `invite_code`; 403 codes by registration mode | Web register page gains the field (WEB-FR-020) | Q-012; ADR-014 |
 | 2 | EVT-007 RECONNECT | v1.0.0 | v1.0.0 (frame unchanged) | Sent in fewer cases: not for a second IDENTIFY | A client that reads op 7 as "signed in elsewhere" must not | Q-009; ADR-017 |
+
+| 9 | API-022 / API-027, ENT-008/009/012/013/022 | REST v2.0.0 | REST v2.1.0 | Migration 000020: DM parent validation/delete triggers; nullable pending upload link with ownership backfill; attachment_ids atomic claim and batched hydration | Web sends uploaded ids with nonempty text; pending message_id is null; existing linked ids stay strings; down refuses while DM messages or pending attachments exist | Driver E116; Q-017; D-08/D-09/D-22 |
 
 ## Revision history
 | Rev | Date | Commit | Mode | Summary |
