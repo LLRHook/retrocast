@@ -1,3 +1,4 @@
+import { useUsersStore } from "@/stores/users";
 import { useTypingStore } from "@/stores/typing";
 import { useAuthStore } from "@/stores/auth";
 import { useMembersStore } from "@/stores/members";
@@ -14,6 +15,7 @@ export default function TypingIndicator({
   const currentUserId = useAuthStore((s) => s.user?.id);
   const selectedGuildId = useGuildsStore((s) => s.selectedGuildId);
   const membersByGuild = useMembersStore((s) => s.membersByGuild);
+  const users = useUsersStore((s) => s.users);
 
   if (!typingMap || typingMap.size === 0) {
     return <div className="h-6" />;
@@ -35,7 +37,8 @@ export default function TypingIndicator({
 
   const names = typingUserIds.map((userId) => {
     const member = guildMembers?.get(userId);
-    return member?.nickname || userId;
+    const user = member?.user ?? users.get(userId);
+    return member?.nickname || user?.display_name || user?.username || userId;
   });
 
   let text: string;

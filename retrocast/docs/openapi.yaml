@@ -154,9 +154,27 @@ components:
         is_default:
           type: boolean
 
+    MemberUser:
+      type: object
+      additionalProperties: false
+      required: [id, username, display_name]
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        display_name:
+          type: string
+          nullable: true
+        avatar_hash:
+          type: string
+          nullable: true
+
     Member:
       type: object
       properties:
+        user:
+          $ref: "#/components/schemas/MemberUser"
         guild_id:
           type: string
         user_id:

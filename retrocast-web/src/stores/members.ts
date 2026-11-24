@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { api } from "@/lib/api";
+import { useUsersStore } from "@/stores/users";
 import type { Member } from "@/types";
 
 interface MembersState {
@@ -13,6 +14,10 @@ export const useMembersStore = create<MembersState>()((set) => ({
   membersByGuild: new Map(),
 
   setMember: (member) => {
+    if (member.user) useUsersStore.getState().cacheUser(member.user.id, {
+      username: member.user.username, display_name: member.user.display_name,
+      avatar_hash: member.user.avatar_hash ?? null,
+    });
     set((state) => {
       const membersByGuild = new Map(state.membersByGuild);
       const guildMembers = new Map(
@@ -44,6 +49,10 @@ export const useMembersStore = create<MembersState>()((set) => ({
       const membersByGuild = new Map(state.membersByGuild);
       const guildMembers = new Map<string, Member>();
       for (const member of members) {
+        if (member.user) useUsersStore.getState().cacheUser(member.user.id, {
+          username: member.user.username, display_name: member.user.display_name,
+          avatar_hash: member.user.avatar_hash ?? null,
+        });
         guildMembers.set(member.user_id, member);
       }
       membersByGuild.set(guildId, guildMembers);
