@@ -2,7 +2,8 @@ BEGIN;
 
 ALTER TABLE messages DROP CONSTRAINT messages_channel_id_fkey;
 
-CREATE FUNCTION check_message_channel() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE FUNCTION check_message_channel() RETURNS trigger LANGUAGE plpgsql
+    SET search_path = public, pg_temp AS $$
 BEGIN
     PERFORM id FROM channels WHERE id = NEW.channel_id FOR KEY SHARE;
     IF NOT FOUND THEN
@@ -19,7 +20,8 @@ CREATE TRIGGER messages_check_channel
     BEFORE INSERT OR UPDATE OF channel_id ON messages
     FOR EACH ROW EXECUTE FUNCTION check_message_channel();
 
-CREATE FUNCTION delete_channel_messages() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE FUNCTION delete_channel_messages() RETURNS trigger LANGUAGE plpgsql
+    SET search_path = public, pg_temp AS $$
 BEGIN
     DELETE FROM messages WHERE channel_id = OLD.id;
     RETURN OLD;

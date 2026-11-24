@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,13 +17,13 @@ import (
 func TestStorageMigrationRoundTrip(t *testing.T) {
 	pool := testPool(t)
 	ctx := context.Background()
-	schema := fmt.Sprintf("l15_migration_%d", time.Now().UnixNano())
-	if _, err := pool.Exec(ctx, "CREATE SCHEMA "+schema); err != nil {
+	databaseName := fmt.Sprintf("l15_migration_%d", time.Now().UnixNano())
+	if _, err := pool.Exec(ctx, "CREATE DATABASE "+databaseName); err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _, _ = pool.Exec(ctx, "DROP SCHEMA "+schema+" CASCADE") }()
+	defer func() { _, _ = pool.Exec(ctx, "DROP DATABASE "+databaseName) }()
 	cfg := pool.Config().Copy()
-	cfg.ConnConfig.RuntimeParams["search_path"] = schema
+	cfg.ConnConfig.Database = databaseName
 	isolated, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -67,6 +68,29 @@ func TestStorageMigrationRoundTrip(t *testing.T) {
 			t.Fatalf("backfill/data preservation: %s %d %d %v", content, uploader, channel, err)
 		}
 	}
+
+	t.Run("empty_search_path", func(t *testing.T) {
+		if _, err := conn.Exec(ctx, `SET search_path = ''`); err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _, _ = conn.Exec(ctx, `RESET search_path`) }()
+		for _, parent := range []int64{3, 6} {
+			id := nextID()
+			if _, err := conn.Exec(ctx, `INSERT INTO public.messages(id,channel_id,author_id,content) VALUES($1,$2,1,'empty path')`, id, parent); err != nil {
+				t.Fatalf("insert with empty search_path: %v", err)
+			}
+			if _, err := conn.Exec(ctx, `DELETE FROM public.messages WHERE id=$1`, id); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if _, err := conn.Exec(ctx, `INSERT INTO public.channels(id,guild_id,name) VALUES(9,2,'empty path'); INSERT INTO public.messages(id,channel_id,author_id,content) VALUES(10,9,1,'cleanup'); DELETE FROM public.channels WHERE id=9`); err != nil {
+			t.Fatalf("parent cleanup with empty search_path: %v", err)
+		}
+		var count int
+		if err := conn.QueryRow(ctx, `SELECT count(*) FROM public.messages WHERE id=10`).Scan(&count); err != nil || count != 0 {
+			t.Fatalf("parent cleanup: count=%d err=%v", count, err)
+		}
+	})
 	checkOriginal()
 	for _, kind := range []string{"DM", "pending"} {
 		if kind == "DM" {
@@ -74,8 +98,13 @@ func TestStorageMigrationRoundTrip(t *testing.T) {
 		} else {
 			exec(`INSERT INTO attachments(id,message_id,uploader_id,channel_id,filename,content_type,size,storage_key) VALUES(8,NULL,1,3,'pending','text/plain',1,'pending')`)
 		}
-		if _, err := conn.Exec(ctx, down); err == nil {
-			t.Fatal("unsafe down succeeded")
+		if _, err := conn.Exec(ctx, down); err == nil || !strings.Contains(err.Error(), "cannot downgrade") {
+			t.Fatalf("expected clear cannot downgrade refusal for %s, got: %v", kind, err)
+		} else {
+			var pgerr *pgconn.PgError
+			if !errors.As(err, &pgerr) || pgerr.Hint != "schema unchanged; run: migrate force 20" {
+				t.Fatalf("missing recovery hint: %v", err)
+			}
 		}
 		exec("ROLLBACK")
 		checkOriginal()

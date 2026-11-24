@@ -178,6 +178,7 @@ test('message composer links uploaded ids and retains files without text',async(
  assert.equal(calls.length,2);assert.equal(calls[0].path,'/api/v1/channels/channel/attachments');
  assert.deepEqual(calls[1].body,{content:'with attachment',attachment_ids:['9007199254740993']});assert.deepEqual(hooks.values[2],[]);
  calls.length=0;hooks.reset(['',false,[file]]);tree=MessageInput({channelId:'channel'});
+ assert.equal(element(tree,n=>n.type==='p'&&n.props.children==='Add a message to send these files.').props.children,'Add a message to send these files.');
  element(tree,n=>n.type==='textarea').props.onKeyDown({key:'Enter',shiftKey:false,preventDefault(){}});
  await new Promise(setImmediate);assert.equal(calls.length,0);assert.deepEqual(hooks.values[2],[file]);delete globalThis.composerCalls;
 });
