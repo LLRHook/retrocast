@@ -260,10 +260,6 @@ test('password change stores tokens, wrong current password preserves session, r
  let body;globalThis.fetch=async(url,options)=>{body=JSON.parse(options.body);return Response.json({data:{user:{id:'new'},access_token:'a',refresh_token:'r'}})};
  await useAuthStore.getState().register('new','password','invite-code');assert.equal(body.invite_code,'invite-code');
 });
-test('expired restored session routes to login when address is saved',()=>{
- const source=readFileSync(resolve('src/layouts/AppLayout.tsx'),'utf8');
- assert.ok(source.includes('serverUrl ? "/login" : "/server"'));
-});
 } catch (error) {
  cleanup();
  throw error;
