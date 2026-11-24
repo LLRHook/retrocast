@@ -3,9 +3,11 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -20,13 +22,25 @@ const (
 	replayBufferSize = 100
 )
 
+// ErrChannelHidden denotes a definitive forbidden or not-found permission result.
+var ErrChannelHidden = errors.New("channel hidden")
+
+// PermissionCheckerFunc adapts the REST resolver without importing service.
+type PermissionCheckerFunc func(context.Context, int64, int64, int64, permissions.Permission) error
+
+func (f PermissionCheckerFunc) RequireChannelPermission(ctx context.Context, guildID, channelID, userID int64, p permissions.Permission) error {
+	return f(ctx, guildID, channelID, userID, p)
+}
+
 // Manager manages all active WebSocket connections and event routing.
 type Manager struct {
-	mu            sync.RWMutex
-	offlineEpoch  map[int64]uint64
-	connections   map[int64]map[*Connection]bool // userID → connection
-	subscriptions map[int64]map[int64]bool       // guildID → set of userIDs
-	sessions      map[string]*Connection         // sessionID → connection
+	mu                 sync.RWMutex
+	offlineEpoch       map[int64]uint64
+	membershipEpoch    map[int64]uint64
+	permissionFailures atomic.Uint64
+	connections        map[int64]map[*Connection]bool // userID → connection
+	subscriptions      map[int64]map[int64]bool       // guildID → set of userIDs
+	sessions           map[string]*Connection         // sessionID → connection
 
 	visibility map[[3]int64]bool
 	checker    interface {
@@ -47,15 +61,16 @@ func NewManager(
 	redisClient *redis.Client,
 ) *Manager {
 	return &Manager{
-		connections:   make(map[int64]map[*Connection]bool),
-		subscriptions: make(map[int64]map[int64]bool),
-		sessions:      make(map[string]*Connection),
-		visibility:    make(map[[3]int64]bool),
-		offlineEpoch:  make(map[int64]uint64),
-		tokens:        tokens,
-		guilds:        guilds,
-		readStates:    readStates,
-		redis:         redisClient,
+		connections:     make(map[int64]map[*Connection]bool),
+		subscriptions:   make(map[int64]map[int64]bool),
+		sessions:        make(map[string]*Connection),
+		visibility:      make(map[[3]int64]bool),
+		offlineEpoch:    make(map[int64]uint64),
+		membershipEpoch: make(map[int64]uint64),
+		tokens:          tokens,
+		guilds:          guilds,
+		readStates:      readStates,
+		redis:           redisClient,
 	}
 }
 
@@ -156,6 +171,7 @@ func (m *Manager) SubscribeToGuild(userID, guildID int64) {
 func (m *Manager) UnsubscribeFromGuild(userID, guildID int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.membershipEpoch[userID]++
 	delete(m.subscriptions[guildID], userID)
 	if len(m.subscriptions[guildID]) == 0 {
 		delete(m.subscriptions, guildID)
@@ -164,7 +180,10 @@ func (m *Manager) UnsubscribeFromGuild(userID, guildID int64) {
 		if c.UserID == userID {
 			delete(c.guildIDs, guildID)
 			c.replay = nil
-			c.replayFloor = c.sequence.Load()
+			c.replayFloor = max(c.replayFloor, c.sequence.Load())
+			if !m.connections[userID][c] {
+				c.replayFloor = c.sequence.Load() + 1
+			}
 		}
 	}
 	m.invalidateLocked(guildID)
@@ -183,11 +202,14 @@ func (m *Manager) invalidateLocked(guildID int64) {
 	for _, c := range m.sessions {
 		if c.guildIDs[guildID] {
 			c.replay = nil
-			c.replayFloor = c.sequence.Load()
+			c.replayFloor = max(c.replayFloor, c.sequence.Load())
 		}
 	}
 }
 func (m *Manager) sendLocked(c *Connection, event string, data any) {
+	if c.replayFloor > c.sequence.Load() {
+		return
+	}
 	raw, err := json.Marshal(data)
 	if err != nil {
 		return
@@ -232,7 +254,7 @@ func (m *Manager) DispatchToGuildExcept(guildID, exceptUserID int64, event strin
 	_ = json.Unmarshal(raw, &fields)
 	var channelID int64
 	field := fields["channel_id"]
-	if event == EventChannelCreate || event == EventChannelUpdate || event == EventChannelDelete {
+	if event == EventChannelUpdate {
 		field = fields["id"]
 	}
 	if len(field) > 0 && string(field) != "null" {
@@ -250,9 +272,19 @@ func (m *Manager) DispatchToGuildExcept(guildID, exceptUserID int64, event strin
 		if channelID != 0 && m.checker != nil {
 			key := [3]int64{guildID, channelID, c.UserID}
 			visible, ok := m.visibility[key]
-			if !ok && event != EventChannelDelete {
+			if !ok {
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				visible = m.checker.RequireChannelPermission(ctx, guildID, channelID, c.UserID, permissions.PermViewChannel) == nil
+				err := m.checker.RequireChannelPermission(ctx, guildID, channelID, c.UserID, permissions.PermViewChannel)
+				visible = err == nil
+				if err != nil && !errors.Is(err, ErrChannelHidden) {
+					cancel()
+					m.permissionFailures.Add(1)
+					slog.Error("gateway permission lookup failed; resynchronizing session", "guild_id", guildID, "channel_id", channelID, "user_id", c.UserID, "error", err)
+					c.replay = nil
+					c.replayFloor = c.sequence.Load() + 1
+					c.Close()
+					continue
+				}
 				cancel()
 				m.visibility[key] = visible
 			}
@@ -301,18 +333,6 @@ func (m *Manager) handleIdentify(c *Connection, data json.RawMessage) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	guilds, err := m.guilds.GetByUserID(ctx, c.UserID)
-	if err != nil {
-		slog.Error("failed to get guilds for user", "userID", c.UserID, "error", err)
-		c.Close()
-		return
-	}
-
-	guildIDs := make([]int64, len(guilds))
-	for i, g := range guilds {
-		guildIDs[i] = g.ID
-	}
-
 	// Set presence to online.
 	if err := m.redis.SetPresence(ctx, c.UserID, "online"); err != nil {
 		slog.Error("failed to set presence", "userID", c.UserID, "error", err)
@@ -329,24 +349,37 @@ func (m *Manager) handleIdentify(c *Connection, data json.RawMessage) {
 		}
 	}
 
-	// Serialize READY before this session becomes eligible for live dispatch.
-	snapshot := m.presenceSnapshot(guildIDs)
-	m.mu.Lock()
-	m.registerLocked(c)
-	for _, id := range guildIDs {
-		m.subscribeLocked(c.UserID, id)
+	// A removal can occur after the database lookup but before registration.
+	for attempt := 0; attempt < 3; attempt++ {
+		m.mu.RLock()
+		epoch := m.membershipEpoch[c.UserID]
+		m.mu.RUnlock()
+		guilds, err := m.guilds.GetByUserID(ctx, c.UserID)
+		if err != nil {
+			c.Close()
+			return
+		}
+		guildIDs := make([]int64, len(guilds))
+		for i, g := range guilds {
+			guildIDs[i] = g.ID
+		}
+		snapshot := m.presenceSnapshot(guildIDs)
+		m.mu.Lock()
+		if m.membershipEpoch[c.UserID] != epoch {
+			m.mu.Unlock()
+			continue
+		}
+		m.registerLocked(c)
+		for _, id := range guildIDs {
+			m.subscribeLocked(c.UserID, id)
+		}
+		m.sendLocked(c, EventReady, ReadyData{SessionID: c.SessionID, UserID: c.UserID, Guilds: guildIDs, ReadStates: readStates, Presences: snapshot})
+		m.mu.Unlock()
+		m.broadcastPresence(c.UserID, "online")
+		return
 	}
-	m.sendLocked(c, EventReady, ReadyData{
-		SessionID:  c.SessionID,
-		UserID:     c.UserID,
-		Guilds:     guildIDs,
-		ReadStates: readStates,
-		Presences:  snapshot,
-	})
+	c.Close()
 
-	m.mu.Unlock()
-	// Broadcast presence online to guild members.
-	m.broadcastPresence(c.UserID, "online")
 }
 
 // handleResume preserves the session sequence or issues fresh READY on any gap.
@@ -508,22 +541,5 @@ func (m *Manager) broadcastPresence(userID int64, status string) {
 
 	for _, guildID := range guildIDs {
 		m.sendToGuildInternal(guildID, event)
-	}
-}
-
-// PrepareChannelDeletion snapshots authorization before overrides cascade away.
-func (m *Manager) PrepareChannelDeletion(guildID, channelID int64) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.checker == nil {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	for _, c := range m.sessions {
-		if c.guildIDs[guildID] {
-			key := [3]int64{guildID, channelID, c.UserID}
-			m.visibility[key] = m.checker.RequireChannelPermission(ctx, guildID, channelID, c.UserID, permissions.PermViewChannel) == nil
-		}
 	}
 }

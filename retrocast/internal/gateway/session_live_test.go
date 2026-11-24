@@ -3,7 +3,6 @@ package gateway
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/victorivanov/retrocast/internal/auth"
 	"github.com/victorivanov/retrocast/internal/models"
@@ -24,7 +23,7 @@ func (p *visibilityChecker) RequireChannelPermission(_ context.Context, _, _, ui
 	if p.allow[uid] {
 		return nil
 	}
-	return fmt.Errorf("hidden")
+	return ErrChannelHidden
 }
 func TestLiveVisibilityAndInvalidation(t *testing.T) {
 	m := newTestManager(t, &mockGuildRepo{})
@@ -52,13 +51,14 @@ func TestLiveVisibilityAndInvalidation(t *testing.T) {
 	if len(drainEvents(a)) != 0 || len(drainEvents(b)) != 1 {
 		t.Fatal("stale visibility cache")
 	}
-	m.PrepareChannelDeletion(1, 50)
-	p.allow[100] = true
-	p.allow[200] = false
+	m.DispatchToGuild(1, EventGuildMemberUpdate, "concurrent invalidation")
+	drainEvents(a)
+	drainEvents(b)
 	m.DispatchToGuild(1, EventChannelDelete, map[string]string{"id": "50"})
-	if len(drainEvents(a)) != 0 || len(drainEvents(b)) != 1 {
-		t.Fatal("delete used permissions after cascading overrides")
+	if len(drainEvents(a)) != 1 || len(drainEvents(b)) != 1 {
+		t.Fatal("channel delete must reach every guild member")
 	}
+
 }
 func TestLiveMultipleConnectionsAndConcurrentDelivery(t *testing.T) {
 	m := newTestManager(t, &mockGuildRepo{})

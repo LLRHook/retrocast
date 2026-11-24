@@ -224,6 +224,15 @@ test('fallback READY refetches open channel and applies its presence snapshot',a
  assert.ok(calls.some(c=>c[0]==='messages'&&c[1]==='50'));assert.ok(calls.some(c=>c[0]==='presence'&&c[1]==='200'&&c[2]==='dnd'));delete globalThis.__l18Calls;
 });
 
+test('successful resume dispatch and cleanup clear resuming',async()=>{
+ const {GatewayClient}=await import(compile(readFileSync(resolve('src/lib/gateway.ts'),'utf8'),'resume-cleanup'));
+ const c=new GatewayClient();let resync=0;c.on('RESYNC',()=>resync++);
+ c.resuming=true;c.handlePayload({op:0,t:'MESSAGE_CREATE',s:2,d:{}});assert.equal(c.resuming,false);
+ c.handlePayload({op:0,t:'READY',s:1,d:{session_id:'fresh'}});assert.equal(resync,0);
+ c.resuming=true;c.cleanup();assert.equal(c.resuming,false);
+ c.handlePayload({op:0,t:'READY',s:1,d:{session_id:'fresh-again'}});assert.equal(resync,0);
+});
+
 } catch (error) {
  cleanup();
  throw error;

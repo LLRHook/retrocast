@@ -136,6 +136,7 @@ export class GatewayClient {
             this.emit("RESYNC", null);
           }
         }
+        if (payload.t !== "READY") this.resuming = false;
         if (payload.t) {
           this.emit(payload.t, payload.d);
         }
@@ -204,6 +205,7 @@ export class GatewayClient {
   }
 
   private cleanup() {
+    this.resuming = false;
     this.stopHeartbeat();
     if (this.ws) {
       this.ws.onclose = null;

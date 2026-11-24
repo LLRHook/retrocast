@@ -55,6 +55,7 @@ type mockGateway struct {
 	events          []dispatchedEvent
 	subscriptions   [][2]int64
 	unsubscriptions [][2]int64
+	invalidations   []int64
 }
 
 func (m *mockGateway) DispatchToGuild(guildID int64, event string, data interface{}) {
@@ -730,4 +731,10 @@ func assertPayloadJSON(t *testing.T, payload any, expected map[string]any) {
 			t.Errorf("%s JSON = %v (%T), want %v (%T)", field, value, value, want, want)
 		}
 	}
+}
+
+func (m *mockGateway) InvalidateGuildPermissions(guildID int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.invalidations = append(m.invalidations, guildID)
 }

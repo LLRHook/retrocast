@@ -375,7 +375,7 @@ func TestDispatchToGuildExcept_NonExistentGuildIsNoop(t *testing.T) {
 // Register / Unregister Tests
 // ---------------------------------------------------------------------------
 
-func TestRegister_DisplacesExistingConnection(t *testing.T) {
+func TestRegister_PreservesEveryConnection(t *testing.T) {
 	m := newTestManager(t, &mockGuildRepo{})
 
 	c1 := fakeConn(m, 100, "s1")
@@ -397,8 +397,8 @@ func TestRegister_DisplacesExistingConnection(t *testing.T) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if !m.connections[100][c2] {
-		t.Error("new connection should replace old one")
+	if !m.connections[100][c1] || !m.connections[100][c2] {
+		t.Error("both connections must remain registered")
 	}
 	if _, ok := m.sessions["s1"]; !ok {
 		t.Error("old session should stay registered")
