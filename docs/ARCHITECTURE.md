@@ -253,7 +253,7 @@ Backing up and restoring (SYS-FR-002–SYS-FR-004, ADR-018): a cron or launchd j
 runs `scripts/backup.sh` daily from `retrocast/`; it writes `backup_<time>.sql.gz` (pg_dump)
 and `minio_<time>.tar.gz` (the MinIO data directory) to `BACKUP_DIR` and deletes archives
 older than 30 days. `scripts/restore.sh` stops the API, replaces the startup-migrated database, applies
-the dump with ON_ERROR_STOP, restores the MinIO volume through the on-demand
+the dump with single-transaction ON_ERROR_STOP, restores the MinIO volume through the on-demand
 Alpine backup-tools container while MinIO is stopped, then starts services and
 checks health. Host schedule templates and the exact command are in docs/OPERATIONS.md. Before each release the operator restores the latest backup into a
 fresh stack and records the file, the date and the row counts before and after
@@ -404,9 +404,8 @@ they affect stay Later.
 | D-31 | Fixed: reaction remove/list verify that the message exists in the route channel before repository access | retrocast/internal/service/reaction.go; internal/api/reaction_handler_test.go (TestReactionRouteBinding) | SV-FR-074, SV-FR-075 | Fixed | [#47](https://github.com/LLRHook/retrocast/issues/47) |
 | D-32 | Fixed: web reload restores a saved session before routing; transport failures preserve tokens; bounded no-lock recheck and late-rotation protection | retrocast-web/src/stores/auth.ts; src/App.tsx; contract.test.mjs | WEB-FR-001, WEB-FR-002, WEB-FR-003 | Fixed | [#49](https://github.com/LLRHook/retrocast/issues/49), [PR #55](https://github.com/LLRHook/retrocast/pull/55) |
 | D-33 | Fixed: kick/ban notify every active target device with GUILD_DELETE after unsubscribe; ban membership and ban row commit atomically, using the guild parent lock before child rows | internal/service/ban.go; member.go; internal/api/moderation_live_test.go; internal/gateway/membership_live_test.go | SV-FR-066, SV-FR-067, WEB-FR-023 | Fixed | [#52](https://github.com/LLRHook/retrocast/issues/52) |
-| D-34 | Fixed: host schedule templates; archive helper for minimal MinIO image; restore replaces migrated target database and fails on SQL errors | retrocast/scripts/; docs/OPERATIONS.md; docs/operations/restore-drills.md | SYS-FR-002–SYS-FR-004, SYS-NFR-005, SYS-NFR-006 | Fixed | — |
+| D-34 | Fixed: host schedule templates; archive helper for minimal MinIO image; restore preflights inputs/configuration, replaces migrated target database and fails transactionally on SQL errors | retrocast/scripts/; docs/OPERATIONS.md; docs/operations/restore-drills.md | SYS-FR-002–SYS-FR-004, SYS-NFR-005, SYS-NFR-006 | Fixed | — |
 | D-35 | Fixed: dashboard handler panel groups by exported url label; internal 15s scrape and live provisioned datasource queries checked | retrocast/grafana/provisioning/dashboards/retrocast.json; retrocast/scripts/test-monitoring.py | SYS-FR-001 | Fixed | — |
-
 | D-36 | Fixed: active client frames renew the gateway read deadline; Pong and heartbeat-timeout behavior retained; fast transport regressions and full deployed load record | retrocast/internal/gateway/connection.go; transport_timing_test.go; docs/operations/performance.md | SYS-NFR-001, SYS-NFR-002, SV-FR-026 | Fixed | [#58](https://github.com/LLRHook/retrocast/issues/58) |
 
 Other debt: the `refresh_tokens` and `device_tokens` tables have no code; op 4 is defined

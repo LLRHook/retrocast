@@ -1,6 +1,6 @@
 # Operations
 
-Run these commands from `retrocast/` with Docker Compose v2, Bash, gzip and GNU
+Run these commands from `retrocast/` with Docker Compose v2, Bash, gzip, awk, tar and GNU
 find available. Use the same `COMPOSE_PROJECT_NAME`, `COMPOSE_FILE` and `.env`
 as the deployed stack. Backups contain password hashes and private conversations;
 keep the destination private, outside the checkout, and monitor job exit status.
@@ -39,8 +39,9 @@ Do not schedule overlapping backup/restore runs.
 
 A backup dumps PostgreSQL and archives the MinIO named volume through the
 on-demand `backup-tools` Alpine container, since MinIO's minimal image has no tar.
-Retention removes `backup_*.sql.gz` and `minio_*.tar.gz` whose mtime is over 30
-whole days old; archive names alone do not determine age. This is a sequential
+Retention removes only top-level regular files matching `backup_*.sql.gz`
+and `minio_*.tar.gz` whose mtime is over 30 whole days old; it leaves nested
+archives and unrelated files alone; archive names alone do not determine age. This is a sequential
 backup, not a transaction across PostgreSQL and MinIO. For a consistent recovery
 point, arrange a maintenance window (stop the API and other writers, leave DB
 and MinIO running) around the scheduled job. Do not delete attachments during
@@ -59,12 +60,19 @@ bash scripts/restore.sh /absolute/backup_TIMESTAMP.sql.gz /absolute/minio_TIMEST
 curl -f http://localhost/health
 ```
 
-Both gzip files are checked before any change. Restore stops the API, drops and
-recreates the database (removing startup migrations), uses psql ON_ERROR_STOP,
-stops MinIO, unpacks its archive via `backup-tools`, starts MinIO and the API,
-and waits up to 60 seconds for health. On failure the script exits nonzero;
-inspect logs and leave the API stopped until recovery is resolved. An invalid
-archive is refused before stopping anything. Only restore trusted operator-made
+Restore resolves both input paths against the caller's directory, then changes
+to the server directory, so absolute or caller-relative archives also work when
+invoked elsewhere. Before stopping the API it checks gzip integrity, the pg_dump
+header and completion footer, tar block length and `tar -tzf`, and the resolved
+compose configuration including the operations-profile archive helper. Empty
+or row-boundary-truncated SQL dumps are refused before any Docker command.
+Restore then stops the API, drops and recreates the database (removing startup
+migrations), uses psql `--single-transaction` with `ON_ERROR_STOP`, stops MinIO,
+unpacks its archive via `backup-tools`, starts MinIO and creates/starts the API
+with `up -d --no-deps api`, and waits up to 60 seconds for health. On failure the script exits nonzero;
+inspect logs and leave the API stopped until recovery is resolved. Invalid gzip, incomplete pg_dump framing, malformed tar, or missing compose
+configuration/helper is refused before stopping anything. Later SQL/extraction
+failures leave the API stopped; a failing SQL restore rolls back its transaction. Only restore trusted operator-made
 archives; restore is not an untrusted archive importer. File restore is intended
 for empty target volumes, not a merge into a used MinIO volume. Redis is not
 restored: members sign in again. Repeat the restore only with the API quiescent.
