@@ -423,6 +423,13 @@ test('GUILD_DELETE purges selected guild channels, messages and typing, preservi
  assert.equal(channels.getState().channelsByGuild.has('kept'),true);assert.equal(messages.getState().messagesByChannel.has('b'),true);
  channels.getState().selectChannel('b');guilds.getState().selectGuild('kept');gateway.handlePayload({op:0,t:'GUILD_DELETE',s:2,d:{id:'gone'}});assert.equal(channels.getState().selectedChannelId,'b');
 });
+test('new roles append above manageable roles without crossing the actor boundary',async()=>{
+ const {nextRolePosition}=await import(compile(readFileSync(resolve('src/lib/role-order.ts'),'utf8'),'role-order'));
+ const roles=[{id:'everyone',is_default:true,position:0},{id:'a',position:1},{id:'manager',position:5},{id:'higher',position:9}];
+ assert.equal(nextRolePosition(roles,true,5),10);assert.equal(nextRolePosition(roles,false,5),2);
+ assert.equal(nextRolePosition([...roles,{id:'full',position:4}],false,5),null);
+ assert.equal(nextRolePosition([],false,0),null);
+});
 test('actual moderation hook drives kick-only, ban-only, Administrator, plain, and self popovers',async()=>{
  const auth=await storeModule('useAuthStore',{user:{id:'moderator'}}),guilds=await storeModule('useGuildsStore',{guilds:new Map([['g',{owner_id:'owner'}]])}),members=await storeModule('useMembersStore',{membersByGuild:new Map([['g',new Map([['moderator',{roles:['r']} ]])]])}),roles=await storeModule('useRolesStore',{rolesByGuild:new Map()});
  let source=readFileSync(resolve('src/hooks/useModeration.ts'),'utf8').replace('"react"',JSON.stringify(hooksUrl)).replace('"@/lib/api"',JSON.stringify(apiUrl));

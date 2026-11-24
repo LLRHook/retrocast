@@ -96,7 +96,9 @@ func (s *MessageService) SendMessage(ctx context.Context, channelID, userID int6
 		return nil, Internal("INTERNAL", "internal server error")
 	}
 
-	setAttachmentURLs([]models.MessageWithAuthor{*full}, s.storage)
+	if err := setAttachmentURLs([]models.MessageWithAuthor{*full}, s.storage); err != nil {
+		return nil, err
+	}
 	if isDM {
 		s.dispatchToDM(ctx, channelID, gateway.EventMessageCreate, full)
 	} else {
@@ -126,7 +128,9 @@ func (s *MessageService) GetMessages(ctx context.Context, channelID, userID int6
 	if messages == nil {
 		messages = []models.MessageWithAuthor{}
 	}
-	setAttachmentURLs(messages, s.storage)
+	if err := setAttachmentURLs(messages, s.storage); err != nil {
+		return nil, err
+	}
 	return messages, nil
 }
 
@@ -151,7 +155,9 @@ func (s *MessageService) GetMessage(ctx context.Context, channelID, msgID, userI
 		return nil, NotFound("NOT_FOUND", "message not found")
 	}
 
-	setAttachmentURLs([]models.MessageWithAuthor{*msg}, s.storage)
+	if err := setAttachmentURLs([]models.MessageWithAuthor{*msg}, s.storage); err != nil {
+		return nil, err
+	}
 	return msg, nil
 }
 
@@ -194,7 +200,9 @@ func (s *MessageService) EditMessage(ctx context.Context, channelID, msgID, user
 		return nil, Internal("INTERNAL", "internal server error")
 	}
 
-	setAttachmentURLs([]models.MessageWithAuthor{*full}, s.storage)
+	if err := setAttachmentURLs([]models.MessageWithAuthor{*full}, s.storage); err != nil {
+		return nil, err
+	}
 	if isDM {
 		s.dispatchToDM(ctx, channelID, gateway.EventMessageUpdate, full)
 	} else {
@@ -331,13 +339,18 @@ func (s *MessageService) dispatchToDM(ctx context.Context, channelID int64, even
 }
 
 func (s *MessageService) SetFileStorage(storage FileStorage) { s.storage = storage }
-func setAttachmentURLs(messages []models.MessageWithAuthor, storage FileStorage) {
+func setAttachmentURLs(messages []models.MessageWithAuthor, storage FileStorage) error {
 	for i := range messages {
 		for j := range messages[i].Attachments {
 			if storage != nil {
 				a := &messages[i].Attachments[j]
-				a.URL = storage.GetURL(a.StorageKey)
+				var err error
+				a.URL, err = storage.GetURL(a.StorageKey, a.ContentType)
+				if err != nil {
+					return Internal("URL_FAILED", "failed to sign attachment")
+				}
 			}
 		}
 	}
+	return nil
 }

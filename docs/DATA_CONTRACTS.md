@@ -181,7 +181,7 @@ are as documented in OpenAPI; where the code differs, the Notes column says so.
 | API-020 | updateChannel | PATCH /channels/{channelId} | 200 channel | yes | | SV-FR-015 |
 | API-021 | deleteChannel | DELETE /channels/{channelId} | 204 | — | | SV-FR-015 |
 | API-022 | sendMessage | POST /channels/{channelId}/messages | 201 message | yes | Optional attachment_ids: decimal-string upload ids; requires ATTACH_FILES when supplied; atomic owner/channel/unlinked claim; 400 INVALID_ATTACHMENTS on invalid claims; content remains 1–2000 bytes | SV-FR-025, SV-FR-055 |
-| API-023 | getMessages | GET /channels/{channelId}/messages | 200 messages | yes | Attachments batched with each page; empty attachments is []; existing internal URLs (D-10) | SV-FR-027, SV-FR-052 |
+| API-023 | getMessages | GET /channels/{channelId}/messages | 200 messages | yes | Attachments batched with each page; empty attachments is []; fresh 15-minute public HTTPS signed GET URLs (D-10 fixed) | SV-FR-027, SV-FR-052 |
 | API-024 | getMessage | GET /channels/{channelId}/messages/{messageId} | 200 message | yes | | SV-FR-028 |
 | API-025 | editMessage | PATCH /channels/{channelId}/messages/{messageId} | 200 message | yes | | SV-FR-029 |
 | API-026 | deleteMessage | DELETE /channels/{channelId}/messages/{messageId} | 204 | — | | SV-FR-030 |
@@ -217,6 +217,7 @@ are as documented in OpenAPI; where the code differs, the Notes column says so.
 | API-056 | joinVoice | POST /channels/{channelId}/voice/join | 200 token + voice states | yes | no LiveKit URL in the response | SV-FR-048, SV-IR-006 |
 | API-057 | leaveVoice | POST /channels/{channelId}/voice/leave | 204 | — | | SV-FR-049 |
 | API-058 | getVoiceStates | GET /channels/{channelId}/voice/states | 200 voice states | yes | | SV-FR-050 |
+| API-060 | reorderRoles | PUT /guilds/{guildId}/roles/order | 200 roles | yes | Complete `expected: [{id: string, position: int}]` snapshot plus `order: [id: string]` ascending, all non-default roles exactly once. Guild row lock; 409 STALE_ROLES on mismatch; missing arrays return 400 INVALID_ORDER; missing/deleted guild returns 404 NOT_FOUND; non-members retain 403; ROLE_ORDER_NO_ROOM asks the owner to make room; atomic hierarchy/grant checked changes; @everyone fixed; one GUILD_ROLE_UPDATE per changed role after commit. | WEB-FR-013, SV-FR-041 |
 | API-059 | changePassword | PUT /users/@me/password | 200 tokens + user | yes | Built; body `current_password`, `new_password`; 403 `INVALID_CREDENTIALS`, 400 `INVALID_PASSWORD`; 503 SESSION_UNAVAILABLE on revocation/token-store failure; credential rate limit | SV-FR-060, SV-FR-061 |
 
 Routes outside `/api/v1`: `GET /health`, `GET /metrics` (Prometheus), `GET /docs`,
@@ -263,6 +264,10 @@ Codes added in rev 2 (registration codes implemented in PR #54; CANNOT_KICK_SELF
 
 | Code | Status | Meaning | Requirement |
 |---|---|---|---|
+| `STALE_ROLES` | 409 | API-060 snapshot no longer matches; refetch roles | WEB-FR-013, SV-FR-041 |
+| `INVALID_ORDER` | 400 | API-060 body/required arrays missing, or duplicate, unknown, default or incomplete movable IDs | WEB-FR-013, SV-FR-041 |
+| `ROLE_ORDER_NO_ROOM` | 409 | Too many roles below the actor boundary to normalize safely; ask the owner to make room | WEB-FR-013, SV-FR-041 |
+| `URL_FAILED` | 500 | Attachment download URL could not be signed | SV-FR-052 |
 | `INVITE_REQUIRED` | 403 | Mode `invite` and no `invite_code` | SV-FR-063, SV-FR-065 |
 | `INVALID_INVITE` | 403 | The invite code at registration is unknown, expired, revoked or used up | SV-FR-063 |
 | `REGISTRATION_CLOSED` | 403 | Mode `closed` | SV-FR-064 |
@@ -343,11 +348,16 @@ check `SPEAK` in the grant and receives no LiveKit webhooks, so voice state is o
 clients report (SV-FR-049). Clients need the LiveKit URL, which API-056 does not return.
 
 ### 7.2 MinIO (S3-compatible)
-`retrocast/internal/storage/minio.go` uploads to bucket `retrocast` and builds URLs as
-`http://{MINIO_ENDPOINT}/retrocast/{key}`. `MINIO_ENDPOINT` is an address inside the compose
-network, so clients outside it cannot fetch those URLs (D-10). Rev 2 decides short-lived
-pre-signed URLs for upload and download, valid 15 minutes and served through the public entry
-point (Q-011; SV-FR-051, SV-FR-052; ADR-019); attachments are Later.
+`retrocast/internal/storage/minio.go` uploads multipart API files to bucket `retrocast`.
+Downloads use fresh pre-signed GET URLs for 15 minutes on `https://{DOMAIN}/retrocast/{key}`.
+`DOMAIN` is one hostname (default `localhost`, no scheme, path or port), passed to Caddy
+and API by Compose. `MINIO_REGION` defaults to `us-east-1` for both MinIO and its clients;
+a separate fixed-region public signer makes no network requests when minting URLs.
+Caddy preserves Host and path, exposes only GET, and sends CSP `sandbox allow-downloads` (scripts and same-origin privileges remain disabled) and
+`nosniff`. Exact allowed image types render inline; all other types force attachment
+disposition. History, single-message and search responses mint URLs locally on each fetch.
+JSON remains compatible, including absolute string `url`. Signed links expire; reload history to mint fresh links. Upload presigning remains Later
+(SV-FR-051); the multipart upload route remains in use (ADR-019).
 
 ### 7.3 Apple Push Notification service
 Not integrated. `device_tokens` (ENT-017) exists without code. Push notifications are Later,
@@ -403,3 +413,5 @@ together with the iOS client (Q-025); APNs is the one optional outside service G
 | 19 | 2026-11-24T01:58:10-05:00 | 76ad98d47a9d | REVISION | PR #55 round 2: post-CAS session revocation, conditional restore clearing, contract and evidence corrections |
 | 20 | 2026-11-24T03:21:06-05:00 | 400bb085e781 | REVISION | B5b: moderation UI, atomic removal and target notification; session transport mapping and bounded cross-tab recovery |
 | 21 | 2026-11-24T04:24:31-05:00 | 73cb40662507 | REVISION | PR 56 round 2: clear removed guild channel state; document session 503 and late-winner residual; strengthen moderation transaction evidence |
+| 22 | 2026-11-24T08:06:57-05:00 | 23eea2497fd6 | REVISION | B6: atomic keyboard role ordering (API-060) and public HTTPS signed downloads (D-10); transactional and Caddy regressions plus owned browser evidence |
+| 23 | 2026-11-24T09:13:39-05:00 | 0edca0aaeafa | REVISION | PR #62 round 2: missing/deleted guild status and permission-before-lock; GET-only downloads and lowercase host; manager create positioning and no-room guidance; contract, operational and D-10 drift repaired |

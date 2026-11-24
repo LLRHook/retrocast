@@ -22,5 +22,6 @@ export function useModeration(guildId: string) {
  const bits = (roles ?? []).filter(r => r.is_default || member?.roles.includes(r.id))
   .reduce((value, role) => value | BigInt(role.permissions), 0n);
  const all = !!userId && (userId === ownerId || (bits & (1n << 31n)) !== 0n);
- return { kick: all || (bits & (1n << 5n)) !== 0n, ban: all || (bits & (1n << 6n)) !== 0n, userId };
+ const highestRolePosition = Math.max(0, ...(roles ?? []).filter(r => member?.roles.includes(r.id)).map(r => r.position));
+ return { isOwner: !!userId && userId === ownerId, highestRolePosition, kick: all || (bits & (1n << 5n)) !== 0n, ban: all || (bits & (1n << 6n)) !== 0n, userId };
 }

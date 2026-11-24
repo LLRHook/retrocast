@@ -2,7 +2,7 @@
 
 Conforms to the SRS content outline of ISO/IEC/IEEE 29148:2018 §9.6.
 Related: [Product Brief](PRODUCT_BRIEF.md) · [Data Contracts](DATA_CONTRACTS.md) · [Architecture](ARCHITECTURE.md)
-Status: Baselined (rev 8)
+Status: Baselined (rev 7)
 
 > **Rev 2 (2026-11-23).** Rev 1 was written unattended from repository evidence. On
 > 2026-11-23 Victor Ivanov accepted every recommendation of the product brief (Q-001–Q-034,
@@ -90,7 +90,7 @@ The operator sets secrets and endpoints in `retrocast/.env` (template `.env.exam
 - Moderation (kick and ban): SV-FR-066–SV-FR-070, WEB-FR-021–WEB-FR-023
 - Operator health, metrics, backups and CLI: SV-NFR-005, SV-NFR-012, SV-NFR-013, SV-FR-073, SYS-FR-001–SYS-FR-004, SYS-NFR-005, SYS-NFR-006
 - Voice (Later): SV-FR-048–SV-FR-050, IOS-FR-011
-- Attachments (Later): SV-FR-051–SV-FR-052, WEB-FR-017
+- Attachments: multipart upload/linking and public signed downloads built (SV-FR-052, D-10 fixed); upload presigning remains Later (SV-FR-051), and file-only sending remains partial (WEB-FR-017).
 - Profiles (Later): SV-FR-053, WEB-FR-015
 - Direct messages (Later): SV-FR-054–SV-FR-058, WEB-FR-016, IOS-FR-009
 - Search (Later): SV-FR-059, IOS-FR-010
@@ -140,8 +140,6 @@ Later capabilities with no requirements yet: CAP-018 (voice controls), CAP-022 (
 CAP-023 (push, with the iOS client), CAP-024 (Unicode emoji picker), CAP-026 (iOS 7-era look),
 CAP-030 (audit log), CAP-038 and CAP-039. Their requirements are written when the owner
 schedules them.
-
-Validation records: [2026-11-24 Pilot validation](validation/pilot-2026-11-24.md) — candidate f60c6d5, exit NOT MET (role-ordering #60; stopped at first gate failure).
 
 ## 2. References
 - ISO/IEC/IEEE 29148:2018, Systems and software engineering — Life cycle processes —
@@ -209,7 +207,7 @@ PR #25 (PRODUCT_BRIEF §14). The rows stay for traceability.
 | TBD-008 | PR #22 Rust core for permission resolution (Q-008) | Permission resolution stays in Go | SV-FR-045, ARCHITECTURE ADR-009 | Victor | Resolved rev 2: resolution stays in Go; PR #22 is decided after the authorisation defects are fixed (SYS-CON-003, ADR-009) |
 | TBD-009 | One gateway connection per user, or several (Q-009) | One (current) | SV-FR-039 | Victor | Resolved rev 2: several connections per user; SV-FR-072 supersedes SV-FR-039 (ADR-017) |
 | TBD-010 | One response shape for every endpoint (Q-010) | Mixed (current), documented per operation | SV-IR-001, WEB-FR-002, WEB-FR-003, WEB-FR-007, WEB-FR-012, WEB-FR-013 | Victor | Resolved rev 2: every success body wrapped in `data` as REST contract v2.0.0 on the same `/api/v1` path, no parallel old shape (SV-IR-007, SV-IR-008; ADR-013, the driver's choice within the owner's answer) |
-| TBD-011 | How clients upload and fetch files (Q-011) | Through the API (current); URL scheme open | SV-FR-051, SV-FR-052 | Victor | Resolved rev 2: pre-signed upload and download URLs valid 15 minutes (SV-FR-051, SV-FR-052; ADR-019); Later |
+| TBD-011 | How clients upload and fetch files (Q-011) | Through the API (current); URL scheme open | SV-FR-051, SV-FR-052 | Victor | Resolved rev 2: pre-signed upload and download URLs valid 15 minutes (SV-FR-051, SV-FR-052; ADR-019); B6 implements download; upload presigning remains Later |
 | TBD-012 | Registration policy (Q-012) | Open registration (current) | SV-FR-001 | Victor | Resolved rev 2: operator-chosen `open`, `invite` or `closed`, default `invite` (SV-FR-062–SV-FR-065, WEB-FR-020; ADR-014) |
 | TBD-013 | Who may DM whom (Q-013) | Anyone on the instance (current) | SV-FR-054, SV-FR-056 | Victor | Resolved rev 2: only users who share a guild (SV-FR-054, SV-FR-056, SV-FR-057); Later |
 | TBD-014 | Default @everyone permissions (Q-014) | View, Send, Read history (current code) | SV-FR-008 | Victor | Resolved rev 2: `DefaultEveryonePerms` = 230147 (SV-FR-008; D-27) |
@@ -268,4 +266,4 @@ ARCHITECTURE §8.
 | 5 | 2026-11-23T16:25:23-05:00 | 7af05226f577 | REVISION | PR #44 round 2: SV-FR-078 grant limits, fixed default-role position, API notes and restored evidence |
 | 6 | 2026-11-23T19:23:21-05:00 | f3f6d6f7bafd | REVISION | B2b: migration 000020 repairs DM parent integrity and pending attachment linking; Q-017 types and D-31 route binding fixed; storage/retention limits and Later delivery retained |
 | 7 | 2026-11-23T23:28:58-05:00 | 2f78d18e5e62 | REVISION | PR #53 round 2: supported LiveKit UDP range; local demo TLS and standalone proxy; deployment drift and requirement provenance repaired; Redis deadline regression |
-| 8 | 2026-11-24T07:30:28-05:00 | 32e326788263 | REVISION | L32: fixed-candidate Pilot validation stopped at role-ordering gap #60; WEB-FR-002 and SYS-CON-002 verified with browser evidence; complete Pilot matrix linked |
+| 8 | 2026-11-24T09:13:39-05:00 | 0edca0aaeafa | REVISION | PR #62 round 2: missing/deleted guild status and permission-before-lock; GET-only downloads and lowercase host; manager create positioning and no-room guidance; contract, operational and D-10 drift repaired |

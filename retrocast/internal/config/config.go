@@ -23,6 +23,8 @@ import (
 )
 
 type Config struct {
+	Domain           string
+	MinIORegion      string
 	RegistrationMode string
 	AllowedOrigins   string
 	DatabaseURL      string
@@ -42,6 +44,8 @@ func Load() *Config {
 	fileVals := loadConfigFile()
 
 	cfg := &Config{
+		Domain:           resolve("DOMAIN", fileVals, "localhost"),
+		MinIORegion:      resolve("MINIO_REGION", fileVals, "us-east-1"),
 		RegistrationMode: resolve("REGISTRATION_MODE", fileVals, "invite"),
 		AllowedOrigins:   resolve("ALLOWED_ORIGINS", fileVals, ""),
 		DatabaseURL:      resolve("DATABASE_URL", fileVals, ""),

@@ -26,7 +26,7 @@ var allowedContentTypes = map[string]bool{
 // FileStorage abstracts object storage operations for testability.
 type FileStorage interface {
 	Upload(ctx context.Context, key string, reader io.Reader, size int64, contentType string) error
-	GetURL(key string) string
+	GetURL(key, contentType string) (string, error)
 	Delete(ctx context.Context, key string) error
 }
 
@@ -86,6 +86,11 @@ func (s *UploadService) UploadFile(ctx context.Context, channelID, userID int64,
 		return nil, NewError(ErrInternal, "UPLOAD_FAILED", "failed to upload file")
 	}
 
+	publicURL, err := s.storage.GetURL(storageKey, contentType)
+	if err != nil {
+		_ = s.storage.Delete(ctx, storageKey)
+		return nil, Internal("URL_FAILED", "failed to sign attachment")
+	}
 	attachment := &models.Attachment{
 		ID:          attachmentID,
 		UploaderID:  userID,
@@ -94,7 +99,7 @@ func (s *UploadService) UploadFile(ctx context.Context, channelID, userID int64,
 		ContentType: contentType,
 		Size:        size,
 		StorageKey:  storageKey,
-		URL:         s.storage.GetURL(storageKey),
+		URL:         publicURL,
 	}
 
 	if err := s.attachments.Create(ctx, attachment); err != nil {

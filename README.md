@@ -79,7 +79,7 @@ operator access use `docker compose exec api curl http://minio:9000/minio/health
 or `docker compose exec db psql -U retrocast`. For the MinIO console, tunnel a
 host loopback port to the container's 9001 port using an operator-controlled
 forwarder on the compose network; do not publish it on all interfaces.
-Attachment URLs still use the internal MinIO address (D-10, Later).
+Attachment downloads use 15-minute signed HTTPS URLs through Caddy (D-10 fixed); multipart uploads remain supported and upload presigning remains Later.
 Prometheus scrapes `api:8080/metrics` internally; Caddy returns 404 for `/metrics`.
 `https://<host>/docs` serves the embedded raw OpenAPI specification without
 external scripts or stylesheets.
@@ -134,3 +134,5 @@ All changes to `main` must go through a pull request with at least one approved 
 ## License
 
 This project is unlicensed. All rights reserved.
+
+Attachment downloads use 15-minute signed HTTPS URLs through Caddy. Set `DOMAIN` in `retrocast/.env` to the public hostname (default `localhost`, no scheme, path or port); Compose passes it to both Caddy and the API. Set `MINIO_REGION` consistently (default `us-east-1`). Only the `retrocast` bucket download path is proxied; MinIO remains private.
