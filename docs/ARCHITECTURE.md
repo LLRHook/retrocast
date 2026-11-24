@@ -264,9 +264,9 @@ Kick and ban act only on members ranked below the caller (SV-FR-070; kick fixed 
 Resolution is in Go (ADR-009).
 
 ### 7.3 Real-time delivery
-In-process fan-out from services to gateway connections, keyed by current guild membership; IDENTIFY retries a snapshot if removal changed the user membership epoch before registration. Per-connection send buffer of 256 frames. A 100-event replay
+In-process fan-out from services to gateway connections, keyed by current guild membership; IDENTIFY retries a snapshot if a join or removal changed the user membership epoch before registration. Per-connection send buffer of 256 frames. A 100-event replay
 buffer per session backs RESUME (PR #50); missing history receives fresh READY. A user may hold several connections
-(ADR-017) and subscriptions follow membership changes (SV-FR-071).
+(ADR-017) and subscriptions follow joins and removals (SV-FR-071). Live devices update in place; retained disconnected sessions receive fresh READY after either change, including a join from another live device.
 
 ### 7.4 Configuration and secrets
 Environment variables override the optional `KEY = VALUE` file, which overrides the defaults

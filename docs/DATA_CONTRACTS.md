@@ -327,7 +327,7 @@ Gateway fan-out visibility (PR #50 round 2; existing channel-list visibility ret
 | CHANNEL_CREATE, CHANNEL_DELETE, GUILD_*, member/role changes, presence, voice leave without a channel | Current guild members, all their connections; channel metadata matches the existing REST channel list |
 | DM events | Current DM participants, all their connections |
 
-Only definitive permission results are cached. A transient lookup fault withholds the event, increments the gateway permission-failure counter, invalidates that session's replay window and closes its connection. RESUME receives fresh READY so clients refetch. A removal while disconnected also forces fresh READY even if no later event was missed.
+Only definitive permission results are cached. A transient lookup fault withholds the event, increments the gateway permission-failure counter, invalidates that session's replay window and closes its connection. RESUME receives fresh READY so clients refetch. A join or removal while disconnected also forces fresh READY even if no later event was missed; live devices update their subscriptions in place. IDENTIFY retries its guild lookup if a join or removal changes the user membership epoch before registration.
 
 Op 4 (`OpVoiceStateUpdate`) is defined in `events.go:15` but the server does not handle it.
 Op 5 is unused.
@@ -377,7 +377,7 @@ together with the iOS client (Q-025); APNs is the one optional outside service G
 | 2 | EVT-007 RECONNECT | v1.0.0 | v1.0.0 (frame unchanged) | Sent in fewer cases: not for a second IDENTIFY | A client that reads op 7 as "signed in elsewhere" must not | Q-009; ADR-017 |
 | 9 | API-022 / API-027, ENT-008/009/012/013/022 | REST v2.0.0 | REST v2.1.0 |Migration 000020: DM parent validation/delete triggers; nullable pending upload link with ownership backfill; attachment_ids atomic claim and batched hydration. After a refused down, the schema remains at 20 while golang-migrate marks version 19 dirty: run `migrate force 20` to recover; `force 19` then `up` fails. | Web sends uploaded ids with nonempty text; pending message_id is null; existing linked ids stay strings; down refuses while DM messages or pending attachments exist | Driver E116; Q-017; D-08/D-09/D-22 |
 
-| 10 | EVT-003 / EVT-006 gateway | v1.0.0 | v1.1.0 (compatible) | READY gains optional presences. RESUME frames unchanged; fresh READY with a new session id signals unavailable replay, sequences restart at 1. Last 100 events per session, retained 5 minutes after disconnect; authorization changes invalidate old history | Web refetches open-channel recent messages after fallback READY. iOS already accepts READY; reconnect catch-up refresh is a follow-up | Driver B3 decision; PR #50 |
+| 11 | EVT-003 / EVT-006 gateway | v1.0.0 | v1.1.0 (compatible) | READY gains optional presences. RESUME frames unchanged; fresh READY with a new session id signals unavailable replay, sequences restart at 1. Last 100 events per session, retained 5 minutes after disconnect; authorization changes invalidate old history | Web refetches open-channel recent messages after fallback READY. iOS already accepts READY; reconnect catch-up refresh is a follow-up | Driver B3 decision; PR #50 |
 
 ## Revision history
 | Rev | Date | Commit | Mode | Summary |
@@ -391,5 +391,5 @@ together with the iOS client (Q-025); APNs is the one optional outside service G
 | 8 | 2026-11-23T18:35:55-05:00 | 8c86806c1499 | REVISION | PR #45 round 2: optional configuration, unified error mapping, API-059/B5 remainder and unconditional local sign-out |
 | 9 | 2026-11-23T19:23:21-05:00 | f3f6d6f7bafd | REVISION | B2b: migration 000020 repairs DM parent integrity and pending attachment linking; Q-017 types and D-31 route binding fixed; storage/retention limits and Later delivery retained |
 | 10 | 2026-11-23T20:11:25-05:00 | e40076472143 | REVISION | PR #48 round 2: down-refusal recovery, READ COMMITTED parent-delete requirement, pinned trigger lookup, updated DM delivery and uploader-delete blockers, repaired table rows |
-| 10 | 2026-11-23T20:32:22-05:00 | c2f7642e7b8c | REVISION | PR #50: live subscriptions, VIEW_CHANNEL fan-out, multiple connections, session replay/fresh READY fallback and presence snapshot/TTL; ADR-017 built |
-| 11 | 2026-11-23T21:36:57-05:00 | 42acac2a86f3 | REVISION | PR #50 round 2: fault-driven READY resynchronization, membership epoch retries, guild-wide channel create/delete metadata; SV-FR-031 delivery corrected |
+| 11 | 2026-11-23T20:32:22-05:00 | c2f7642e7b8c | REVISION | PR #50: live subscriptions, VIEW_CHANNEL fan-out, multiple connections, session replay/fresh READY fallback and presence snapshot/TTL; ADR-017 built |
+| 12 | 2026-11-23T21:36:57-05:00 | 42acac2a86f3 | REVISION | PR #50 round 2: fault-driven READY resynchronization, membership epoch retries, guild-wide channel create/delete metadata; SV-FR-031 delivery corrected |
