@@ -405,3 +405,4 @@ Scraping and dashboards are SYS-FR-001 in [system.md](system.md).
 | 19 | 2026-11-24T03:21:06-05:00 | 400bb085e781 | REVISION | B5b: moderation UI, atomic removal and target notification; session transport mapping and bounded cross-tab recovery |
 | 20 | 2026-11-24T04:24:31-05:00 | 73cb40662507 | REVISION | PR 56 round 2: clear removed guild channel state; document session 503 and late-winner residual; strengthen moderation transaction evidence |
 | 21 | 2026-11-24T08:06:57-05:00 | 23eea2497fd6 | REVISION | B6: atomic keyboard role ordering (API-060) and public HTTPS signed downloads (D-10); transactional and Caddy regressions plus owned browser evidence |
+| 22 | 2026-11-24T11:27:20-05:00 | b98bf925608b | REVISION | L36 full candidate validation: all 114 Pilot ids mapped, verified Delivery with evidence, explicit remaining gaps and successful candidate restore drill |
