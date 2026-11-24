@@ -99,7 +99,7 @@ export default function AppLayout() {
   }, [isMobile]);
 
   if (!isAuthenticated) {
-    return <Navigate to="/server" replace />;
+    return <Navigate to={serverUrl ? "/login" : "/server"} replace />;
   }
 
   return (
