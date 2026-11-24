@@ -118,9 +118,9 @@ function storeModule(name, state) {
 }
 let componentSequence=0;
 async function component(file, replacements, suffix='') {
- let source=readFileSync(resolve((['InvitePage','LoginPage','RegisterPage'].includes(file)?'src/pages/':'src/components/')+file+'.tsx'),'utf8')+suffix;
+ let source=readFileSync(resolve((file==='AppLayout'?'src/layouts/':['InvitePage','LoginPage','RegisterPage'].includes(file)?'src/pages/':'src/components/')+file+'.tsx'),'utf8')+suffix;
  source=source.replace(/from "([^"]+)"/g,(whole,name)=>{
-  const target=name==='react'?hooksUrl:replacements[name]??(name.startsWith('@/components/')?emptyComponentUrl:undefined);
+  const target=name==='react'?(replacements.react??hooksUrl):replacements[name]??(name.startsWith('@/components/')?emptyComponentUrl:undefined);
   return target?'from '+JSON.stringify(target):whole;
  });
  // The JSX runtime import is introduced by TypeScript after import rewriting.
@@ -495,6 +495,25 @@ test('login submit preserves invite destination and registration never reaccepts
  assert.equal(registers,1);assert.deepEqual(selected,['invited']);assert.deepEqual(destinations,['/app']);
  g.module.setState({fetchGuilds:async()=>{},guilds:new Map()});destinations=[];hooks.reset(['copied-code','open-user','password','',false]);await Register().props.onSubmit({preventDefault(){}});assert.deepEqual(destinations,['/invite/copied-code']);
  delete globalThis.l37Navigate;delete globalThis.l37Select;
+});
+
+test('successful invite history state restores its guild after a redirect-time reload',async()=>{
+ const effectUrl=compile('export const effects=[];export function useEffect(fn){effects.push(fn)};export const useState=v=>[v,()=>{}];export const useSyncExternalStore=()=>true;','invite-effects');const effect=await import(effectUrl);
+ const a=await storeModule('useAuthStore',{isAuthenticated:true,accessToken:'fixture',serverUrl:'https://fixture'});
+ let navigation,selectedGuild,selectedChannel;
+ globalThis.l37Redirect=(...args)=>navigation=args;
+ const router=compile('export const Link="Link",Navigate="Navigate",Outlet="Outlet";export const useNavigate=()=>globalThis.l37Redirect;export const useParams=()=>({code:"copied"});export const useLocation=()=>({state:globalThis.l37History});','invite-history-router');
+ const invite=compile('export const ApiClientError=Error;export const acceptInvite=async()=>({id:"target"});','invite-history-accept');
+ const {default:Invite}=await component('InvitePage',{react:effectUrl,'@/stores/auth':a.url,'react-router':router,'@/lib/invite':invite,'@/lib/api':apiUrl});
+ Invite();effect.effects.shift()();await new Promise(setImmediate);assert.deepEqual(navigation,['/app',{replace:true,state:{inviteGuildId:'target'}}]);
+ globalThis.l37History=navigation[1].state;effect.effects.length=0;
+ const g=await storeModule('useGuildsStore',{guilds:new Map([['first',{id:'first'}],['target',{id:'target'}]]),selectedGuildId:null,fetchGuilds:async()=>{},selectGuild:id=>selectedGuild=id});
+ const c=await storeModule('useChannelsStore',{fetchChannels:async()=>{},channelsByGuild:new Map([['target',[{id:'target-text',type:0}]]]),selectChannel:id=>selectedChannel=id});
+ const d=await storeModule('useDMsStore',{fetchDMs:async()=>{}});
+ const gateway=compile('export const gateway={connect(){},disconnect(){}}','reload-gateway');const dispatcher=compile('export const initGatewayDispatcher=()=>{}','reload-dispatcher');
+ const {default:Layout}=await component('AppLayout',{react:effectUrl,'react-router':router,'@/stores/auth':a.url,'@/stores/guilds':g.url,'@/stores/channels':c.url,'@/stores/dms':d.url,'@/lib/gateway':gateway,'@/lib/gateway-dispatcher':dispatcher});
+ Layout();effect.effects[0]();await new Promise(setImmediate);assert.equal(selectedGuild,'target');assert.equal(selectedChannel,'target-text');
+ delete globalThis.l37History;delete globalThis.l37Redirect;
 });
 
 } catch (error) {

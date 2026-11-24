@@ -13,7 +13,7 @@ export default function InvitePage() {
   useEffect(() => {
     if (!serverUrl || !authenticated) return;
     let cancelled = false;
-    acceptInvite(code).then(() => { if (!cancelled) navigate("/app", {replace: true}); })
+    acceptInvite(code).then(guild => { if (!cancelled) navigate("/app", {replace: true, state: {inviteGuildId: guild.id}}); })
       .catch(err => { if (!cancelled) setError(err instanceof ApiClientError ? err.message : "Could not connect to the server. Open the invite again to retry."); });
     return () => { cancelled = true; };
   }, [serverUrl, authenticated, code, navigate]);
