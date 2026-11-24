@@ -6,6 +6,7 @@ import AppLayout from "@/layouts/AppLayout";
 import ServerAddressPage from "@/pages/ServerAddressPage";
 import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
+import InvitePage from "@/pages/InvitePage";
 import ChatArea from "@/components/ChatArea";
 
 export default function App() {
@@ -20,6 +21,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/invite/:code" element={<InvitePage />} />
         <Route element={<AuthLayout />}>
           <Route path="/server" element={<ServerAddressPage />} />
           <Route path="/login" element={<LoginPage />} />

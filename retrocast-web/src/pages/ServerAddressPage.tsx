@@ -1,9 +1,11 @@
 import { useState, type FormEvent } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { useAuthStore } from "@/stores/auth";
 
 export default function ServerAddressPage() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const inviteCode = params.get("invite_code") || "";
   const setServerUrl = useAuthStore((s) => s.setServerUrl);
   const savedUrl = useAuthStore((s) => s.serverUrl);
   const [url, setUrl] = useState(savedUrl || "");
@@ -13,7 +15,7 @@ export default function ServerAddressPage() {
     const trimmed = url.trim().replace(/\/+$/, "");
     if (!trimmed) return;
     setServerUrl(trimmed);
-    navigate("/login");
+    navigate(inviteCode ? `/register?invite_code=${encodeURIComponent(inviteCode)}` : "/login");
   }
 
   return (

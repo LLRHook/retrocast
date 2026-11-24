@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { useAuthStore } from "@/stores/auth";
+import { selectInviteGuild } from "@/lib/invite";
+import { useGuildsStore } from "@/stores/guilds";
 import { ApiClientError } from "@/lib/api";
 
 export default function RegisterPage() {
@@ -19,6 +21,14 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       await register(username, password, inviteCode.trim());
+      // Registration atomically joins the invite guild, including single-use invites.
+      // A new account has only that membership; do not consume the invite again.
+      if (inviteCode.trim()) {
+        await useGuildsStore.getState().fetchGuilds();
+        const guild = useGuildsStore.getState().guilds.values().next().value;
+        if (guild) await selectInviteGuild(guild);
+        else { navigate(`/invite/${encodeURIComponent(inviteCode.trim())}`); return; }
+      }
       navigate("/app");
     } catch (err) {
       if (err instanceof ApiClientError) {
@@ -80,7 +90,7 @@ export default function RegisterPage() {
 
       <p className="mt-4 text-sm text-text-muted">
         Already have an account?{" "}
-        <Link to="/login" className="text-accent hover:underline">
+        <Link to={inviteCode ? `/login?invite_code=${encodeURIComponent(inviteCode)}` : "/login"} className="text-accent hover:underline">
           Log in
         </Link>
       </p>

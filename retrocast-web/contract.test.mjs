@@ -118,7 +118,7 @@ function storeModule(name, state) {
 }
 let componentSequence=0;
 async function component(file, replacements, suffix='') {
- let source=readFileSync(resolve('src/components/'+file+'.tsx'),'utf8')+suffix;
+ let source=readFileSync(resolve((file==='InvitePage'?'src/pages/':'src/components/')+file+'.tsx'),'utf8')+suffix;
  source=source.replace(/from "([^"]+)"/g,(whole,name)=>{
   const target=name==='react'?hooksUrl:replacements[name]??(name.startsWith('@/components/')?emptyComponentUrl:undefined);
   return target?'from '+JSON.stringify(target):whole;
@@ -442,6 +442,30 @@ test('actual moderation hook drives kick-only, ban-only, Administrator, plain, a
   const buttons=nodes(tree).filter(n=>n.type==='button').map(n=>n.props.children).filter(s=>s==='Kick'||s==='Ban');assert.deepEqual(buttons,self?[]:expected,bits+' self='+self);
  }}finally{globalThis.window=previous}
 });
+test('copied invite route preserves code through server, register and login',async()=>{
+ assert.match(readFileSync('src/App.tsx','utf8'),/path="\/invite\/:code"/);
+ const auth=await storeModule('useAuthStore',{serverUrl:null,isAuthenticated:false});
+ const router=compile('export const Navigate="Navigate";export const Link="Link";export const useNavigate=()=>()=>{};export const useParams=()=>({code:"copied-code"});','invite-router');
+ const invite=compile('export const acceptInvite=async()=>{}','invite-action');
+ const {default:Page}=await component('InvitePage',{'@/stores/auth':auth.url,'react-router':router,'@/lib/invite':invite,'@/lib/api':apiUrl});
+ hooks.reset();assert.equal(Page().props.to,'/server?invite_code=copied-code');
+ auth.module.setState({serverUrl:'https://fixture',isAuthenticated:false});hooks.reset();assert.equal(Page().props.to,'/register?invite_code=copied-code');
+ for(const page of ['ServerAddressPage','LoginPage','RegisterPage']) assert.match(readFileSync('src/pages/'+page+'.tsx','utf8'),/encodeURIComponent\(inviteCode\)/);
+});
+
+test('invite acceptance coalesces replays, selects target and propagates invalid errors',async()=>{
+ const g=await storeModule('useGuildsStore',{setGuild:x=>calls.push(['guild',x.id]),selectGuild:x=>calls.push(['select',x])});
+ const c=await storeModule('useChannelsStore',{selectChannel:x=>calls.push(['channel',x]),fetchChannels:async x=>calls.push(['fetch',x]),channelsByGuild:new Map([['target',[{id:'text',type:0}]]])});
+ let calls=[];
+ const source=readFileSync('src/lib/invite.ts','utf8').replace('"@/lib/api"',JSON.stringify(apiUrl)).replace('"@/stores/guilds"',JSON.stringify(g.url)).replace('"@/stores/channels"',JSON.stringify(c.url));
+ const {acceptInvite}=await import(compile(source,'real-invite'));
+ let requests=0;globalThis.fetch=async()=>{requests++;await new Promise(setImmediate);return Response.json({data:{id:'target'}})};
+ await Promise.all([acceptInvite('copied'),acceptInvite('copied')]);assert.equal(requests,1);
+ assert.deepEqual(calls,[['guild','target'],['select','target'],['channel',null],['fetch','target'],['channel','text']]);
+ calls=[];globalThis.fetch=async()=>Response.json({error:{code:'EXPIRED',message:'invite has expired'}},{status:410});
+ await assert.rejects(acceptInvite('expired'),/expired/);assert.deepEqual(calls,[]);
+});
+
 } catch (error) {
  cleanup();
  throw error;
