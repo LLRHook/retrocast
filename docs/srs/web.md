@@ -137,4 +137,4 @@ Bound by SYS-CON-003 (existing stack: React 19, Vite 7, TypeScript, Tailwind 4, 
 | 15 | 2026-11-24T12:07:01-05:00 | 6e9507a02345 | REVISION | B7: copied invite routing and server selection; REST contract 2.2.0 and SV-IR-008 version equality through API-060 |
 | 16 | 2026-11-24T13:22:47-05:00 | 2b64e5b68b82 | REVISION | B8 L40: Pilot clause test index; SV-IR-001 documented success criterion; WEB-FR-009 name wording; optional public member identity per E347 |
 | 17 | 2026-11-24T14:31:40-05:00 | 23ec2de281ea | REVISION | B8 round 2: bound typing member lookups; restore acceptance revision punctuation |
-| 18 | 2026-11-24T15:51:31-05:00 | a35d49e9689f | REVISION | B9 #72 round 2: cross-server and empty-channel acceptance; committed create/join recovery, channel refresh and mobile selection regressions; Delivery unchanged |
+| 18 | 2026-11-24T16:23:52-05:00 | 1107811d5d40 | REVISION | B9 #72 round 2: cross-server and empty-channel acceptance; committed create/join recovery, channel refresh and mobile selection regressions; Delivery unchanged |
