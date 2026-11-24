@@ -406,3 +406,4 @@ Scraping and dashboards are SYS-FR-001 in [system.md](system.md).
 | 20 | 2026-11-24T04:24:31-05:00 | 73cb40662507 | REVISION | PR 56 round 2: clear removed guild channel state; document session 503 and late-winner residual; strengthen moderation transaction evidence |
 | 21 | 2026-11-24T08:06:57-05:00 | 23eea2497fd6 | REVISION | B6: atomic keyboard role ordering (API-060) and public HTTPS signed downloads (D-10); transactional and Caddy regressions plus owned browser evidence |
 | 22 | 2026-11-24T12:07:01-05:00 | 6e9507a02345 | REVISION | B7: copied invite routing and server selection; REST contract 2.2.0 and SV-IR-008 version equality through API-060 |
+| 23 | 2026-11-24T12:48:31-05:00 | dcb540ca8410 | REVISION | B7 round 2 (E339): API-049 preview guild_id in unreleased 2.2.0; API-050 unchanged; SV-IR-001/005/007 trace API-060 |
