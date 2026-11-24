@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# demo.sh â€” Seed the Retrocast database with demo data.
+# demo.sh — Seed the Retrocast database with demo data.
 #
 # Usage:
 #   ./scripts/demo.sh
@@ -264,7 +264,7 @@ echo ""
 echo "=== Demo data seeded successfully ==="
 echo ""
 echo "Users:"
-echo "  alice (id=$ALICE_ID) â€” guild owner, Moderator"
+echo "  alice (id=$ALICE_ID) — guild owner, Moderator"
 echo "  bob (id=$BOB_ID)"
 echo ""
 echo "Guild: Retrocast Demo Server (id=$GUILD_ID)"

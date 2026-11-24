@@ -27,7 +27,7 @@ server stops at start with an error naming the keys.
 | `REDIS_URL` | no | Redis connection (default `redis://localhost:6379`) |
 | `SERVER_ADDR` | no | Listen address (default `:8080`; compose keeps it internal) |
 | `LOG_LEVEL` | no | slog level (default `info`) |
-| `REGISTRATION_MODE` | no | `open`, `invite` or `closed` (default `invite`); any other value stops the server at start (SV-FR-062). Specified in rev 2, not yet read by the code |
+| `REGISTRATION_MODE` | no | `open`, `invite` or `closed` (default `invite`); any other value stops the server at start (SV-FR-062). Implemented in PR #54; validated at startup |
 | `ALLOWED_ORIGINS` | no | Comma-separated browser origins allowed besides the server's own (SV-NFR-011). Read from environment or config file; empty by default; exact scheme/host/effective-port match, no wildcards |
 | `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY` | yes for uploads | Object store; bucket `retrocast` is created at start |
 | `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | yes for voice | Token minting (§7.1) |
@@ -96,7 +96,7 @@ strings (SV-IR-004; D-11 fixed in B2).
 | ENT-016 | VoiceState | PostgreSQL `voice_states` | PK (guild_id, user_id); channel_id; session_id TEXT; self_mute BOOL; self_deaf BOOL; joined_at | No foreign keys; rows stay when a client disconnects without leaving | Personal (presence in a room) | SV-FR-048–SV-FR-050 | v1.0.0 |
 | ENT-017 | DeviceToken | PostgreSQL `device_tokens` | id BIGSERIAL PK; user_id FK cascade; platform VARCHAR(16); token TEXT; UNIQUE(user_id, token) | No code reads or writes it | Secret (push token) | none (push is Later, with the iOS client: Q-025) | v1.0.0 |
 | ENT-018 | RefreshTokenRow | PostgreSQL `refresh_tokens` | token VARCHAR(64) PK; user_id FK cascade; expires_at; created_at | No code reads or writes it; refresh tokens live in Redis (ENT-019) | Secret | none | v1.0.0 |
-| ENT-019 | RefreshToken | Redis | key `refresh:{token}` (token = 32 random bytes, hex); value user id; TTL 7 days | Read then deleted on refresh (two commands, not atomic); no per-user index, which SV-FR-061 needs | Secret | SV-FR-005, SV-FR-006, SV-FR-061, SV-NFR-002 | v1.0.0 |
+| ENT-019 | RefreshToken | Redis | key `refresh:{token}` (token = 32 random bytes, hex); value user id; TTL 7 days | Atomically consumed on refresh with Redis GETDEL (PR #54); no per-user index, which SV-FR-061 needs | Secret | SV-FR-005, SV-FR-006, SV-FR-061, SV-NFR-002 | v1.0.0 |
 | ENT-020 | Presence | Redis | key `presence:{user id}`; value status; TTL 5 minutes | Set on IDENTIFY, successful RESUME and op 3; authenticated heartbeats extend the existing status TTL | Personal | SV-FR-032–SV-FR-034 | v1.0.0 |
 | ENT-021 | RateLimitCounter and TypingMarker | Redis | `rl:user:{user id}:{route}` or `rl:ip:{client ip}:{route}`, one-minute window (Lua script); `typing:{channel id}:{user id}`, TTL 10 s | Ephemeral; the client IP is Echo's `RealIP` (SV-NFR-009) | Internal | SV-NFR-003, SV-NFR-009, SV-NFR-010, SV-FR-031 | v1.0.0 |
 | ENT-022 | StoredObject | MinIO bucket `retrocast` | key `attachments/{channel id}/{attachment id}/{filename}`; content type from upload | Unlinked uploads and objects remain indefinitely; linked-message deletion removes metadata but does not remove objects. Metadata insert failure triggers best-effort object deletion, which can leave an orphan if cleanup fails. | Personal (file content) | SV-FR-051, SV-FR-052 | v1.1.0 |

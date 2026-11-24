@@ -437,11 +437,20 @@ paths:
                 username:
                   type: string
                   example: alice
+                invite_code:
+                  type: string
+                  description: Required in invite mode except for the first account on an empty instance.
                 password:
                   type: string
                   format: password
                   example: s3cret!
       responses:
+        "403":
+          description: INVITE_REQUIRED, INVALID_INVITE or REGISTRATION_CLOSED.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "200":
           description: Account created
           content:
