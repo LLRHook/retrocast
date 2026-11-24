@@ -2,7 +2,7 @@
 
 Conforms to the SRS content outline of ISO/IEC/IEEE 29148:2018 §9.6.
 Related: [Product Brief](PRODUCT_BRIEF.md) · [Data Contracts](DATA_CONTRACTS.md) · [Architecture](ARCHITECTURE.md)
-Status: Baselined (rev 7)
+Status: Baselined (rev 8)
 
 > **Rev 2 (2026-11-23).** Rev 1 was written unattended from repository evidence. On
 > 2026-11-23 Victor Ivanov accepted every recommendation of the product brief (Q-001–Q-034,
@@ -140,6 +140,8 @@ Later capabilities with no requirements yet: CAP-018 (voice controls), CAP-022 (
 CAP-023 (push, with the iOS client), CAP-024 (Unicode emoji picker), CAP-026 (iOS 7-era look),
 CAP-030 (audit log), CAP-038 and CAP-039. Their requirements are written when the owner
 schedules them.
+
+Validation records: [2026-11-24 Pilot validation](validation/pilot-2026-11-24.md) — candidate f60c6d5, exit NOT MET (role-ordering #60; stopped at first gate failure).
 
 ## 2. References
 - ISO/IEC/IEEE 29148:2018, Systems and software engineering — Life cycle processes —
