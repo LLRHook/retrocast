@@ -1,7 +1,9 @@
 package api
 
 import (
+	"context"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/victorivanov/retrocast/internal/models"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -34,6 +36,23 @@ func TestSetupRouter_ResolvesClientIPThroughProxy(t *testing.T) {
 	}
 }
 
+func TestInviteLookupLimit(t *testing.T) {
+	e := echo.New()
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+	SetupRouter(e, &Dependencies{TokenService: auth.NewTokenService("test"), Redis: newTestRedis(t), Invites: newInviteHandler(&mockInviteRepo{GetByCodeFn: func(context.Context, string) (*models.Invite, error) { return nil, nil }}, &mockGuildRepo{}, &mockMemberRepo{}, &mockRoleRepo{}, &mockBanRepo{}, &mockGateway{})})
+	for i := 0; i < 6; i++ {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/api/v1/invites/test", nil)
+		e.ServeHTTP(rec, req)
+		want := 404
+		if i == 5 {
+			want = 429
+		}
+		if rec.Code != want {
+			t.Fatalf("request %d: got %d want %d", i+1, rec.Code, want)
+		}
+	}
+}
 func TestRouterOriginPolicy(t *testing.T) {
 	for _, tc := range []struct {
 		origin string

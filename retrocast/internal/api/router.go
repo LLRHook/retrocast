@@ -131,7 +131,7 @@ func SetupRouter(e *echo.Echo, deps *Dependencies) {
 	authGroup.POST("/refresh", deps.Auth.Refresh)
 
 	// Public invite info — no auth required
-	v1.GET("/invites/:code", deps.Invites.GetInvite)
+	v1.GET("/invites/:code", deps.Invites.GetInvite, RateLimitMiddleware(deps.Redis, 5, time.Minute))
 
 	// Protected routes — require JWT auth + general rate limit
 	authMw := deps.TokenService.Middleware()

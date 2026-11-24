@@ -27,6 +27,7 @@ func ClientIPExtractor() echo.IPExtractor {
 func RateLimitMiddleware(redisClient *redis.Client, limit int, window time.Duration) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
+			_, authenticated := c.Get("user_id").(int64)
 			var key string
 			if uid, ok := c.Get("user_id").(int64); ok {
 				key = fmt.Sprintf("rl:user:%d:%s", uid, c.Path())
@@ -36,7 +37,10 @@ func RateLimitMiddleware(redisClient *redis.Client, limit int, window time.Durat
 
 			allowed, count, ttlMs, err := redisClient.CheckRateLimit(c.Request().Context(), key, limit, window)
 			if err != nil {
-				// On Redis failure, allow the request through rather than blocking users.
+				// Keep authenticated members chatting; prevent unthrottled anonymous abuse.
+				if !authenticated {
+					return errorJSON(c, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "rate limiting unavailable")
+				}
 				return next(c)
 			}
 
