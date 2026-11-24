@@ -80,7 +80,7 @@ func TestRegistrationAtomicityLive(t *testing.T) {
 		}
 		return r
 	}
-	check := func(r *httptest.ResponseRecorder, status int, code string) {
+	check := func(t *testing.T, r *httptest.ResponseRecorder, status int, code string) {
 		t.Helper()
 		if r.Code != status || (code != "" && !strings.Contains(r.Body.String(), `"code":"`+code+`"`)) {
 			t.Fatalf("status=%d, expected %d code %s", r.Code, status, code)
@@ -108,11 +108,11 @@ func TestRegistrationAtomicityLive(t *testing.T) {
 		if counts[200] != 1 || counts[403] != 1 {
 			t.Fatalf("bootstrap %v", counts)
 		}
-		check(register("missing", ""), 403, "INVITE_REQUIRED")
+		check(t, register("missing", ""), 403, "INVITE_REQUIRED")
 	})
 	as.ConfigureRegistration("open", invites)
 	owner := register("owner", "")
-	check(owner, 200, "")
+	check(t, owner, 200, "")
 	var response struct {
 		Data struct {
 			User struct {
@@ -154,11 +154,11 @@ func TestRegistrationAtomicityLive(t *testing.T) {
 	as.ConfigureRegistration("invite", invites)
 	t.Run("registration invite and rollback", func(t *testing.T) {
 		makeInvite("register", 1, time.Now().Add(time.Hour))
-		check(register("invited", "register"), 200, "")
-		check(register("exhausted", "register"), 403, "INVALID_INVITE")
-		check(register("unknown", "absent"), 403, "INVALID_INVITE")
+		check(t, register("invited", "register"), 200, "")
+		check(t, register("exhausted", "register"), 403, "INVALID_INVITE")
+		check(t, register("unknown", "absent"), 403, "INVALID_INVITE")
 		makeInvite("expired", 1, time.Now().Add(-time.Hour))
-		check(register("expired", "expired"), 403, "INVALID_INVITE")
+		check(t, register("expired", "expired"), 403, "INVALID_INVITE")
 		var n int
 		_ = pool.QueryRow(ctx, "SELECT count(*) FROM users WHERE username IN ('exhausted','unknown','expired')").Scan(&n)
 		if n != 0 {
@@ -171,7 +171,7 @@ func TestRegistrationAtomicityLive(t *testing.T) {
 		// Failure after membership insert must roll back account, membership and use.
 		makeInvite("failuse", 1, time.Now().Add(time.Hour))
 		exec(`CREATE FUNCTION fail_use() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'injected failure'; END $$; CREATE TRIGGER fail_use BEFORE UPDATE ON invites FOR EACH ROW EXECUTE FUNCTION fail_use()`)
-		check(register("failedjoin", "failuse"), 500, "INTERNAL")
+		check(t, register("failedjoin", "failuse"), 500, "INTERNAL")
 		exec("DROP TRIGGER fail_use ON invites; DROP FUNCTION fail_use()")
 		_ = pool.QueryRow(ctx, "SELECT count(*) FROM users WHERE username='failedjoin'").Scan(&n)
 		if n != 0 {
@@ -217,11 +217,11 @@ func TestRegistrationAtomicityLive(t *testing.T) {
 	})
 	t.Run("closed preserves login", func(t *testing.T) {
 		as.ConfigureRegistration("closed", invites)
-		check(register("closed", ""), 403, "REGISTRATION_CLOSED")
+		check(t, register("closed", ""), 403, "REGISTRATION_CLOSED")
 		c, r := newTestContext(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"owner","password":"password123"}`))
 		if e := h.Login(c); e != nil {
 			t.Fatal(e)
 		}
-		check(r, 200, "")
+		check(t, r, 200, "")
 	})
 }
