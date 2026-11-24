@@ -4,6 +4,7 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"flag"
@@ -124,6 +125,12 @@ func (m *measurement) receive(client int, content string) {
 	}
 	d.seen[client] = true
 	m.latencies = append(m.latencies, float64(time.Since(d.sent).Microseconds())/1000)
+}
+func quantile(values []float64) any {
+	if len(values) == 0 {
+		return nil
+	}
+	return p95(values)
 }
 func p95(values []float64) float64 {
 	if len(values) == 0 {
@@ -279,8 +286,28 @@ func main() {
 		}
 		history = append(history, float64(time.Since(start).Microseconds())/1000)
 	}
-	// Keep measured sends clear of the seeding window's per-user 50/min limit.
-	time.Sleep(time.Minute)
+	// Credential refresh already leaves more than a minute after seed writes.
+	// Begin immediately after READY/history; an idle cooldown could conceal a
+	// connection-lifetime defect before the measured profile even starts.
+	for _, client := range clients {
+		parts := strings.Split(client.token, ".")
+		if len(parts) != 3 {
+			panic("invalid setup access token")
+		}
+		raw, err := base64.RawURLEncoding.DecodeString(parts[1])
+		if err != nil {
+			panic("invalid setup access token")
+		}
+		var claims struct {
+			Exp int64 `json:"exp"`
+		}
+		if json.Unmarshal(raw, &claims) != nil {
+			panic("invalid setup access token")
+		}
+		if time.Until(time.Unix(claims.Exp, 0)) < *duration+time.Minute {
+			panic("setup credential lifetime insufficient for measured load")
+		}
+	}
 	fmt.Printf("load: starting %s, 20 clients, one send/client/10s; no retries\n", *duration)
 	start := time.Now()
 	attempts, sendErrors := 0, 0
@@ -311,7 +338,7 @@ func main() {
 	time.Sleep(5 * time.Second)
 	m.mu.Lock()
 	lost := attempts*19 - len(m.latencies)
-	result := map[string]any{"duration_seconds": duration.Seconds(), "clients": 20, "send_attempts": attempts, "send_errors": sendErrors, "expected_deliveries": attempts * 19, "received_deliveries": len(m.latencies), "lost_deliveries": lost, "duplicates": m.duplicates, "unexpected": m.unexpected, "disconnects": m.disconnects, "gateway_p95_ms": p95(m.latencies), "history_calls": len(history), "history_p95_ms": p95(history), "channel_id": channel}
+	result := map[string]any{"duration_seconds": duration.Seconds(), "clients": 20, "send_attempts": attempts, "send_errors": sendErrors, "expected_deliveries": attempts * 19, "received_deliveries": len(m.latencies), "lost_deliveries": lost, "duplicates": m.duplicates, "unexpected": m.unexpected, "disconnects": m.disconnects, "gateway_p95_ms": quantile(m.latencies), "history_calls": len(history), "history_p95_ms": quantile(history), "channel_id": channel}
 
 	loadP95 := p95(m.latencies)
 	loadDisconnects, loadDuplicates, loadUnexpected := m.disconnects, m.duplicates, m.unexpected
@@ -338,7 +365,7 @@ func main() {
 	result["single_sender_attempts"] = 100
 	result["single_sender_expected_deliveries"] = 1900
 	result["single_sender_received_deliveries"] = len(m.latencies)
-	result["single_sender_p95_ms"] = p95(m.latencies)
+	result["single_sender_p95_ms"] = quantile(m.latencies)
 	result["send_errors"] = sendErrors
 	b, _ := json.MarshalIndent(result, "", "  ")
 	fmt.Println(string(b))
