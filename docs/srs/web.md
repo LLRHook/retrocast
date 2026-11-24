@@ -90,30 +90,30 @@ Bound by SYS-CON-003 (existing stack: React 19, Vite 7, TypeScript, Tailwind 4, 
 
 | Req | Priority | Delivery | Entities | APIs / Events | Components | Verification |
 |---|---|---|---|---|---|---|
-| WEB-FR-001 | Must | Implemented | — | — | CMP-008 | Demonstration |
-| WEB-FR-002 | Must | Implemented | ENT-001 | API-001, API-002 | CMP-008, CMP-001 | Demonstration |
-| WEB-FR-003 | Must | Implemented | ENT-019 | API-003 | CMP-008, CMP-001 | Demonstration |
-| WEB-FR-004 | Must | Implemented | — | EVT-001–EVT-007 | CMP-008, CMP-002 | Demonstration |
-| WEB-FR-005 | Must | Implemented | ENT-002 | API-007, API-013, API-050 | CMP-008, CMP-001 | Demonstration |
-| WEB-FR-006 | Must | Implemented | ENT-003 | API-017–API-021, EVT-015–EVT-017 | CMP-008, CMP-001 | Demonstration |
-| WEB-FR-007 | Must | Implemented | ENT-008 | API-023, EVT-009–EVT-011 | CMP-008, CMP-001 | Demonstration |
-| WEB-FR-008 | Must | Implemented | ENT-008 | API-022, API-028 | CMP-008, CMP-001 | Demonstration |
-| WEB-FR-009 | Must | Implemented | — | EVT-024 | CMP-008, CMP-002 | Demonstration |
-| WEB-FR-010 | Must | Implemented | ENT-004 | API-033, EVT-025 | CMP-008, CMP-002 | Demonstration |
-| WEB-FR-011 | Must | Implemented | ENT-008 | EVT-009 | CMP-008 | Inspection |
-| WEB-FR-012 | Must | Implemented | ENT-010 | API-047, API-048, API-051 | CMP-008, CMP-001 | Demonstration |
-| WEB-FR-013 | Must | Implemented | ENT-006 | API-039–API-042, API-060, EVT-021–EVT-023 | CMP-008, CMP-001 | Demonstration |
-| WEB-FR-014 | Must | Implemented | ENT-002, ENT-004 | API-015, API-016, API-035 | CMP-008, CMP-001 | Demonstration |
+| WEB-FR-001 | Must | Verified | — | — | CMP-008 | Demonstration |
+| WEB-FR-002 | Must | Verified | ENT-001 | API-001, API-002 | CMP-008, CMP-001 | Demonstration |
+| WEB-FR-003 | Must | Verified | ENT-019 | API-003 | CMP-008, CMP-001 | Demonstration |
+| WEB-FR-004 | Must | Verified | — | EVT-001–EVT-007 | CMP-008, CMP-002 | Demonstration |
+| WEB-FR-005 | Must | Verified | ENT-002 | API-007, API-013, API-050 | CMP-008, CMP-001 | Demonstration |
+| WEB-FR-006 | Must | Verified | ENT-003 | API-017–API-021, EVT-015–EVT-017 | CMP-008, CMP-001 | Demonstration |
+| WEB-FR-007 | Must | Verified | ENT-008 | API-023, EVT-009–EVT-011 | CMP-008, CMP-001 | Demonstration |
+| WEB-FR-008 | Must | Verified | ENT-008 | API-022, API-028 | CMP-008, CMP-001 | Demonstration |
+| WEB-FR-009 | Must | Verified | — | EVT-024 | CMP-008, CMP-002 | Demonstration |
+| WEB-FR-010 | Must | Verified | ENT-004 | API-033, EVT-025 | CMP-008, CMP-002 | Demonstration |
+| WEB-FR-011 | Must | Verified | ENT-008 | EVT-009 | CMP-008 | Inspection |
+| WEB-FR-012 | Must | Verified | ENT-010 | API-047, API-048, API-051 | CMP-008, CMP-001 | Demonstration |
+| WEB-FR-013 | Must | Verified | ENT-006 | API-039–API-042, API-060, EVT-021–EVT-023 | CMP-008, CMP-001 | Demonstration |
+| WEB-FR-014 | Must | Verified | ENT-002, ENT-004 | API-015, API-016, API-035 | CMP-008, CMP-001 | Demonstration |
 | WEB-FR-015 | Could | Implemented | ENT-001 | API-004, API-005, API-006 | CMP-008, CMP-001 | Demonstration |
 | WEB-FR-016 | Could | Implemented | ENT-012 | API-008, API-009, API-022 | CMP-008, CMP-001 | Demonstration |
 | WEB-FR-017 | Could | Partial | ENT-009 | API-027 | CMP-008, CMP-001, CMP-006 | Demonstration |
 | WEB-FR-018 | Could | Partial | ENT-008 | API-025, API-026, EVT-010, EVT-011 | CMP-008, CMP-001 | Demonstration |
-| WEB-FR-019 | Must | Implemented | ENT-001 | API-059 | CMP-008, CMP-001 | Demonstration |
-| WEB-FR-020 | Must | Implemented | ENT-001, ENT-010 | API-001, API-002, API-050 | CMP-008, CMP-001 | Demonstration |
-| WEB-FR-021 | Must | Implemented | ENT-004, ENT-011 | API-038, API-053 | CMP-008, CMP-001 | Demonstration |
-| WEB-FR-022 | Must | Implemented | ENT-011 | API-052, API-054 | CMP-008, CMP-001 | Demonstration |
-| WEB-FR-023 | Should | Implemented | ENT-004 | EVT-014, EVT-019, EVT-027 | CMP-008, CMP-002 | Demonstration |
-| WEB-FR-024 | Must | Implemented | ENT-019 | API-004 | CMP-008, CMP-001 | Demonstration |
+| WEB-FR-019 | Must | Verified | ENT-001 | API-059 | CMP-008, CMP-001 | Demonstration |
+| WEB-FR-020 | Must | Verified | ENT-001, ENT-010 | API-001, API-002, API-050 | CMP-008, CMP-001 | Demonstration |
+| WEB-FR-021 | Must | Verified | ENT-004, ENT-011 | API-038, API-053 | CMP-008, CMP-001 | Demonstration |
+| WEB-FR-022 | Must | Verified | ENT-011 | API-052, API-054 | CMP-008, CMP-001 | Demonstration |
+| WEB-FR-023 | Should | Verified | ENT-004 | EVT-014, EVT-019, EVT-027 | CMP-008, CMP-002 | Demonstration |
+| WEB-FR-024 | Must | Verified | ENT-019 | API-004 | CMP-008, CMP-001 | Demonstration |
 | WEB-NFR-001 | Should | Not started | — | — | CMP-008 | Test |
 | WEB-NFR-002 | Should | Not started | — | — | CMP-008 | Demonstration |
 

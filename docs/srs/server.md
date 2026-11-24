@@ -281,58 +281,58 @@ Scraping and dashboards are SYS-FR-001 in [system.md](system.md).
 
 | Req | Priority | Delivery | Entities | APIs / Events | Components | Verification |
 |---|---|---|---|---|---|---|
-| SV-FR-001 | Must | Implemented | ENT-001, ENT-019 | API-001 | CMP-001 | Test |
-| SV-FR-002 | Must | Implemented | ENT-001 | API-001 | CMP-001 | Test |
-| SV-FR-003 | Must | Implemented | — | API-001 | CMP-001 | Test |
-| SV-FR-004 | Must | Implemented | ENT-001, ENT-019 | API-002 | CMP-001 | Test |
-| SV-FR-005 | Must | Implemented | ENT-019 | API-003 | CMP-001, CMP-005 | Test |
-| SV-FR-006 | Must | Implemented | ENT-019 | API-004 | CMP-001, CMP-005 | Test |
-| SV-FR-060 | Must | Implemented | ENT-001 | API-059 | CMP-001 | Test |
-| SV-FR-061 | Must | Implemented | ENT-019 | API-059, API-003 | CMP-001, CMP-005 | Test |
-| SV-FR-007 | Must | Implemented | ENT-002, ENT-004 | API-013, EVT-012 | CMP-001 | Test |
-| SV-FR-008 | Must | Implemented | ENT-005, ENT-006 | API-013 | CMP-001 | Test |
-| SV-FR-009 | Must | Implemented | ENT-003 | API-013, API-018 | CMP-001 | Test |
-| SV-FR-010 | Must | Implemented | ENT-002 | API-014 | CMP-001 | Test |
-| SV-FR-011 | Must | Implemented | ENT-002 | API-015, EVT-013 | CMP-001 | Test |
-| SV-FR-012 | Must | Implemented | ENT-002 | API-016, EVT-014 | CMP-001 | Test |
-| SV-FR-013 | Must | Implemented | ENT-002, ENT-004 | API-007 | CMP-001 | Test |
-| SV-FR-014 | Must | Implemented | ENT-003 | API-017, EVT-015 | CMP-001 | Test |
-| SV-FR-015 | Must | Implemented | ENT-003 | API-020, API-021, EVT-016, EVT-017 | CMP-001 | Test |
-| SV-FR-016 | Must | Implemented | ENT-003 | API-018, API-019 | CMP-001 | Test |
+| SV-FR-001 | Must | Verified | ENT-001, ENT-019 | API-001 | CMP-001 | Test |
+| SV-FR-002 | Must | Verified | ENT-001 | API-001 | CMP-001 | Test |
+| SV-FR-003 | Must | Verified | — | API-001 | CMP-001 | Test |
+| SV-FR-004 | Must | Verified | ENT-001, ENT-019 | API-002 | CMP-001 | Test |
+| SV-FR-005 | Must | Verified | ENT-019 | API-003 | CMP-001, CMP-005 | Test |
+| SV-FR-006 | Must | Verified | ENT-019 | API-004 | CMP-001, CMP-005 | Test |
+| SV-FR-060 | Must | Verified | ENT-001 | API-059 | CMP-001 | Test |
+| SV-FR-061 | Must | Verified | ENT-019 | API-059, API-003 | CMP-001, CMP-005 | Test |
+| SV-FR-007 | Must | Verified | ENT-002, ENT-004 | API-013, EVT-012 | CMP-001 | Test |
+| SV-FR-008 | Must | Verified | ENT-005, ENT-006 | API-013 | CMP-001 | Test |
+| SV-FR-009 | Must | Verified | ENT-003 | API-013, API-018 | CMP-001 | Test |
+| SV-FR-010 | Must | Verified | ENT-002 | API-014 | CMP-001 | Test |
+| SV-FR-011 | Must | Verified | ENT-002 | API-015, EVT-013 | CMP-001 | Test |
+| SV-FR-012 | Must | Verified | ENT-002 | API-016, EVT-014 | CMP-001 | Test |
+| SV-FR-013 | Must | Verified | ENT-002, ENT-004 | API-007 | CMP-001 | Test |
+| SV-FR-014 | Must | Verified | ENT-003 | API-017, EVT-015 | CMP-001 | Test |
+| SV-FR-015 | Must | Verified | ENT-003 | API-020, API-021, EVT-016, EVT-017 | CMP-001 | Test |
+| SV-FR-016 | Must | Verified | ENT-003 | API-018, API-019 | CMP-001 | Test |
 | SV-FR-017 | Could | Implemented | ENT-003 | API-017 | CMP-001 | Test |
-| SV-FR-018 | Must | Implemented | ENT-010 | API-047 | CMP-001 | Test |
-| SV-FR-019 | Must | Implemented | ENT-010 | API-049 | CMP-001 | Test |
-| SV-FR-020 | Must | Implemented | ENT-004, ENT-010 | API-050, EVT-018 | CMP-001, CMP-002 | Test |
-| SV-FR-021 | Must | Implemented | ENT-010 | API-048, API-051 | CMP-001 | Test |
-| SV-FR-022 | Must | Implemented | ENT-004 | API-035, EVT-019 | CMP-001 | Test |
-| SV-FR-023 | Must | Implemented | ENT-004, ENT-005 | API-033 | CMP-001 | Test |
-| SV-FR-024 | Must | Implemented | ENT-004 | API-036 | CMP-001 | Test |
-| SV-FR-025 | Must | Implemented | ENT-008 | API-022 | CMP-001 | Test |
-| SV-FR-026 | Must | Implemented | — | EVT-009 | CMP-002 | Test |
-| SV-FR-027 | Must | Implemented | ENT-008, ENT-009 | API-023 | CMP-001 | Test |
-| SV-FR-028 | Must | Implemented | ENT-008 | API-024 | CMP-001 | Test |
+| SV-FR-018 | Must | Verified | ENT-010 | API-047 | CMP-001 | Test |
+| SV-FR-019 | Must | Verified | ENT-010 | API-049 | CMP-001 | Test |
+| SV-FR-020 | Must | Verified | ENT-004, ENT-010 | API-050, EVT-018 | CMP-001, CMP-002 | Test |
+| SV-FR-021 | Must | Verified | ENT-010 | API-048, API-051 | CMP-001 | Test |
+| SV-FR-022 | Must | Verified | ENT-004 | API-035, EVT-019 | CMP-001 | Test |
+| SV-FR-023 | Must | Verified | ENT-004, ENT-005 | API-033 | CMP-001 | Test |
+| SV-FR-024 | Must | Verified | ENT-004 | API-036 | CMP-001 | Test |
+| SV-FR-025 | Must | Verified | ENT-008 | API-022 | CMP-001 | Test |
+| SV-FR-026 | Must | Verified | — | EVT-009 | CMP-002 | Test |
+| SV-FR-027 | Must | Verified | ENT-008, ENT-009 | API-023 | CMP-001 | Test |
+| SV-FR-028 | Must | Verified | ENT-008 | API-024 | CMP-001 | Test |
 | SV-FR-029 | Could | Implemented | ENT-008 | API-025, EVT-010 | CMP-001 | Test |
 | SV-FR-030 | Could | Implemented | ENT-008 | API-026, EVT-011 | CMP-001 | Test |
-| SV-FR-031 | Must | Implemented | ENT-021 | API-028, EVT-024 | CMP-002 | Test |
-| SV-FR-032 | Must | Implemented | ENT-020 | EVT-003, EVT-025 | CMP-002 | Test |
-| SV-FR-033 | Must | Implemented | ENT-020 | EVT-008, EVT-025 | CMP-002 | Test |
-| SV-FR-034 | Must | Implemented | ENT-020 | EVT-025 | CMP-002 | Test |
-| SV-FR-035 | Must | Implemented | — | EVT-001 | CMP-002 | Test |
-| SV-FR-036 | Must | Implemented | — | EVT-002, EVT-003 | CMP-002 | Test |
-| SV-FR-037 | Must | Implemented | — | EVT-004, EVT-005 | CMP-002 | Test |
-| SV-FR-038 | Must | Implemented | — | EVT-006 | CMP-002 | Test |
+| SV-FR-031 | Must | Verified | ENT-021 | API-028, EVT-024 | CMP-002 | Test |
+| SV-FR-032 | Must | Verified | ENT-020 | EVT-003, EVT-025 | CMP-002 | Test |
+| SV-FR-033 | Must | Verified | ENT-020 | EVT-008, EVT-025 | CMP-002 | Test |
+| SV-FR-034 | Must | Verified | ENT-020 | EVT-025 | CMP-002 | Test |
+| SV-FR-035 | Must | Verified | — | EVT-001 | CMP-002 | Test |
+| SV-FR-036 | Must | Verified | — | EVT-002, EVT-003 | CMP-002 | Test |
+| SV-FR-037 | Must | Verified | — | EVT-004, EVT-005 | CMP-002 | Test |
+| SV-FR-038 | Must | Verified | — | EVT-006 | CMP-002 | Test |
 | SV-FR-039 | Won't | Deprecated (rev 2, superseded by SV-FR-072) | — | EVT-007 | CMP-002 | Test |
-| SV-FR-071 | Must | Implemented | ENT-004 | EVT-009, EVT-012, EVT-018, EVT-019 | CMP-002 | Test |
-| SV-FR-072 | Must | Implemented | — | EVT-003, EVT-009, EVT-025 | CMP-002 | Test |
-| SV-FR-040 | Must | Implemented | ENT-006 | API-039, EVT-021 | CMP-001 | Test |
-| SV-FR-041 | Must | Implemented | ENT-006 | API-041, EVT-022 | CMP-001 | Test |
-| SV-FR-042 | Must | Implemented | ENT-006 | API-042, EVT-023 | CMP-001 | Test |
-| SV-FR-043 | Must | Implemented | ENT-005 | API-043, API-044, API-037, EVT-020 | CMP-001 | Test |
-| SV-FR-044 | Must | Implemented | ENT-006 | API-040 | CMP-001 | Test |
-| SV-FR-045 | Must | Implemented | ENT-005, ENT-006, ENT-007 | — | CMP-001 | Test |
-| SV-FR-046 | Must | Implemented | ENT-002, ENT-006 | — | CMP-001 | Test |
+| SV-FR-071 | Must | Verified | ENT-004 | EVT-009, EVT-012, EVT-018, EVT-019 | CMP-002 | Test |
+| SV-FR-072 | Must | Verified | — | EVT-003, EVT-009, EVT-025 | CMP-002 | Test |
+| SV-FR-040 | Must | Verified | ENT-006 | API-039, EVT-021 | CMP-001 | Test |
+| SV-FR-041 | Must | Verified | ENT-006 | API-041, EVT-022 | CMP-001 | Test |
+| SV-FR-042 | Must | Verified | ENT-006 | API-042, EVT-023 | CMP-001 | Test |
+| SV-FR-043 | Must | Verified | ENT-005 | API-043, API-044, API-037, EVT-020 | CMP-001 | Test |
+| SV-FR-044 | Must | Verified | ENT-006 | API-040 | CMP-001 | Test |
+| SV-FR-045 | Must | Verified | ENT-005, ENT-006, ENT-007 | — | CMP-001 | Test |
+| SV-FR-046 | Must | Verified | ENT-002, ENT-006 | — | CMP-001 | Test |
 | SV-FR-047 | Could | Implemented | ENT-007 | API-045, API-046 | CMP-001 | Test |
-| SV-FR-078 | Must | Implemented | ENT-005, ENT-006, ENT-007 | API-037, API-039, API-041, API-043, API-044, API-045 | CMP-001 | Test |
+| SV-FR-078 | Must | Verified | ENT-005, ENT-006, ENT-007 | API-037, API-039, API-041, API-043, API-044, API-045 | CMP-001 | Test |
 | SV-FR-048 | Could | Implemented | ENT-016 | API-056, EVT-026 | CMP-001, CMP-007 | Test |
 | SV-FR-049 | Could | Implemented | ENT-016 | API-057, EVT-026 | CMP-001 | Test |
 | SV-FR-050 | Could | Implemented | ENT-016 | API-058 | CMP-001 | Test |
@@ -345,41 +345,41 @@ Scraping and dashboards are SYS-FR-001 in [system.md](system.md).
 | SV-FR-057 | Could | Partial | ENT-013 | API-010, API-011 | CMP-001 | Test |
 | SV-FR-058 | Could | Implemented | ENT-012, ENT-013 | API-009 | CMP-001 | Test |
 | SV-FR-059 | Could | Partial | ENT-008 | API-055 | CMP-001, CMP-004 | Test |
-| SV-FR-062 | Must | Implemented | — | API-001 | CMP-001 | Test |
-| SV-FR-063 | Must | Implemented | ENT-001, ENT-004, ENT-010 | API-001 | CMP-001 | Test |
-| SV-FR-064 | Must | Implemented | — | API-001, API-002 | CMP-001 | Test |
-| SV-FR-065 | Must | Implemented | ENT-001 | API-001 | CMP-001 | Test |
-| SV-FR-066 | Must | Implemented | ENT-004 | API-038, EVT-019 | CMP-001 | Test |
-| SV-FR-067 | Must | Implemented | ENT-004, ENT-011 | API-053, API-050, EVT-019, EVT-027 | CMP-001 | Test |
-| SV-FR-068 | Must | Implemented | ENT-011 | API-052 | CMP-001 | Test |
-| SV-FR-069 | Must | Implemented | ENT-011 | API-054, EVT-028 | CMP-001 | Test |
-| SV-FR-070 | Must | Implemented | ENT-004, ENT-006 | API-038, API-053 | CMP-001 | Test |
-| SV-FR-073 | Should | Implemented | — | — | CMP-003 | Test |
+| SV-FR-062 | Must | Verified | — | API-001 | CMP-001 | Test |
+| SV-FR-063 | Must | Verified | ENT-001, ENT-004, ENT-010 | API-001 | CMP-001 | Test |
+| SV-FR-064 | Must | Verified | — | API-001, API-002 | CMP-001 | Test |
+| SV-FR-065 | Must | Verified | ENT-001 | API-001 | CMP-001 | Test |
+| SV-FR-066 | Must | Verified | ENT-004 | API-038, EVT-019 | CMP-001 | Test |
+| SV-FR-067 | Must | Verified | ENT-004, ENT-011 | API-053, API-050, EVT-019, EVT-027 | CMP-001 | Test |
+| SV-FR-068 | Must | Verified | ENT-011 | API-052 | CMP-001 | Test |
+| SV-FR-069 | Must | Verified | ENT-011 | API-054, EVT-028 | CMP-001 | Test |
+| SV-FR-070 | Must | Verified | ENT-004, ENT-006 | API-038, API-053 | CMP-001 | Test |
+| SV-FR-073 | Should | Verified | — | — | CMP-003 | Test |
 | SV-FR-074 | Could | Implemented | ENT-014 | API-030, API-031, EVT-029, EVT-030 | CMP-001 | Test |
 | SV-FR-075 | Could | Implemented | ENT-014 | API-032 | CMP-001 | Test |
 | SV-FR-076 | Could | Implemented | ENT-015 | API-012, API-029, EVT-003 | CMP-001 | Test |
 | SV-FR-077 | Could | Partial | ENT-004 | API-034, API-037, EVT-020 | CMP-001 | Test |
-| SV-IR-001 | Must | Implemented | — | API-001–API-060 | CMP-001 | Test |
-| SV-IR-002 | Must | Implemented | — | EVT-001–EVT-030 | CMP-002 | Test |
-| SV-IR-003 | Must | Implemented | — | all API | CMP-001 | Test |
-| SV-IR-004 | Must | Implemented | ENT-004 | API-033, EVT-003 | CMP-001, CMP-002 | Test |
-| SV-IR-005 | Should | Implemented | — | API-001–API-060 | CMP-001 | Demonstration |
+| SV-IR-001 | Must | Verified | — | API-001–API-060 | CMP-001 | Test |
+| SV-IR-002 | Must | Verified | — | EVT-001–EVT-030 | CMP-002 | Test |
+| SV-IR-003 | Must | Verified | — | all API | CMP-001 | Test |
+| SV-IR-004 | Must | Verified | ENT-004 | API-033, EVT-003 | CMP-001, CMP-002 | Test |
+| SV-IR-005 | Should | Verified | — | API-001–API-060 | CMP-001 | Demonstration |
 | SV-IR-006 | Could | Implemented | — | API-056 | CMP-001, CMP-007 | Test |
-| SV-IR-007 | Must | Implemented | — | API-001–API-060 | CMP-001 | Test |
-| SV-IR-008 | Must | Implemented | — | API-001–API-060 | CMP-001 | Test |
-| SV-NFR-001 | Must | Implemented | ENT-001 | API-001, API-002 | CMP-001 | Test |
-| SV-NFR-002 | Must | Implemented | ENT-019 | API-002, API-003 | CMP-001 | Test |
-| SV-NFR-003 | Must | Implemented | ENT-021 | API-001–API-003, API-049, API-059 | CMP-001, CMP-005 | Test |
-| SV-NFR-004 | Must | Implemented | — | — | CMP-001 | Demonstration |
-| SV-NFR-005 | Must | Implemented | — | `/health` | CMP-001 | Test |
-| SV-NFR-006 | Should | Implemented | — | — | CMP-001 | Inspection |
-| SV-NFR-007 | Must | Implemented | ENT-001–ENT-018 | — | CMP-001, CMP-004 | Test |
-| SV-NFR-008 | Must | Implemented | — | — | CMP-010 | Inspection |
-| SV-NFR-009 | Must | Implemented | — | API-001–API-003, API-049 | CMP-001, CMP-010 | Test |
-| SV-NFR-010 | Must | Implemented | — | API-001–API-003, API-049 | CMP-001, CMP-005 | Test |
-| SV-NFR-011 | Must | Implemented | — | all API, `/gateway` | CMP-001, CMP-002 | Test |
-| SV-NFR-012 | Must | Implemented | — | `/metrics` | CMP-001, CMP-010, CMP-011 | Inspection |
-| SV-NFR-013 | Must | Implemented | — | `/metrics` | CMP-001, CMP-011 | Test |
+| SV-IR-007 | Must | Verified | — | API-001–API-060 | CMP-001 | Test |
+| SV-IR-008 | Must | Verified | — | API-001–API-060 | CMP-001 | Test |
+| SV-NFR-001 | Must | Verified | ENT-001 | API-001, API-002 | CMP-001 | Test |
+| SV-NFR-002 | Must | Verified | ENT-019 | API-002, API-003 | CMP-001 | Test |
+| SV-NFR-003 | Must | Verified | ENT-021 | API-001–API-003, API-049, API-059 | CMP-001, CMP-005 | Test |
+| SV-NFR-004 | Must | Verified | — | — | CMP-001 | Demonstration |
+| SV-NFR-005 | Must | Verified | — | `/health` | CMP-001 | Test |
+| SV-NFR-006 | Should | Verified | — | — | CMP-001 | Inspection |
+| SV-NFR-007 | Must | Verified | ENT-001–ENT-018 | — | CMP-001, CMP-004 | Test |
+| SV-NFR-008 | Must | Verified | — | — | CMP-010 | Inspection |
+| SV-NFR-009 | Must | Verified | — | API-001–API-003, API-049 | CMP-001, CMP-010 | Test |
+| SV-NFR-010 | Must | Verified | — | API-001–API-003, API-049 | CMP-001, CMP-005 | Test |
+| SV-NFR-011 | Must | Verified | — | all API, `/gateway` | CMP-001, CMP-002 | Test |
+| SV-NFR-012 | Must | Verified | — | `/metrics` | CMP-001, CMP-010, CMP-011 | Inspection |
+| SV-NFR-013 | Must | Verified | — | `/metrics` | CMP-001, CMP-011 | Test |
 
 ## Revision history
 | Rev | Date | Commit | Mode | Summary |
