@@ -108,4 +108,12 @@ func TestRoleReorderConcurrentAndRollback(t *testing.T) {
 	if got.Position != 2 || len(gw.events) != 2 {
 		t.Fatal("partial write or event on rollback")
 	}
+	exec(`DROP TRIGGER l34_reorder_fail ON roles`)
+	exec(fmt.Sprintf(`CREATE CONSTRAINT TRIGGER l34_reorder_fail AFTER UPDATE ON roles DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (NEW.guild_id=%d) EXECUTE FUNCTION l34_reorder_fail()`, guild))
+	color := 42
+	_, err = svc.UpdateRole(ctx, guild, owner, b, nil, &color, nil, nil)
+	if err == nil || !strings.Contains(err.Error(), "fixture failure") || len(gw.events) != 2 {
+		t.Fatalf("legacy update dispatched before commit: err=%v events=%d", err, len(gw.events))
+	}
+
 }

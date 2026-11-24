@@ -89,7 +89,6 @@ func (s *RoleService) createRole(ctx context.Context, guildID, actorID int64, na
 		return nil, Internal("INTERNAL", "internal server error")
 	}
 
-	s.gateway.DispatchToGuild(guildID, gateway.EventGuildRoleCreate, map[string]any{"guild_id": strconv.FormatInt(guildID, 10), "role": role})
 	return role, nil
 }
 
@@ -174,7 +173,6 @@ func (s *RoleService) updateRole(ctx context.Context, guildID, actorID, roleID i
 		return nil, Internal("INTERNAL", "internal server error")
 	}
 
-	s.gateway.DispatchToGuild(guildID, gateway.EventGuildRoleUpdate, map[string]any{"guild_id": strconv.FormatInt(guildID, 10), "role": role})
 	return role, nil
 }
 
@@ -216,7 +214,6 @@ func (s *RoleService) deleteRole(ctx context.Context, guildID, actorID, roleID i
 		return Internal("INTERNAL", "internal server error")
 	}
 
-	s.gateway.DispatchToGuild(guildID, gateway.EventGuildRoleDelete, map[string]any{"guild_id": strconv.FormatInt(guildID, 10), "role_id": strconv.FormatInt(roleID, 10)})
 	return nil
 }
 
@@ -505,6 +502,9 @@ func (s *RoleService) CreateRole(ctx context.Context, guildID, actorID int64, na
 		result, err = s.createRole(ctx, guildID, actorID, name, color, permBits, position)
 		return err
 	})
+	if err == nil {
+		s.gateway.DispatchToGuild(guildID, gateway.EventGuildRoleCreate, map[string]any{"guild_id": strconv.FormatInt(guildID, 10), "role": result})
+	}
 	return result, err
 }
 
@@ -518,14 +518,21 @@ func (s *RoleService) UpdateRole(ctx context.Context, guildID, actorID, roleID i
 		result, err = s.updateRole(ctx, guildID, actorID, roleID, name, color, permBits, position)
 		return err
 	})
+	if err == nil {
+		s.gateway.DispatchToGuild(guildID, gateway.EventGuildRoleUpdate, map[string]any{"guild_id": strconv.FormatInt(guildID, 10), "role": result})
+	}
 	return result, err
 }
 
 func (s *RoleService) DeleteRole(ctx context.Context, guildID, actorID, roleID int64) error {
-	return database.InTransaction(ctx, s.roles, func(ctx context.Context) error {
+	err := database.InTransaction(ctx, s.roles, func(ctx context.Context) error {
 		if err := database.LockGuildForModeration(ctx, s.roles, guildID); err != nil {
 			return err
 		}
 		return s.deleteRole(ctx, guildID, actorID, roleID)
 	})
+	if err == nil {
+		s.gateway.DispatchToGuild(guildID, gateway.EventGuildRoleDelete, map[string]any{"guild_id": strconv.FormatInt(guildID, 10), "role_id": strconv.FormatInt(roleID, 10)})
+	}
+	return err
 }
