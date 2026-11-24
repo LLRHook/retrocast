@@ -128,3 +128,4 @@ Bound by SYS-CON-003 (existing stack: React 19, Vite 7, TypeScript, Tailwind 4, 
 | 6 | 2026-11-23T18:41:01-05:00 | 94bd59930c73 | REVISION | Clarify WEB-FR-024 as unconditional local sign-out; retain failure-path acceptance criteria |
 | 7 | 2026-11-23T19:23:21-05:00 | f3f6d6f7bafd | REVISION | B2b: migration 000020 repairs DM parent integrity and pending attachment linking; Q-017 types and D-31 route binding fixed; storage/retention limits and Later delivery retained |
 | 8 | 2026-11-23T20:11:25-05:00 | e40076472143 | REVISION | PR #48 round 2: down-refusal recovery, READ COMMITTED parent-delete requirement, pinned trigger lookup, updated DM delivery and uploader-delete blockers, repaired table rows |
+| 9 | 2026-11-24T00:51:47-05:00 | 03b5c35200c3 | REVISION | PR #55: API-059, refresh generations, web session restoration, invite registration and password settings |

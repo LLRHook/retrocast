@@ -395,7 +395,7 @@ they affect stay Later.
 | D-30 | Web sign-out clears the local tokens without calling API-004, so the refresh token stays valid for up to 7 days | retrocast-web/src/stores/auth.ts:68–75 | WEB-FR-024 | Pilot | [#42](https://github.com/LLRHook/retrocast/issues/42) Fixed in [PR #45](https://github.com/LLRHook/retrocast/pull/45). |
 | D-31 | Fixed: reaction remove/list verify that the message exists in the route channel before repository access | retrocast/internal/service/reaction.go; internal/api/reaction_handler_test.go (TestReactionRouteBinding) | SV-FR-074, SV-FR-075 | Fixed | [#47](https://github.com/LLRHook/retrocast/issues/47) |
 
-| D-32 | Fixed: web reload restores a saved session before routing; offline retry preserves the refresh token | retrocast-web/src/stores/auth.ts; src/App.tsx; contract.test.mjs | WEB-FR-001, WEB-FR-002, WEB-FR-003 | Fixed | [#49](https://github.com/LLRHook/retrocast/issues/49), PR_LINK |
+| D-32 | Fixed: web reload restores a saved session before routing; offline retry preserves the refresh token | retrocast-web/src/stores/auth.ts; src/App.tsx; contract.test.mjs | WEB-FR-001, WEB-FR-002, WEB-FR-003 | Fixed | [#49](https://github.com/LLRHook/retrocast/issues/49), [PR #55](https://github.com/LLRHook/retrocast/pull/55) |
 
 Other debt: the `refresh_tokens` and `device_tokens` tables have no code; op 4 is defined
 but unhandled; username uniqueness is case-sensitive; invite codes carry 32 random bits;
@@ -428,3 +428,4 @@ See [SRS §1.3](SRS.md) and §5.3.
 | 14 | 2026-11-23T23:28:58-05:00 | 2f78d18e5e62 | REVISION | PR #53 round 2: supported LiveKit UDP range; local demo TLS and standalone proxy; deployment drift and requirement provenance repaired; Redis deadline regression |
 | 15 | 2026-11-23T23:44:31-05:00 | ad03a1a80f06 | REVISION | PR #54: registration modes and bootstrap; atomic guild creation, invite acceptance and refresh consumption; delivery and evidence aligned |
 | 16 | 2026-11-24T00:33:25-05:00 | 4bfa82018aa4 | REVISION | PR #54 round 2: restore requirement evidence, correct registration diagram and operator guidance, parent-first invite locks and stronger concurrency/commit regressions |
+| 17 | 2026-11-24T00:51:47-05:00 | 03b5c35200c3 | REVISION | PR #55: API-059, refresh generations, web session restoration, invite registration and password settings |
