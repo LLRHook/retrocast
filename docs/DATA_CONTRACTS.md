@@ -159,8 +159,8 @@ are as documented in OpenAPI; where the code differs, the Notes column says so.
 
 | ID | Operation | Method and path | Success | Wrapped today | Notes | Requirements |
 |---|---|---|---|---|---|---|
-| API-001 | register | POST /auth/register | 200 tokens + user | yes | the legacy api.md said 201; optional `invite_code` (rev 2, used in mode `invite`; ignored in `open`, where joining requires API-050); 403 `INVITE_REQUIRED`, `INVALID_INVITE` or `REGISTRATION_CLOSED` by mode | SV-FR-001–SV-FR-003, SV-FR-062–SV-FR-065, SYS-CON-002 |
-| API-002 | login | POST /auth/login | 200 tokens + user | yes | | SV-FR-004 |
+| API-001 | register | POST /auth/register | 200 tokens + user | yes | the legacy api.md said 201; optional `invite_code` (rev 2, used in mode `invite`; ignored in `open`, where joining requires API-050); 403 `INVITE_REQUIRED`, `INVALID_INVITE` or `REGISTRATION_CLOSED` by mode; 503 SESSION_UNAVAILABLE on session-store/transport failure | SV-FR-001–SV-FR-003, SV-FR-062–SV-FR-065, SYS-CON-002 |
+| API-002 | login | POST /auth/login | 200 tokens + user | yes |; 503 SESSION_UNAVAILABLE on session-store/transport failure | SV-FR-004 |
 | API-003 | refreshToken | POST /auth/refresh | 200 token pair | yes | 401 INVALID_TOKEN only for invalid/consumed/revoked tokens; 503 SESSION_UNAVAILABLE for Redis transport/timeouts | SV-FR-005 |
 | API-004 | logout | POST /auth/logout | 204 | — | 401 INVALID_TOKEN for invalid/consumed/revoked tokens; 503 SESSION_UNAVAILABLE for Redis transport/timeouts | SV-FR-006 |
 | API-005 | getMe | GET /users/@me | 200 user | yes | | SV-FR-053 |

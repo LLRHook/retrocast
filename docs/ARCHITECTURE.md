@@ -245,7 +245,7 @@ issued expire within 15 minutes.
 The web auth store restores a saved session before routing, coalesces concurrent refreshes,
 and uses Web Locks across tabs to read and rotate the latest stored token. A refresh 401
 clears only the token that failed: when another tab has replaced it, restore retries once
-with that replacement. A second replacement is preserved for Retry. Without Web Locks, restore waits 250 ms and rechecks storage before clearing; a winner arriving after that bounded wait can still leave the losing tab signed out. Late successful rotations do not overwrite a token that storage has already replaced. Password-change token writes hold the
+with that replacement. A second replacement is preserved for Retry. Without Web Locks, restore waits 250 ms and rechecks storage before clearing; a winner whose response arrives after that bounded wait can leave both tabs signed out and its rotated server token orphaned until expiry. Late successful rotations do not overwrite a token that storage has already replaced. Password-change token writes hold the
 same lock for storage updates; the password request itself is not serialized with rotations. A network error preserves the session and presents Retry. Logout drains the local
 refresh and uses the same tab lock through revocation and local clearing.
 
