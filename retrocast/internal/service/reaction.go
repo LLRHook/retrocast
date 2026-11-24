@@ -110,6 +110,14 @@ func (s *ReactionService) RemoveReaction(ctx context.Context, channelID, message
 		}
 	}
 
+	msg, err := s.messages.GetByID(ctx, messageID)
+	if err != nil {
+		return Internal("INTERNAL", "internal server error")
+	}
+	if msg == nil || msg.ChannelID != channelID {
+		return NotFound("NOT_FOUND", "message not found")
+	}
+
 	if err := s.reactions.Remove(ctx, messageID, userID, emoji); err != nil {
 		return Internal("INTERNAL", "internal server error")
 	}
@@ -146,6 +154,14 @@ func (s *ReactionService) GetReactions(ctx context.Context, channelID, messageID
 		if err := s.perms.RequireChannelPermission(ctx, channel.GuildID, channelID, userID, permissions.PermViewChannel|permissions.PermReadMessageHistory); err != nil {
 			return nil, err
 		}
+	}
+
+	msg, err := s.messages.GetByID(ctx, messageID)
+	if err != nil {
+		return nil, Internal("INTERNAL", "internal server error")
+	}
+	if msg == nil || msg.ChannelID != channelID {
+		return nil, NotFound("NOT_FOUND", "message not found")
 	}
 
 	userIDs, err := s.reactions.GetUsersByReaction(ctx, messageID, emoji, limit)

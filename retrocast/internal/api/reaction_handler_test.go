@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -11,6 +12,35 @@ import (
 	"github.com/victorivanov/retrocast/internal/permissions"
 	"github.com/victorivanov/retrocast/internal/service"
 )
+
+func TestReactionRouteBinding(t *testing.T) {
+	for _, operation := range []string{"remove", "list"} {
+		for _, channel := range []int64{0, 9999} {
+			t.Run(operation+fmt.Sprint(channel), func(t *testing.T) {
+				guilds, members, roles, overrides := permMocks(permissions.PermViewChannel | permissions.PermReadMessageHistory)
+				msgs := &mockMessageRepo{GetByIDFn: func(context.Context, int64) (*models.MessageWithAuthor, error) {
+					if channel == 0 {
+						return nil, nil
+					}
+					return &models.MessageWithAuthor{Message: models.Message{ChannelID: channel}}, nil
+				}}
+				h := newReactionHandler(&mockReactionRepo{}, msgs, channelMock(), guilds, members, roles, overrides, &mockGateway{})
+				c, rec := newTestContext(http.MethodGet, "/", nil)
+				c.SetParamNames("id", "message_id", "emoji")
+				c.SetParamValues("2000", "5000", "ok")
+				setAuthUser(c, testUserID)
+				if operation == "remove" {
+					_ = h.RemoveReaction(c)
+				} else {
+					_ = h.GetReactions(c)
+				}
+				if rec.Code != 404 {
+					t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
+				}
+			})
+		}
+	}
+}
 
 // ---------------------------------------------------------------------------
 // Shared helpers for reaction tests

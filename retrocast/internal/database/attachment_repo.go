@@ -17,9 +17,9 @@ func NewAttachmentRepository(pool *pgxpool.Pool) AttachmentRepository {
 
 func (r *attachmentRepo) Create(ctx context.Context, a *models.Attachment) error {
 	_, err := r.pool.Exec(ctx,
-		`INSERT INTO attachments (id, message_id, filename, content_type, size, storage_key)
-		 VALUES ($1, $2, $3, $4, $5, $6)`,
-		a.ID, a.MessageID, a.Filename, a.ContentType, a.Size, a.StorageKey,
+		`INSERT INTO attachments (id, message_id, filename, content_type, size, storage_key, uploader_id, channel_id)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		a.ID, a.MessageID, a.Filename, a.ContentType, a.Size, a.StorageKey, a.UploaderID, a.ChannelID,
 	)
 	return err
 }

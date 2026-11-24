@@ -51,22 +51,25 @@ export default function MessageInput({
 
   async function handleSend() {
     const text = content.trim();
-    if (!text && pendingFiles.length === 0) return;
+    if (sending || !text) return;
 
     setSending(true);
     try {
+      const attachmentIds: string[] = [];
       // Upload pending files first
       for (const file of pendingFiles) {
-        await api.upload<Attachment>(
+        const attachment = await api.upload<Attachment>(
           `/api/v1/channels/${channelId}/attachments`,
           file,
         );
+        attachmentIds.push(attachment.id);
       }
 
       // Send message
       if (text) {
         await api.post<Message>(`/api/v1/channels/${channelId}/messages`, {
           content: text,
+          attachment_ids: attachmentIds,
         });
       }
 
@@ -105,6 +108,9 @@ export default function MessageInput({
 
   return (
     <div className="px-4 pb-6">
+      {pendingFiles.length > 0 && !content.trim() && (
+        <p className="mb-2 text-sm text-text-muted">Add a message to send these files.</p>
+      )}
       {/* Pending files with image previews */}
       {pendingFiles.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-2">

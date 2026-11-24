@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/victorivanov/retrocast/internal/database"
@@ -17,6 +18,7 @@ type TypingStore interface {
 }
 
 type MessageService struct {
+	storage     FileStorage
 	typingStore TypingStore
 	messages    database.MessageRepository
 	channels    database.ChannelRepository
@@ -49,7 +51,7 @@ func NewMessageService(
 func (s *MessageService) SetTypingStore(store TypingStore) { s.typingStore = store }
 
 // SendMessage creates a message in a guild or DM channel.
-func (s *MessageService) SendMessage(ctx context.Context, channelID, userID int64, content string) (*models.MessageWithAuthor, error) {
+func (s *MessageService) SendMessage(ctx context.Context, channelID, userID int64, content string, attachmentIDs ...int64) (*models.MessageWithAuthor, error) {
 	channel, isDM, err := s.resolveChannelAccess(ctx, channelID, userID)
 	if err != nil {
 		return nil, err
@@ -61,19 +63,31 @@ func (s *MessageService) SendMessage(ctx context.Context, channelID, userID int6
 		}
 	}
 
+	if len(attachmentIDs) > 0 {
+		if isDM {
+			return nil, BadRequest("INVALID_ATTACHMENTS", "invalid attachments")
+		}
+		if err := s.perms.RequireChannelPermission(ctx, channel.GuildID, channelID, userID, permissions.PermAttachFiles); err != nil {
+			return nil, err
+		}
+	}
 	if len(content) == 0 || len(content) > 2000 {
 		return nil, BadRequest("INVALID_CONTENT", "message content must be 1-2000 characters")
 	}
 
 	msg := &models.Message{
-		ID:        s.snowflake.Generate().Int64(),
-		ChannelID: channelID,
-		AuthorID:  userID,
-		Content:   content,
-		CreatedAt: time.Now(),
+		AttachmentIDs: attachmentIDs,
+		ID:            s.snowflake.Generate().Int64(),
+		ChannelID:     channelID,
+		AuthorID:      userID,
+		Content:       content,
+		CreatedAt:     time.Now(),
 	}
 
 	if err := s.messages.Create(ctx, msg); err != nil {
+		if errors.Is(err, database.ErrInvalidAttachments) {
+			return nil, BadRequest("INVALID_ATTACHMENTS", "invalid attachments")
+		}
 		return nil, Internal("INTERNAL", "internal server error")
 	}
 
@@ -82,6 +96,7 @@ func (s *MessageService) SendMessage(ctx context.Context, channelID, userID int6
 		return nil, Internal("INTERNAL", "internal server error")
 	}
 
+	setAttachmentURLs([]models.MessageWithAuthor{*full}, s.storage)
 	if isDM {
 		s.dispatchToDM(ctx, channelID, gateway.EventMessageCreate, full)
 	} else {
@@ -111,6 +126,7 @@ func (s *MessageService) GetMessages(ctx context.Context, channelID, userID int6
 	if messages == nil {
 		messages = []models.MessageWithAuthor{}
 	}
+	setAttachmentURLs(messages, s.storage)
 	return messages, nil
 }
 
@@ -135,6 +151,7 @@ func (s *MessageService) GetMessage(ctx context.Context, channelID, msgID, userI
 		return nil, NotFound("NOT_FOUND", "message not found")
 	}
 
+	setAttachmentURLs([]models.MessageWithAuthor{*msg}, s.storage)
 	return msg, nil
 }
 
@@ -177,6 +194,7 @@ func (s *MessageService) EditMessage(ctx context.Context, channelID, msgID, user
 		return nil, Internal("INTERNAL", "internal server error")
 	}
 
+	setAttachmentURLs([]models.MessageWithAuthor{*full}, s.storage)
 	if isDM {
 		s.dispatchToDM(ctx, channelID, gateway.EventMessageUpdate, full)
 	} else {
@@ -308,6 +326,18 @@ func (s *MessageService) dispatchToDM(ctx context.Context, channelID int64, even
 	if dm != nil {
 		for _, r := range dm.Recipients {
 			s.gateway.DispatchToUser(r.ID, event, data)
+		}
+	}
+}
+
+func (s *MessageService) SetFileStorage(storage FileStorage) { s.storage = storage }
+func setAttachmentURLs(messages []models.MessageWithAuthor, storage FileStorage) {
+	for i := range messages {
+		for j := range messages[i].Attachments {
+			if storage != nil {
+				a := &messages[i].Attachments[j]
+				a.URL = storage.GetURL(a.StorageKey)
+			}
 		}
 	}
 }

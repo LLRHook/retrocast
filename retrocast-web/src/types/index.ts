@@ -39,7 +39,7 @@ export interface Message {
 
 export interface Attachment {
   id: string;
-  message_id: string;
+  message_id: string | null;
   filename: string;
   content_type: string;
   size: number;
