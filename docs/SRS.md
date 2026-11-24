@@ -2,7 +2,7 @@
 
 Conforms to the SRS content outline of ISO/IEC/IEEE 29148:2018 §9.6.
 Related: [Product Brief](PRODUCT_BRIEF.md) · [Data Contracts](DATA_CONTRACTS.md) · [Architecture](ARCHITECTURE.md)
-Status: Baselined (rev 7)
+Status: Baselined (rev 9)
 
 > **Rev 2 (2026-11-23).** Rev 1 was written unattended from repository evidence. On
 > 2026-11-23 Victor Ivanov accepted every recommendation of the product brief (Q-001–Q-034,
@@ -59,7 +59,7 @@ No hardware interfaces beyond the operator's host and the clients' microphones a
 for voice (Later).
 
 #### 1.3.4 Software interfaces
-REST operations API-001–API-059 (contract v2.0.0), gateway frames and events EVT-001–EVT-030,
+REST operations API-001–API-060 (current contract version in DATA_CONTRACTS), gateway frames and events EVT-001–EVT-030,
 LiveKit token contract and object storage contract (DATA_CONTRACTS §4, §6, §7).
 
 #### 1.3.5 Communications interfaces
@@ -146,7 +146,7 @@ schedules them.
   Requirements engineering.
 - [docs/PRODUCT_BRIEF.md](PRODUCT_BRIEF.md) (Status: Specified (SRS rev 2), 2026-11-23).
 - SYSTEM_DESIGN.md, README.md, TODO.md, PLAN.md at commit `6bc385e` (seed and plans).
-- retrocast/docs/openapi.yaml (OpenAPI 3.0.3, `info.version` 2.0.0): REST operations.
+- retrocast/docs/openapi.yaml (OpenAPI 3.0.3, `info.version` matching DATA_CONTRACTS): REST operations.
 - docs/legacy/ (api.md, architecture.md, database.md, deployment.md, gateway.md,
   ios-architecture.md, permissions.md): older prose docs, kept for history. What they said
   that the code proves is folded into DATA_CONTRACTS and ARCHITECTURE (Q-034).
