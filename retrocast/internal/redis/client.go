@@ -161,3 +161,8 @@ func (c *Client) GetTyping(ctx context.Context, channelID int64) ([]int64, error
 	}
 	return userIDs, nil
 }
+
+// RefreshPresence extends the existing status without changing idle/dnd/invisible.
+func (c *Client) RefreshPresence(ctx context.Context, userID int64) error {
+	return c.rdb.Expire(ctx, presencePrefix+strconv.FormatInt(userID, 10), presenceTTL).Err()
+}

@@ -28,8 +28,13 @@ type Connection struct {
 	manager   *Manager
 	sequence  atomic.Int64
 
-	closeOnce sync.Once
-	done      chan struct{}
+	replay         []GatewayPayload
+	replayFloor    int64
+	guildIDs       map[int64]bool
+	expires        time.Time
+	presenceStatus string
+	closeOnce      sync.Once
+	done           chan struct{}
 
 	lastHeartbeat atomic.Int64 // unix millis of last heartbeat ACK from client
 }
@@ -60,31 +65,24 @@ func (c *Connection) SendPayload(p GatewayPayload) {
 	select {
 	case c.Send <- data:
 	default:
-		slog.Warn("send buffer full, dropping message", "userID", c.UserID)
+		c.Close() // Reconnect and replay rather than silently accepting a sequence gap.
 	}
 }
 
 // SendEvent sends a dispatch event with a sequence number.
 func (c *Connection) SendEvent(name string, data any) {
-	raw, err := json.Marshal(data)
-	if err != nil {
-		slog.Error("marshal event error", "event", name, "error", err)
-		return
-	}
-	seq := c.NextSequence()
-	c.SendPayload(GatewayPayload{
-		Op:        OpDispatch,
-		Data:      raw,
-		Sequence:  &seq,
-		Event: &name,
-	})
+	c.manager.mu.Lock()
+	defer c.manager.mu.Unlock()
+	c.manager.sendLocked(c, name, data)
 }
 
 // Close terminates the connection.
 func (c *Connection) Close() {
 	c.closeOnce.Do(func() {
 		close(c.done)
-		_ = c.Conn.Close()
+		if c.Conn != nil {
+			_ = c.Conn.Close()
+		}
 	})
 }
 
@@ -163,12 +161,21 @@ func (c *Connection) handleMessage(data []byte) {
 	switch payload.Op {
 	case OpHeartbeat:
 		c.lastHeartbeat.Store(time.Now().UnixMilli())
+		c.manager.refreshPresence(c)
 		c.SendPayload(GatewayPayload{Op: OpHeartbeatAck})
 
 	case OpIdentify:
+		if c.UserID != 0 {
+			c.Close()
+			return
+		}
 		c.manager.handleIdentify(c, payload.Data)
 
 	case OpResume:
+		if c.UserID != 0 {
+			c.Close()
+			return
+		}
 		c.manager.handleResume(c, payload.Data)
 
 	case OpPresenceUpdate:

@@ -263,6 +263,7 @@ func (s *RoleService) AssignRole(ctx context.Context, guildID, actorID, userID, 
 		return Internal("INTERNAL", "internal server error")
 	}
 
+	s.invalidateGateway(guildID)
 	return nil
 }
 
@@ -307,6 +308,7 @@ func (s *RoleService) RemoveRole(ctx context.Context, guildID, actorID, userID, 
 		return Internal("INTERNAL", "internal server error")
 	}
 
+	s.invalidateGateway(guildID)
 	return nil
 }
 
@@ -339,6 +341,7 @@ func (s *RoleService) SetChannelOverride(ctx context.Context, channelID, actorID
 		return nil, Internal("INTERNAL", "internal server error")
 	}
 
+	s.invalidateGateway(ch.GuildID)
 	return override, nil
 }
 
@@ -358,6 +361,7 @@ func (s *RoleService) DeleteChannelOverride(ctx context.Context, channelID, acto
 	if err := s.overrides.Delete(ctx, channelID, roleID); err != nil {
 		return Internal("INTERNAL", "internal server error")
 	}
+	s.invalidateGateway(ch.GuildID)
 	return nil
 }
 
@@ -373,4 +377,10 @@ func (s *RoleService) checkOverride(ctx context.Context, ch *models.Channel, act
 		return NotFound("NOT_FOUND", "role not found")
 	}
 	return nil
+}
+
+func (s *RoleService) invalidateGateway(guildID int64) {
+	if g, ok := s.gateway.(interface{ InvalidateGuildPermissions(int64) }); ok {
+		g.InvalidateGuildPermissions(guildID)
+	}
 }

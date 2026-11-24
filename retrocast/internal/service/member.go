@@ -271,6 +271,7 @@ func (s *MemberService) KickMember(ctx context.Context, guildID, callerID, targe
 		return Internal("INTERNAL", "internal server error")
 	}
 
+	s.gateway.UnsubscribeFromGuild(targetUserID, guildID)
 	s.gateway.DispatchToGuild(guildID, gateway.EventGuildMemberRemove, map[string]any{"guild_id": strconv.FormatInt(guildID, 10), "user_id": strconv.FormatInt(targetUserID, 10)})
 	return nil
 }
@@ -297,6 +298,7 @@ func (s *MemberService) LeaveGuild(ctx context.Context, guildID, userID int64) e
 		return Internal("INTERNAL", "internal server error")
 	}
 
+	s.gateway.UnsubscribeFromGuild(userID, guildID)
 	s.gateway.DispatchToGuild(guildID, gateway.EventGuildMemberRemove, map[string]any{"guild_id": strconv.FormatInt(guildID, 10), "user_id": strconv.FormatInt(userID, 10)})
 	return nil
 }

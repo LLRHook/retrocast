@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import test, { after } from 'node:test';
 import ts from 'typescript';
 const require = createRequire(import.meta.url);
-const dir = mkdtempSync(join(tmpdir(), 'l15-retrocast-web-test-'));
+const dir = mkdtempSync(join(tmpdir(), 'l18-retrocast-web-test-'));
 const cleanup = () => rmSync(dir, {recursive:true,force:true});
 after(cleanup);
 process.on('exit', cleanup);
@@ -200,6 +200,28 @@ test('UserSettings always navigates when disconnect or logout throws',async()=>{
    assert.equal(logoutCalls,fail?2:1);
   }
  } finally {globalThis.window=previousWindow}
+});
+
+test('READY after RESUME signals resync and retains the replacement session',async()=>{
+ const {GatewayClient}=await import(compile(readFileSync(resolve('src/lib/gateway.ts'),'utf8'),'gateway'));
+ const c=new GatewayClient();let resync=0;const sent=[];
+ globalThis.WebSocket={OPEN:1};c.ws={readyState:1,send:raw=>sent.push(JSON.parse(raw))};c.token='test';
+ c.on('RESYNC',()=>resync++);
+ c.handlePayload({op:0,t:'READY',s:1,d:{session_id:'old'}});assert.equal(resync,0);
+ c.handlePayload({op:10,d:{heartbeat_interval:60000}});assert.equal(sent.at(-1).op,6);
+ c.handlePayload({op:0,t:'READY',s:1,d:{session_id:'new'}});assert.equal(resync,1);assert.equal(c.sessionId,'new');assert.equal(c.sequence,1);
+ c.handlePayload({op:10,d:{heartbeat_interval:60000}});assert.equal(sent.at(-1).d.session_id,'new');c.stopHeartbeat();
+});
+
+test('fallback READY refetches open channel and applies its presence snapshot',async()=>{
+ const gwUrl=compile(readFileSync(resolve('src/lib/gateway.ts'),'utf8'),'dispatcher-gateway');
+ const {gateway}=await import(gwUrl);const calls=[];
+ globalThis.__l18Calls=calls;
+ const stateUrl=compile(`const state={selectedChannelId:'50',fetchMessages:async id=>globalThis.__l18Calls.push(['messages',id]),fetchGuilds:async()=>globalThis.__l18Calls.push(['guilds']),clearPresences:()=>globalThis.__l18Calls.push(['clear']),setPresence:(id,status)=>globalThis.__l18Calls.push(['presence',id,status])};const store={getState:()=>state};export const useGuildsStore=store,useChannelsStore=store,useMembersStore=store,useRolesStore=store,useMessagesStore=store,usePresenceStore=store,useTypingStore=store,useUsersStore=store;`,'dispatcher-stores');
+ const source=readFileSync(resolve('src/lib/gateway-dispatcher.ts'),'utf8').replace('"@/lib/gateway"',JSON.stringify(gwUrl)).replace(/"@\/stores\/[^"\n]+"/g,JSON.stringify(stateUrl));
+ const {initGatewayDispatcher}=await import(compile(source,'dispatcher'));initGatewayDispatcher();
+ gateway.resuming=true;gateway.handlePayload({op:0,t:'READY',s:1,d:{session_id:'new',guilds:[],presences:[{user_id:'200',status:'dnd'}]}});
+ assert.ok(calls.some(c=>c[0]==='messages'&&c[1]==='50'));assert.ok(calls.some(c=>c[0]==='presence'&&c[1]==='200'&&c[2]==='dnd'));delete globalThis.__l18Calls;
 });
 
 } catch (error) {

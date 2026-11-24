@@ -167,6 +167,9 @@ func (s *ChannelService) DeleteChannel(ctx context.Context, channelID, userID in
 		return err
 	}
 
+	if g, ok := s.gateway.(interface{ PrepareChannelDeletion(int64, int64) }); ok {
+		g.PrepareChannelDeletion(ch.GuildID, channelID)
+	}
 	if err := s.channels.Delete(ctx, channelID); err != nil {
 		return Internal("INTERNAL", "internal server error")
 	}

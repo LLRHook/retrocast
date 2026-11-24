@@ -99,6 +99,7 @@ func main() {
 	// --- Services ---
 
 	permChecker := service.NewPermissionChecker(guilds, members, roles, overrides)
+	gwManager.SetPermissionChecker(permChecker)
 
 	authSvc := service.NewAuthService(users, tokenSvc, rdb, sf)
 	userSvc := service.NewUserService(users)
