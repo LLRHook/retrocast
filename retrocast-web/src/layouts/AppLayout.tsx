@@ -6,6 +6,7 @@ import { useChannelsStore } from "@/stores/channels";
 import { useDMsStore } from "@/stores/dms";
 import { gateway } from "@/lib/gateway";
 import { initGatewayDispatcher } from "@/lib/gateway-dispatcher";
+import { selectGuildChannels } from "@/lib/invite";
 import ServerList from "@/components/ServerList";
 import ChannelSidebar from "@/components/ChannelSidebar";
 
@@ -44,27 +45,13 @@ export default function AppLayout() {
       .getState()
       .fetchGuilds()
       .then(() => {
-        const { guilds, selectedGuildId, selectGuild } =
+        const { guilds, selectedGuildId } =
           useGuildsStore.getState();
         // Auto-select first guild if none selected
         if (!selectedGuildId && guilds.size > 0) {
           const firstGuild = (inviteGuildId ? guilds.get(inviteGuildId) : undefined) ?? guilds.values().next().value;
           if (firstGuild) {
-            selectGuild(firstGuild.id);
-            // Fetch channels for the first guild
-            useChannelsStore
-              .getState()
-              .fetchChannels(firstGuild.id)
-              .then(() => {
-                const channels = useChannelsStore
-                  .getState()
-                  .channelsByGuild.get(firstGuild.id);
-                const firstText = channels?.find((c) => c.type === 0);
-                if (firstText) {
-                  useChannelsStore.getState().selectChannel(firstText.id);
-                }
-              })
-              .catch(() => {});
+            void selectGuildChannels(firstGuild.id, { refresh: true }).catch(() => {});
           }
         }
       })
@@ -85,7 +72,7 @@ export default function AppLayout() {
     const unsubChannel = useChannelsStore.subscribe((s) => {
       if (s.selectedChannelId !== prevChannel) {
         prevChannel = s.selectedChannelId;
-        setSidebarOpen(false);
+        if (s.selectedChannelId !== null) setSidebarOpen(false);
       }
     });
     const unsubDM = useDMsStore.subscribe((s) => {
