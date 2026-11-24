@@ -186,12 +186,8 @@ func main() {
 		},
 	}))
 	e.Use(middleware.Recover())
-	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: []string{"*"},
-		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPatch, http.MethodPut, http.MethodDelete, http.MethodOptions},
-		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, echo.HeaderAuthorization},
-	}))
 
+	deps.AllowedOrigins = cfg.AllowedOrigins
 	api.SetupRouter(e, deps)
 
 	// --- Start ---

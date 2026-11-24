@@ -7,9 +7,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo-contrib/echoprometheus"
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 	"github.com/victorivanov/retrocast/docs"
 	"github.com/victorivanov/retrocast/internal/auth"
 	"github.com/victorivanov/retrocast/internal/gateway"
+	"github.com/victorivanov/retrocast/internal/origin"
 	"github.com/victorivanov/retrocast/internal/redis"
 )
 
@@ -38,22 +40,23 @@ const swaggerUIHTML = `<!DOCTYPE html>
 
 // Dependencies holds all handler instances and middleware for route wiring.
 type Dependencies struct {
-	Auth       *AuthHandler
-	Guilds     *GuildHandler
-	Channels   *ChannelHandler
-	Members    *MemberHandler
-	Users      *UserHandler
-	Messages   *MessageHandler
-	Invites    *InviteHandler
-	Roles      *RoleHandler
-	Uploads    *UploadHandler
-	Bans       *BanHandler
-	DMs        *DMHandler
-	ReadStates *ReadStateHandler
-	Reactions  *ReactionHandler
-	Search     *SearchHandler
-	Voice      *VoiceHandler
-	Gateway    *gateway.Manager
+	AllowedOrigins string
+	Auth           *AuthHandler
+	Guilds         *GuildHandler
+	Channels       *ChannelHandler
+	Members        *MemberHandler
+	Users          *UserHandler
+	Messages       *MessageHandler
+	Invites        *InviteHandler
+	Roles          *RoleHandler
+	Uploads        *UploadHandler
+	Bans           *BanHandler
+	DMs            *DMHandler
+	ReadStates     *ReadStateHandler
+	Reactions      *ReactionHandler
+	Search         *SearchHandler
+	Voice          *VoiceHandler
+	Gateway        *gateway.Manager
 
 	TokenService *auth.TokenService
 	Pool         *pgxpool.Pool
@@ -62,6 +65,21 @@ type Dependencies struct {
 
 // SetupRouter registers all API routes on the Echo instance.
 func SetupRouter(e *echo.Echo, deps *Dependencies) {
+	policy := origin.Policy{Allowed: deps.AllowedOrigins}
+	// Capture the request for own-origin checks; Echo's AllowOriginFunc only receives the Origin.
+	e.Pre(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			cors := middleware.CORSWithConfig(middleware.CORSConfig{
+				AllowOriginFunc: func(string) (bool, error) { return policy.Check(c.Request()), nil },
+				AllowMethods:    []string{http.MethodGet, http.MethodPost, http.MethodPatch, http.MethodPut, http.MethodDelete, http.MethodOptions},
+				AllowHeaders:    []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, echo.HeaderAuthorization},
+			})
+			return cors(next)(c)
+		}
+	})
+	if deps.Gateway != nil {
+		deps.Gateway.SetAllowedOrigins(deps.AllowedOrigins)
+	}
 	// Resolve client IPs (used for unauthenticated rate limiting) through the
 	// reverse proxy's X-Forwarded-For header; see ClientIPExtractor.
 	e.IPExtractor = ClientIPExtractor()

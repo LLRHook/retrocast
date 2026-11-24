@@ -34,6 +34,7 @@ func (f PermissionCheckerFunc) RequireChannelPermission(ctx context.Context, gui
 
 // Manager manages all active WebSocket connections and event routing.
 type Manager struct {
+	allowedOrigins     string
 	mu                 sync.RWMutex
 	offlineEpoch       map[int64]uint64
 	membershipEpoch    map[int64]uint64
