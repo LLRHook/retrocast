@@ -389,9 +389,7 @@ together with the iOS client (Q-025); APNs is the one optional outside service G
 | 2 | API-001 register | v1.0.0 | v2.0.0 | Optional `invite_code`; 403 codes by registration mode | Web register page gains the field (WEB-FR-020) | Q-012; ADR-014 |
 | 2 | EVT-007 RECONNECT | v1.0.0 | v1.0.0 (frame unchanged) | Sent in fewer cases: not for a second IDENTIFY | A client that reads op 7 as "signed in elsewhere" must not | Q-009; ADR-017 |
 | 9 | API-022 / API-027, ENT-008/009/012/013/022 | REST v2.0.0 | REST v2.1.0 |Migration 000020: DM parent validation/delete triggers; nullable pending upload link with ownership backfill; attachment_ids atomic claim and batched hydration. After a refused down, the schema remains at 20 while golang-migrate marks version 19 dirty: run `migrate force 20` to recover; `force 19` then `up` fails. | Web sends uploaded ids with nonempty text; pending message_id is null; existing linked ids stay strings; down refuses while DM messages or pending attachments exist | Driver E116; Q-017; D-08/D-09/D-22 |
-
 | 11 | EVT-003 / EVT-006 gateway | v1.0.0 | v1.1.0 (compatible) | READY gains optional presences. RESUME frames unchanged; fresh READY with a new session id signals unavailable replay, sequences restart at 1. Last 100 events per session, retained 5 minutes after disconnect; authorization changes invalidate old history | Web refetches open-channel recent messages after fallback READY. iOS already accepts READY; reconnect catch-up refresh is a follow-up | Driver B3 decision; PR #50 |
-
 | 24 | API-060 role ordering | REST v2.1.0 | REST v2.2.0 | Additive atomic role-order operation from B6; current whole-contract version reconciled in B7 | No envelope or route prefix change; no iOS implementation change | SV-IR-008; issues #64/#66 |
 
 ## Revision history
