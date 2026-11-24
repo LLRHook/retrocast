@@ -23,8 +23,8 @@ import (
 )
 
 type apiClient struct {
-	base, token string
-	http        *http.Client
+	base, token, refreshToken string
+	http                      *http.Client
 }
 
 func (c apiClient) request(method, path string, body any, setup bool) (json.RawMessage, error) {
@@ -68,6 +68,14 @@ func (c apiClient) request(method, path string, body any, setup bool) (json.RawM
 		return envelope.Data, err
 	}
 }
+func (c *apiClient) refresh() {
+	auth := decode[struct {
+		Token   string `json:"access_token"`
+		Refresh string `json:"refresh_token"`
+	}](c.request("POST", "/auth/refresh", map[string]string{"refresh_token": c.refreshToken}, true))
+	c.token, c.refreshToken = auth.Token, auth.Refresh
+}
+
 func decode[T any](raw json.RawMessage, err error) T {
 	if err != nil {
 		panic(err)
@@ -202,10 +210,12 @@ func main() {
 	clients := make([]apiClient, 20)
 	for i := range clients {
 		auth := decode[struct {
-			Token string `json:"access_token"`
+			Token   string `json:"access_token"`
+			Refresh string `json:"refresh_token"`
 		}](c.request("POST", "/auth/register", map[string]string{"username": fmt.Sprintf("perf_%s_%d", run, i), "password": run + "Aa9!"}, true))
 		clients[i] = c
 		clients[i].token = auth.Token
+		clients[i].refreshToken = auth.Refresh
 	}
 	fmt.Println("setup: 20 users registered (429 Retry-After honored only during setup)")
 	guild := decode[entity](clients[0].request("POST", "/guilds", map[string]string{"name": "Perf " + run}, true))
@@ -232,6 +242,12 @@ func main() {
 		msg := decode[entity](clients[i%20].request("POST", path, map[string]string{"content": fmt.Sprintf("seed-%s-%d", run, i)}, true))
 		cursors[i] = msg.ID
 		time.Sleep(70 * time.Millisecond)
+	}
+	// Refresh after setup so the first registered member's 15-minute access
+	// token remains valid through the entire measured load. Setup may take minutes
+	// because credential throttling is deliberately unchanged.
+	for i := range clients {
+		clients[i].refresh()
 	}
 	m := &measurement{pending: map[string]*delivery{}}
 	sockets := make([]*websocket.Conn, 20)
@@ -303,6 +319,7 @@ func main() {
 	m.latencies = nil
 	m.mu.Unlock()
 	time.Sleep(time.Minute)
+	clients[0].refresh()
 	// Explicit SYS-NFR-002 acceptance: one sender sends 100 messages with all
 	// 20 members connected. 1.3s spacing stays below 50 messages/user/minute.
 	for i := 0; i < 100; i++ {
