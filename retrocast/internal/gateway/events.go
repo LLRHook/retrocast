@@ -73,10 +73,11 @@ type HelloData struct {
 
 // ReadyData is sent by the server after successful IDENTIFY.
 type ReadyData struct {
-	SessionID  string             `json:"session_id"`
-	UserID     int64              `json:"user_id,string"`
-	Guilds     models.StringIDs   `json:"guilds"`
-	ReadStates []models.ReadState `json:"read_states"`
+	SessionID  string               `json:"session_id"`
+	UserID     int64                `json:"user_id,string"`
+	Guilds     models.StringIDs     `json:"guilds"`
+	Presences  []PresenceUpdateData `json:"presences"`
+	ReadStates []models.ReadState   `json:"read_states"`
 }
 
 // Event is a dispatch event ready to broadcast.

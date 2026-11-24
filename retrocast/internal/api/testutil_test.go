@@ -51,9 +51,11 @@ type dispatchedEvent struct {
 }
 
 type mockGateway struct {
-	mu            sync.Mutex
-	events        []dispatchedEvent
-	subscriptions [][2]int64
+	mu              sync.Mutex
+	events          []dispatchedEvent
+	subscriptions   [][2]int64
+	unsubscriptions [][2]int64
+	invalidations   []int64
 }
 
 func (m *mockGateway) DispatchToGuild(guildID int64, event string, data interface{}) {
@@ -80,7 +82,11 @@ func (m *mockGateway) SubscribeToGuild(userID, guildID int64) {
 	m.subscriptions = append(m.subscriptions, [2]int64{userID, guildID})
 }
 
-func (m *mockGateway) UnsubscribeFromGuild(userID, guildID int64) {}
+func (m *mockGateway) UnsubscribeFromGuild(userID, guildID int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.unsubscriptions = append(m.unsubscriptions, [2]int64{userID, guildID})
+}
 
 // ---------------------------------------------------------------------------
 // Mock repositories
@@ -725,4 +731,10 @@ func assertPayloadJSON(t *testing.T, payload any, expected map[string]any) {
 			t.Errorf("%s JSON = %v (%T), want %v (%T)", field, value, value, want, want)
 		}
 	}
+}
+
+func (m *mockGateway) InvalidateGuildPermissions(guildID int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.invalidations = append(m.invalidations, guildID)
 }

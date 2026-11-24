@@ -267,6 +267,7 @@ func TestDeleteChannel_WithPermission(t *testing.T) {
 	const channelID int64 = 100
 	const guildID int64 = 500
 
+	gw := &mockGateway{}
 	var deleted bool
 	channels := &mockChannelRepo{
 		GetByIDFn: func(_ context.Context, id int64) (*models.Channel, error) {
@@ -276,12 +277,12 @@ func TestDeleteChannel_WithPermission(t *testing.T) {
 			return nil, nil
 		},
 		DeleteFn: func(_ context.Context, id int64) error {
+			gw.DispatchToGuild(guildID, "GUILD_MEMBER_UPDATE", "invalidation during delete")
 			deleted = true
 			return nil
 		},
 	}
 
-	gw := &mockGateway{}
 	h := allowAllChannelHandler(channels, &mockMemberRepo{}, gw)
 
 	c, rec := newTestContext(http.MethodDelete, "/api/v1/channels/100", nil)

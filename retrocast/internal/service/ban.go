@@ -86,7 +86,10 @@ func (s *BanService) BanMember(ctx context.Context, guildID, callerID, targetUse
 		return Internal("INTERNAL", "internal server error")
 	}
 
-	_ = s.members.Delete(ctx, guildID, targetUserID)
+	if err := s.members.Delete(ctx, guildID, targetUserID); err != nil {
+		return Internal("INTERNAL", "internal server error")
+	}
+	s.gateway.UnsubscribeFromGuild(targetUserID, guildID)
 
 	s.gateway.DispatchToGuild(guildID, gateway.EventGuildBanAdd, ban)
 	s.gateway.DispatchToGuild(guildID, gateway.EventGuildMemberRemove, map[string]any{"guild_id": strconv.FormatInt(guildID, 10), "user_id": strconv.FormatInt(targetUserID, 10)})

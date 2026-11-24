@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
@@ -18,6 +19,7 @@ import (
 	"github.com/victorivanov/retrocast/internal/config"
 	"github.com/victorivanov/retrocast/internal/database"
 	"github.com/victorivanov/retrocast/internal/gateway"
+	"github.com/victorivanov/retrocast/internal/permissions"
 	redisclient "github.com/victorivanov/retrocast/internal/redis"
 	"github.com/victorivanov/retrocast/internal/service"
 	"github.com/victorivanov/retrocast/internal/snowflake"
@@ -99,6 +101,10 @@ func main() {
 	// --- Services ---
 
 	permChecker := service.NewPermissionChecker(guilds, members, roles, overrides)
+	gwManager.SetPermissionChecker(gateway.PermissionCheckerFunc(func(ctx context.Context, guildID, channelID, userID int64, perm permissions.Permission) error {
+		err := permChecker.RequireChannelPermission(ctx, guildID, channelID, userID, perm)
+		return gatewayPermissionResult(err)
+	}))
 
 	authSvc := service.NewAuthService(users, tokenSvc, rdb, sf)
 	userSvc := service.NewUserService(users)
@@ -207,4 +213,12 @@ func main() {
 		slog.Error("shutdown error", "error", err)
 		os.Exit(1)
 	}
+}
+
+// gatewayPermissionResult distinguishes authorization denials from lookup failures.
+func gatewayPermissionResult(err error) error {
+	if errors.Is(err, service.ErrForbidden) || errors.Is(err, service.ErrNotFound) {
+		return gateway.ErrChannelHidden
+	}
+	return err
 }

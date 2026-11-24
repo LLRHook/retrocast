@@ -307,6 +307,10 @@ func TestAssignRole_Success(t *testing.T) {
 	if !assigned {
 		t.Error("expected role to be assigned")
 	}
+	if len(gw.invalidations) != 1 || gw.invalidations[0] != 1 {
+		t.Fatal("gateway visibility was not invalidated")
+	}
+
 }
 
 func TestRemoveRole_Success(t *testing.T) {
@@ -339,5 +343,35 @@ func TestRemoveRole_Success(t *testing.T) {
 	}
 	if !removed {
 		t.Error("expected role to be removed")
+	}
+	if len(gw.invalidations) != 1 || gw.invalidations[0] != 1 {
+		t.Fatal("gateway visibility was not invalidated")
+	}
+
+}
+
+func TestOverrideWritesInvalidateGateway(t *testing.T) {
+	for _, remove := range []bool{false, true} {
+		t.Run(map[bool]string{false: "set", true: "delete"}[remove], func(t *testing.T) {
+			gw := &mockGateway{}
+			guilds := &mockGuildRepo{GetByIDFn: func(context.Context, int64) (*models.Guild, error) { return &models.Guild{ID: 1, OwnerID: 100}, nil }}
+			roles := &mockRoleRepo{GetByIDFn: func(context.Context, int64) (*models.Role, error) { return &models.Role{ID: 20, GuildID: 1}, nil }}
+			channels := &mockChannelRepo{GetByIDFn: func(context.Context, int64) (*models.Channel, error) { return &models.Channel{ID: 50, GuildID: 1}, nil }}
+			overrides := &mockChannelOverrideRepo{}
+			perms := service.NewPermissionChecker(guilds, &mockMemberRepo{}, roles, overrides)
+			svc := service.NewRoleService(guilds, roles, &mockMemberRepo{}, channels, overrides, testSnowflake(), gw, perms)
+			if remove {
+				if err := svc.DeleteChannelOverride(context.Background(), 50, 100, 20); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				if _, err := svc.SetChannelOverride(context.Background(), 50, 100, 20, 0, 0); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if len(gw.invalidations) != 1 || gw.invalidations[0] != 1 {
+				t.Fatal("override write did not invalidate visibility")
+			}
+		})
 	}
 }

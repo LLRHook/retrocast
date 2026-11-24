@@ -30,6 +30,7 @@ export class GatewayClient {
   private ws: WebSocket | null = null;
   private sessionId: string | null = null;
   private sequence = 0;
+  private resuming = false;
   private heartbeatInterval: number | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private heartbeatAcked = true;
@@ -105,6 +106,7 @@ export class GatewayClient {
         this.startHeartbeat();
 
         if (this.sessionId) {
+          this.resuming = true;
           this.send({
             op: OP_RESUME,
             d: {
@@ -129,7 +131,12 @@ export class GatewayClient {
         if (payload.t === "READY") {
           const data = payload.d as ReadyData;
           this.sessionId = data.session_id;
+          if (this.resuming) {
+            this.resuming = false;
+            this.emit("RESYNC", null);
+          }
         }
+        if (payload.t !== "READY") this.resuming = false;
         if (payload.t) {
           this.emit(payload.t, payload.d);
         }
@@ -198,6 +205,7 @@ export class GatewayClient {
   }
 
   private cleanup() {
+    this.resuming = false;
     this.stopHeartbeat();
     if (this.ws) {
       this.ws.onclose = null;

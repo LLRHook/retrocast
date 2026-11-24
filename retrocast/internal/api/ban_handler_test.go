@@ -94,6 +94,10 @@ func TestBanMember(t *testing.T) {
 	if gw.events[1].Event != gateway.EventGuildMemberRemove {
 		t.Errorf("expected second event GUILD_MEMBER_REMOVE, got %s", gw.events[1].Event)
 	}
+	if len(gw.unsubscriptions) != 1 || gw.unsubscriptions[0] != [2]int64{200, 1} {
+		t.Fatal("membership removal did not unsubscribe gateway")
+	}
+
 }
 
 func TestBanMember_CannotBanOwner(t *testing.T) {

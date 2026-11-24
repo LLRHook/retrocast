@@ -3,14 +3,18 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
+	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/victorivanov/retrocast/internal/auth"
 	"github.com/victorivanov/retrocast/internal/database"
 	"github.com/victorivanov/retrocast/internal/models"
+	"github.com/victorivanov/retrocast/internal/permissions"
 	"github.com/victorivanov/retrocast/internal/redis"
 )
 
@@ -18,16 +22,30 @@ const (
 	replayBufferSize = 100
 )
 
+// ErrChannelHidden denotes a definitive forbidden or not-found permission result.
+var ErrChannelHidden = errors.New("channel hidden")
+
+// PermissionCheckerFunc adapts the REST resolver without importing service.
+type PermissionCheckerFunc func(context.Context, int64, int64, int64, permissions.Permission) error
+
+func (f PermissionCheckerFunc) RequireChannelPermission(ctx context.Context, guildID, channelID, userID int64, p permissions.Permission) error {
+	return f(ctx, guildID, channelID, userID, p)
+}
+
 // Manager manages all active WebSocket connections and event routing.
 type Manager struct {
-	mu            sync.RWMutex
-	connections   map[int64]*Connection            // userID → connection
-	subscriptions map[int64]map[int64]bool          // guildID → set of userIDs
-	sessions      map[string]*Connection            // sessionID → connection
+	mu                 sync.RWMutex
+	offlineEpoch       map[int64]uint64
+	membershipEpoch    map[int64]uint64
+	permissionFailures atomic.Uint64
+	connections        map[int64]map[*Connection]bool // userID → connection
+	subscriptions      map[int64]map[int64]bool       // guildID → set of userIDs
+	sessions           map[string]*Connection         // sessionID → connection
 
-	// Ring buffer per guild for session resume replay.
-	replayMu     sync.RWMutex
-	replayBuffer map[int64]*ringBuffer // guildID → ring buffer of events
+	visibility map[[3]int64]bool
+	checker    interface {
+		RequireChannelPermission(context.Context, int64, int64, int64, permissions.Permission) error
+	}
 
 	tokens     *auth.TokenService
 	guilds     database.GuildRepository
@@ -43,178 +61,259 @@ func NewManager(
 	redisClient *redis.Client,
 ) *Manager {
 	return &Manager{
-		connections:   make(map[int64]*Connection),
-		subscriptions: make(map[int64]map[int64]bool),
-		sessions:      make(map[string]*Connection),
-		replayBuffer:  make(map[int64]*ringBuffer),
-		tokens:        tokens,
-		guilds:        guilds,
-		readStates:    readStates,
-		redis:         redisClient,
+		connections:     make(map[int64]map[*Connection]bool),
+		subscriptions:   make(map[int64]map[int64]bool),
+		sessions:        make(map[string]*Connection),
+		visibility:      make(map[[3]int64]bool),
+		offlineEpoch:    make(map[int64]uint64),
+		membershipEpoch: make(map[int64]uint64),
+		tokens:          tokens,
+		guilds:          guilds,
+		readStates:      readStates,
+		redis:           redisClient,
 	}
 }
 
-// register adds a connection to the manager.
-func (m *Manager) register(c *Connection) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	// Disconnect existing connection for this user.
-	if old, ok := m.connections[c.UserID]; ok {
-		old.SendPayload(GatewayPayload{Op: OpReconnect})
-		old.Close()
-		delete(m.sessions, old.SessionID)
+func (m *Manager) SetPermissionChecker(p interface {
+	RequireChannelPermission(context.Context, int64, int64, int64, permissions.Permission) error
+}) {
+	m.checker = p
+}
+func (m *Manager) register(c *Connection) { m.mu.Lock(); defer m.mu.Unlock(); m.registerLocked(c) }
+func (m *Manager) registerLocked(c *Connection) {
+	m.pruneLocked()
+	if m.connections[c.UserID] == nil {
+		m.connections[c.UserID] = make(map[*Connection]bool)
 	}
-
-	m.connections[c.UserID] = c
+	m.offlineEpoch[c.UserID]++
+	m.connections[c.UserID][c] = true
 	m.sessions[c.SessionID] = c
+	if c.guildIDs == nil {
+		c.guildIDs = make(map[int64]bool)
+	}
 }
-
-// unregister removes a connection from the manager and cleans up subscriptions.
+func (m *Manager) pruneLocked() {
+	for id, c := range m.sessions {
+		if !c.expires.IsZero() && time.Now().After(c.expires) {
+			delete(m.sessions, id)
+		}
+	}
+}
 func (m *Manager) unregister(c *Connection) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-
-	if existing, ok := m.connections[c.UserID]; ok && existing == c {
-		delete(m.connections, c.UserID)
-
-		// Remove from all guild subscriptions.
-		for guildID, members := range m.subscriptions {
-			delete(members, c.UserID)
-			if len(members) == 0 {
-				delete(m.subscriptions, guildID)
-			}
-		}
-
-		// Clear presence with grace period.
-		go m.clearPresenceWithGrace(c.UserID)
-	}
-
-	delete(m.sessions, c.SessionID)
-}
-
-// clearPresenceWithGrace waits before setting offline, allowing reconnection.
-func (m *Manager) clearPresenceWithGrace(userID int64) {
-	time.Sleep(10 * time.Second)
-
-	m.mu.RLock()
-	_, stillConnected := m.connections[userID]
-	m.mu.RUnlock()
-
-	if stillConnected {
+	conns := m.connections[c.UserID]
+	if !conns[c] {
 		return
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	if err := m.redis.SetPresence(ctx, userID, "offline"); err != nil {
-		slog.Error("failed to clear presence", "userID", userID, "error", err)
+	delete(conns, c)
+	c.expires = time.Now().Add(5 * time.Minute)
+	if len(conns) > 0 {
+		return
 	}
-
-	m.broadcastPresence(userID, "offline")
+	delete(m.connections, c.UserID)
+	var guilds []int64
+	for id, members := range m.subscriptions {
+		if members[c.UserID] {
+			guilds = append(guilds, id)
+		}
+		delete(members, c.UserID)
+		if len(members) == 0 {
+			delete(m.subscriptions, id)
+		}
+	}
+	m.offlineEpoch[c.UserID]++
+	go m.clearPresenceWithGrace(c.UserID, guilds, m.offlineEpoch[c.UserID])
 }
-
-// subscribe adds a user to a guild's event subscription.
-func (m *Manager) subscribe(userID, guildID int64) {
+func (m *Manager) clearPresenceWithGrace(userID int64, guilds []int64, epoch uint64) {
+	time.Sleep(10 * time.Second)
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
+	if len(m.connections[userID]) > 0 || m.offlineEpoch[userID] != epoch {
+		m.mu.Unlock()
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	err := m.redis.SetPresence(ctx, userID, "offline")
+	cancel()
+	if err == nil {
+		for _, guildID := range guilds {
+			for _, c := range m.sessions {
+				if c.guildIDs[guildID] {
+					m.sendLocked(c, EventPresenceUpdate, PresenceUpdateData{UserID: userID, Status: "offline"})
+				}
+			}
+		}
+	}
+	m.mu.Unlock()
+}
+func (m *Manager) subscribeLocked(userID, guildID int64) {
+	if len(m.connections[userID]) == 0 {
+		return
+	}
 	if m.subscriptions[guildID] == nil {
 		m.subscriptions[guildID] = make(map[int64]bool)
 	}
 	m.subscriptions[guildID][userID] = true
+	for _, c := range m.sessions {
+		if c.UserID == userID {
+			if c.guildIDs == nil {
+				c.guildIDs = make(map[int64]bool)
+			}
+			c.guildIDs[guildID] = true
+		}
+	}
 }
-
-// SubscribeToGuild adds a user to a guild's event subscription.
 func (m *Manager) SubscribeToGuild(userID, guildID int64) {
-	m.subscribe(userID, guildID)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.membershipEpoch[userID]++
+	// Away devices need a new READY even when another device updates memberships.
+	for _, c := range m.sessions {
+		if c.UserID == userID && !m.connections[userID][c] {
+			c.replayFloor = c.sequence.Load() + 1
+		}
+	}
+	m.subscribeLocked(userID, guildID)
 }
-
-// UnsubscribeFromGuild removes a user from a guild's event subscription.
 func (m *Manager) UnsubscribeFromGuild(userID, guildID int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-
-	if members, ok := m.subscriptions[guildID]; ok {
-		delete(members, userID)
-		if len(members) == 0 {
-			delete(m.subscriptions, guildID)
+	m.membershipEpoch[userID]++
+	delete(m.subscriptions[guildID], userID)
+	if len(m.subscriptions[guildID]) == 0 {
+		delete(m.subscriptions, guildID)
+	}
+	for _, c := range m.sessions {
+		if c.UserID == userID {
+			delete(c.guildIDs, guildID)
+			c.replay = nil
+			c.replayFloor = max(c.replayFloor, c.sequence.Load())
+			if !m.connections[userID][c] {
+				c.replayFloor = c.sequence.Load() + 1
+			}
+		}
+	}
+	m.invalidateLocked(guildID)
+}
+func (m *Manager) InvalidateGuildPermissions(guildID int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.invalidateLocked(guildID)
+}
+func (m *Manager) invalidateLocked(guildID int64) {
+	for key := range m.visibility {
+		if key[0] == guildID {
+			delete(m.visibility, key)
+		}
+	}
+	for _, c := range m.sessions {
+		if c.guildIDs[guildID] {
+			c.replay = nil
+			c.replayFloor = max(c.replayFloor, c.sequence.Load())
 		}
 	}
 }
-
-// DispatchToUser sends a dispatch event to a specific connected user.
+func (m *Manager) sendLocked(c *Connection, event string, data any) {
+	if c.replayFloor > c.sequence.Load() {
+		return
+	}
+	raw, err := json.Marshal(data)
+	if err != nil {
+		return
+	}
+	seq := c.NextSequence()
+	p := GatewayPayload{Op: OpDispatch, Data: raw, Sequence: &seq, Event: &event}
+	c.replay = append(c.replay, p)
+	if len(c.replay) > replayBufferSize {
+		c.replayFloor = *c.replay[0].Sequence
+		c.replay = c.replay[1:]
+	}
+	if m.connections[c.UserID][c] {
+		c.SendPayload(p)
+	}
+}
 func (m *Manager) DispatchToUser(userID int64, event string, data interface{}) {
-	m.mu.RLock()
-	c, ok := m.connections[userID]
-	m.mu.RUnlock()
-
-	if ok {
-		c.SendEvent(event, data)
-	}
-}
-
-// DispatchToGuild sends a dispatch event to all users subscribed to a guild.
-func (m *Manager) DispatchToGuild(guildID int64, event string, data interface{}) {
-	m.mu.RLock()
-	members := m.subscriptions[guildID]
-	conns := make([]*Connection, 0, len(members))
-	for userID := range members {
-		if c, ok := m.connections[userID]; ok {
-			conns = append(conns, c)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.pruneLocked()
+	for _, c := range m.sessions {
+		if c.UserID == userID {
+			m.sendLocked(c, event, data)
 		}
 	}
-	m.mu.RUnlock()
-
-	for _, c := range conns {
-		c.SendEvent(event, data)
-	}
-
-	// Store in replay buffer.
-	m.storeReplayEvent(guildID, Event{Name: event, Data: data})
 }
-
-// DispatchToGuildExcept sends a dispatch event to all guild subscribers except one user.
-func (m *Manager) DispatchToGuildExcept(guildID int64, exceptUserID int64, event string, data interface{}) {
-	m.mu.RLock()
-	members := m.subscriptions[guildID]
-	conns := make([]*Connection, 0, len(members))
-	for userID := range members {
-		if userID == exceptUserID {
+func (m *Manager) DispatchToGuild(guildID int64, event string, data interface{}) {
+	m.DispatchToGuildExcept(guildID, 0, event, data)
+}
+func (m *Manager) DispatchToGuildExcept(guildID, exceptUserID int64, event string, data interface{}) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.pruneLocked()
+	switch event {
+	case EventGuildRoleCreate, EventGuildRoleUpdate, EventGuildRoleDelete, EventGuildMemberUpdate, EventGuildMemberAdd, EventGuildMemberRemove, EventChannelCreate, EventChannelUpdate:
+		m.invalidateLocked(guildID)
+	}
+	raw, err := json.Marshal(data)
+	if err != nil {
+		return
+	}
+	var fields map[string]json.RawMessage
+	_ = json.Unmarshal(raw, &fields)
+	var channelID int64
+	field := fields["channel_id"]
+	if event == EventChannelUpdate {
+		field = fields["id"]
+	}
+	if len(field) > 0 && string(field) != "null" {
+		var str string
+		if json.Unmarshal(field, &str) == nil {
+			channelID, _ = strconv.ParseInt(str, 10, 64)
+		} else {
+			_ = json.Unmarshal(field, &channelID)
+		}
+	}
+	for _, c := range m.sessions {
+		if c.UserID == exceptUserID || !c.guildIDs[guildID] {
 			continue
 		}
-		if c, ok := m.connections[userID]; ok {
-			conns = append(conns, c)
+		if channelID != 0 && m.checker != nil {
+			key := [3]int64{guildID, channelID, c.UserID}
+			visible, ok := m.visibility[key]
+			if !ok {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				err := m.checker.RequireChannelPermission(ctx, guildID, channelID, c.UserID, permissions.PermViewChannel)
+				visible = err == nil
+				if err != nil && !errors.Is(err, ErrChannelHidden) {
+					cancel()
+					m.permissionFailures.Add(1)
+					slog.Error("gateway permission lookup failed; resynchronizing session", "guild_id", guildID, "channel_id", channelID, "user_id", c.UserID, "error", err)
+					c.replay = nil
+					c.replayFloor = c.sequence.Load() + 1
+					c.Close()
+					continue
+				}
+				cancel()
+				m.visibility[key] = visible
+			}
+			if !visible {
+				continue
+			}
+		}
+		m.sendLocked(c, event, data)
+	}
+	if event == EventChannelDelete {
+		m.invalidateLocked(guildID)
+	}
+	if event == EventGuildDelete {
+		delete(m.subscriptions, guildID)
+		m.invalidateLocked(guildID)
+		for _, c := range m.sessions {
+			delete(c.guildIDs, guildID)
 		}
 	}
-	m.mu.RUnlock()
-
-	for _, c := range conns {
-		c.SendEvent(event, data)
-	}
-
-	// Store in replay buffer.
-	m.storeReplayEvent(guildID, Event{Name: event, Data: data})
 }
-
-// sendToGuildInternal sends an Event to all guild subscribers (internal use).
 func (m *Manager) sendToGuildInternal(guildID int64, event Event) {
-	m.mu.RLock()
-	members := m.subscriptions[guildID]
-	conns := make([]*Connection, 0, len(members))
-	for userID := range members {
-		if c, ok := m.connections[userID]; ok {
-			conns = append(conns, c)
-		}
-	}
-	m.mu.RUnlock()
-
-	for _, c := range conns {
-		c.SendEvent(event.Name, event.Data)
-	}
-
-	m.storeReplayEvent(guildID, event)
+	m.DispatchToGuild(guildID, event.Name, event.Data)
 }
 
 // handleIdentify processes an IDENTIFY payload from a client.
@@ -235,25 +334,11 @@ func (m *Manager) handleIdentify(c *Connection, data json.RawMessage) {
 
 	c.UserID = claims.UserID
 	c.SessionID = uuid.NewString()
+	c.presenceStatus = "online"
 
 	// Get user's guilds and subscribe.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
-	guilds, err := m.guilds.GetByUserID(ctx, c.UserID)
-	if err != nil {
-		slog.Error("failed to get guilds for user", "userID", c.UserID, "error", err)
-		c.Close()
-		return
-	}
-
-	m.register(c)
-
-	guildIDs := make([]int64, len(guilds))
-	for i, g := range guilds {
-		guildIDs[i] = g.ID
-		m.subscribe(c.UserID, g.ID)
-	}
 
 	// Set presence to online.
 	if err := m.redis.SetPresence(ctx, c.UserID, "online"); err != nil {
@@ -271,67 +356,135 @@ func (m *Manager) handleIdentify(c *Connection, data json.RawMessage) {
 		}
 	}
 
-	// Send READY.
-	c.SendEvent(EventReady, ReadyData{
-		SessionID:  c.SessionID,
-		UserID:     c.UserID,
-		Guilds:     guildIDs,
-		ReadStates: readStates,
-	})
+	// A removal can occur after the database lookup but before registration.
+	for attempt := 0; attempt < 3; attempt++ {
+		m.mu.RLock()
+		epoch := m.membershipEpoch[c.UserID]
+		m.mu.RUnlock()
+		guilds, err := m.guilds.GetByUserID(ctx, c.UserID)
+		if err != nil {
+			c.Close()
+			return
+		}
+		guildIDs := make([]int64, len(guilds))
+		for i, g := range guilds {
+			guildIDs[i] = g.ID
+		}
+		snapshot := m.presenceSnapshot(guildIDs)
+		m.mu.Lock()
+		if m.membershipEpoch[c.UserID] != epoch {
+			m.mu.Unlock()
+			continue
+		}
+		m.registerLocked(c)
+		for _, id := range guildIDs {
+			m.subscribeLocked(c.UserID, id)
+		}
+		m.sendLocked(c, EventReady, ReadyData{SessionID: c.SessionID, UserID: c.UserID, Guilds: guildIDs, ReadStates: readStates, Presences: snapshot})
+		m.mu.Unlock()
+		m.broadcastPresence(c.UserID, "online")
+		return
+	}
+	c.Close()
 
-	// Broadcast presence online to guild members.
-	m.broadcastPresence(c.UserID, "online")
 }
 
-// handleResume processes a RESUME payload to replay missed events.
+// handleResume preserves the session sequence or issues fresh READY on any gap.
 func (m *Manager) handleResume(c *Connection, data json.RawMessage) {
-	var resume ResumeData
-	if err := json.Unmarshal(data, &resume); err != nil {
-		slog.Error("invalid resume data", "error", err)
-		c.SendPayload(GatewayPayload{Op: OpReconnect})
+	var r ResumeData
+	if json.Unmarshal(data, &r) != nil {
 		c.Close()
 		return
 	}
-
-	claims, err := m.tokens.ValidateAccessToken(resume.Token)
+	claims, err := m.tokens.ValidateAccessToken(r.Token)
 	if err != nil {
-		slog.Warn("invalid token in resume", "error", err)
 		c.Close()
 		return
 	}
-
-	c.UserID = claims.UserID
-	c.SessionID = resume.SessionID
-
-	// Get user's guilds.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	guilds, err := m.guilds.GetByUserID(ctx, c.UserID)
-	if err != nil {
-		slog.Error("failed to get guilds on resume", "userID", c.UserID, "error", err)
-		c.SendPayload(GatewayPayload{Op: OpReconnect})
+	guilds, guildErr := m.guilds.GetByUserID(ctx, claims.UserID)
+	cancel()
+	if guildErr != nil {
 		c.Close()
 		return
 	}
-
-	m.register(c)
-
-	for _, g := range guilds {
-		m.subscribe(c.UserID, g.ID)
-
-		// Replay missed events from ring buffer.
-		m.replayMu.RLock()
-		rb, ok := m.replayBuffer[g.ID]
-		m.replayMu.RUnlock()
-
-		if ok {
-			events := rb.since(resume.Sequence)
-			for _, ev := range events {
-				c.SendEvent(ev.Name, ev.Data)
+	m.mu.Lock()
+	m.pruneLocked()
+	old := m.sessions[r.SessionID]
+	membershipChanged := false
+	if old != nil {
+		if len(guilds) != len(old.guildIDs) {
+			membershipChanged = true
+		}
+		for _, g := range guilds {
+			if !old.guildIDs[g.ID] {
+				membershipChanged = true
 			}
 		}
 	}
+	if membershipChanged || old == nil || old.UserID != claims.UserID || r.Sequence < old.replayFloor || r.Sequence > old.sequence.Load() || m.connections[old.UserID][old] {
+		m.mu.Unlock()
+		raw, _ := json.Marshal(IdentifyData{Token: r.Token})
+		m.handleIdentify(c, raw)
+		return
+	}
+	c.presenceStatus = old.presenceStatus
+	c.UserID = old.UserID
+	c.SessionID = old.SessionID
+	c.guildIDs = old.guildIDs
+	c.replay = old.replay
+	c.replayFloor = old.replayFloor
+	c.sequence.Store(old.sequence.Load())
+	m.registerLocked(c)
+	for id := range c.guildIDs {
+		m.subscribeLocked(c.UserID, id)
+	}
+	for _, p := range c.replay {
+		if *p.Sequence > r.Sequence {
+			c.SendPayload(p)
+		}
+	}
+	status := c.presenceStatus
+	m.mu.Unlock()
+	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+	if status == "" {
+		status = "online"
+	}
+	_ = m.redis.SetPresence(ctx, c.UserID, status)
+	cancel()
+	m.broadcastPresence(c.UserID, status)
+}
+func (m *Manager) refreshPresence(c *Connection) {
+	if c.UserID == 0 {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := m.redis.RefreshPresence(ctx, c.UserID); err != nil {
+		slog.Error("refresh presence", "error", err)
+	}
+}
+func (m *Manager) presenceSnapshot(guildIDs []int64) []PresenceUpdateData {
+	m.mu.RLock()
+	users := make(map[int64]bool)
+	for _, id := range guildIDs {
+		for _, c := range m.sessions {
+			if c.guildIDs[id] {
+				users[c.UserID] = true
+			}
+		}
+	}
+	m.mu.RUnlock()
+	result := make([]PresenceUpdateData, 0, len(users))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	for uid := range users {
+		status, err := m.redis.GetPresence(ctx, uid)
+		if err == nil && status != "" && status != "offline" {
+			result = append(result, PresenceUpdateData{UserID: uid, Status: status})
+		}
+	}
+	return result
 }
 
 // handlePresenceUpdate processes a client presence update.
@@ -364,6 +517,13 @@ func (m *Manager) handlePresenceUpdate(c *Connection, data json.RawMessage) {
 	if broadcastStatus == "invisible" {
 		broadcastStatus = "offline"
 	}
+	m.mu.Lock()
+	for _, session := range m.sessions {
+		if session.UserID == c.UserID {
+			session.presenceStatus = broadcastStatus
+		}
+	}
+	m.mu.Unlock()
 	m.broadcastPresence(c.UserID, broadcastStatus)
 }
 
@@ -389,70 +549,4 @@ func (m *Manager) broadcastPresence(userID int64, status string) {
 	for _, guildID := range guildIDs {
 		m.sendToGuildInternal(guildID, event)
 	}
-}
-
-// storeReplayEvent adds an event to the guild's replay ring buffer.
-func (m *Manager) storeReplayEvent(guildID int64, event Event) {
-	m.replayMu.Lock()
-	defer m.replayMu.Unlock()
-
-	rb, ok := m.replayBuffer[guildID]
-	if !ok {
-		rb = newRingBuffer(replayBufferSize)
-		m.replayBuffer[guildID] = rb
-	}
-	rb.add(event)
-}
-
-// sequencedEvent pairs an event with its sequence number for replay.
-type sequencedEvent struct {
-	Sequence int64
-	Event
-}
-
-// ringBuffer is a fixed-size circular buffer for replay events.
-type ringBuffer struct {
-	events []sequencedEvent
-	size   int
-	pos    int
-	seq    int64
-	full   bool
-}
-
-func newRingBuffer(size int) *ringBuffer {
-	return &ringBuffer{
-		events: make([]sequencedEvent, size),
-		size:   size,
-	}
-}
-
-func (rb *ringBuffer) add(event Event) {
-	rb.seq++
-	rb.events[rb.pos] = sequencedEvent{Sequence: rb.seq, Event: event}
-	rb.pos = (rb.pos + 1) % rb.size
-	if rb.pos == 0 {
-		rb.full = true
-	}
-}
-
-// since returns all events with sequence > afterSeq.
-func (rb *ringBuffer) since(afterSeq int64) []Event {
-	var result []Event
-	count := rb.size
-	if !rb.full {
-		count = rb.pos
-	}
-
-	start := 0
-	if rb.full {
-		start = rb.pos
-	}
-
-	for i := 0; i < count; i++ {
-		idx := (start + i) % rb.size
-		if rb.events[idx].Sequence > afterSeq {
-			result = append(result, rb.events[idx].Event)
-		}
-	}
-	return result
 }

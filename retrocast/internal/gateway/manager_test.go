@@ -81,8 +81,12 @@ func fakeConn(m *Manager, userID int64, sessionID string) *Connection {
 
 	// Register the connection in the manager.
 	m.mu.Lock()
-	m.connections[userID] = c
+	if m.connections[userID] == nil {
+		m.connections[userID] = make(map[*Connection]bool)
+	}
+	m.connections[userID][c] = true
 	m.sessions[sessionID] = c
+	c.guildIDs = make(map[int64]bool)
 	m.mu.Unlock()
 
 	return c
@@ -110,10 +114,10 @@ type mockGuildRepo struct {
 	GetByUserIDFn func(ctx context.Context, userID int64) ([]models.Guild, error)
 }
 
-func (m *mockGuildRepo) Create(context.Context, *models.Guild) error          { return nil }
+func (m *mockGuildRepo) Create(context.Context, *models.Guild) error           { return nil }
 func (m *mockGuildRepo) GetByID(context.Context, int64) (*models.Guild, error) { return nil, nil }
-func (m *mockGuildRepo) Update(context.Context, *models.Guild) error          { return nil }
-func (m *mockGuildRepo) Delete(context.Context, int64) error                  { return nil }
+func (m *mockGuildRepo) Update(context.Context, *models.Guild) error           { return nil }
+func (m *mockGuildRepo) Delete(context.Context, int64) error                   { return nil }
 func (m *mockGuildRepo) GetByUserID(ctx context.Context, userID int64) ([]models.Guild, error) {
 	if m.GetByUserIDFn != nil {
 		return m.GetByUserIDFn(ctx, userID)
@@ -125,146 +129,16 @@ func (m *mockGuildRepo) GetByUserID(ctx context.Context, userID int64) ([]models
 // Ring Buffer Tests
 // ---------------------------------------------------------------------------
 
-func TestRingBuffer_AddAndSinceZero(t *testing.T) {
-	rb := newRingBuffer(100)
-	rb.add(Event{Name: "A", Data: "one"})
-	rb.add(Event{Name: "B", Data: "two"})
-
-	events := rb.since(0)
-	if len(events) != 2 {
-		t.Fatalf("since(0) returned %d events, want 2", len(events))
-	}
-	if events[0].Name != "A" {
-		t.Errorf("events[0].Name = %q, want %q", events[0].Name, "A")
-	}
-	if events[1].Name != "B" {
-		t.Errorf("events[1].Name = %q, want %q", events[1].Name, "B")
-	}
-}
-
-func TestRingBuffer_SequenceIncrement(t *testing.T) {
-	rb := newRingBuffer(100)
-	rb.add(Event{Name: "A"})
-	rb.add(Event{Name: "B"})
-	rb.add(Event{Name: "C"})
-
-	if rb.seq != 3 {
-		t.Fatalf("seq = %d, want 3", rb.seq)
-	}
-
-	// since(1) should return events with seq > 1, i.e. B(2) and C(3).
-	events := rb.since(1)
-	if len(events) != 2 {
-		t.Fatalf("since(1) returned %d events, want 2", len(events))
-	}
-	if events[0].Name != "B" {
-		t.Errorf("events[0].Name = %q, want %q", events[0].Name, "B")
-	}
-	if events[1].Name != "C" {
-		t.Errorf("events[1].Name = %q, want %q", events[1].Name, "C")
-	}
-}
-
-func TestRingBuffer_SinceMidway(t *testing.T) {
-	rb := newRingBuffer(100)
-	for i := 0; i < 10; i++ {
-		rb.add(Event{Name: "E"})
-	}
-
-	// Since seq 7 should return events 8, 9, 10.
-	events := rb.since(7)
-	if len(events) != 3 {
-		t.Fatalf("since(7) returned %d events, want 3", len(events))
-	}
-}
-
-func TestRingBuffer_SinceAll(t *testing.T) {
-	rb := newRingBuffer(100)
-	for i := 0; i < 5; i++ {
-		rb.add(Event{Name: "E"})
-	}
-
-	// since(5) means "after seq 5" — the last event is seq 5, so nothing returned.
-	events := rb.since(5)
-	if len(events) != 0 {
-		t.Fatalf("since(5) returned %d events, want 0", len(events))
-	}
-}
-
-func TestRingBuffer_WrapAround(t *testing.T) {
-	rb := newRingBuffer(10)
-
-	// Write 25 events into a buffer of size 10.
-	for i := 1; i <= 25; i++ {
-		rb.add(Event{Name: "E", Data: i})
-	}
-
-	// Buffer should be full and contain the last 10 events (seq 16-25).
-	events := rb.since(0)
-	if len(events) != 10 {
-		t.Fatalf("since(0) after wrap returned %d events, want 10", len(events))
-	}
-
-	// The oldest event should have data=16 (seq 16).
-	if events[0].Data != 16 {
-		t.Errorf("oldest event data = %v, want 16", events[0].Data)
-	}
-	// The newest event should have data=25 (seq 25).
-	if events[9].Data != 25 {
-		t.Errorf("newest event data = %v, want 25", events[9].Data)
-	}
-}
-
-func TestRingBuffer_WrapSincePartial(t *testing.T) {
-	rb := newRingBuffer(10)
-
-	for i := 1; i <= 25; i++ {
-		rb.add(Event{Name: "E", Data: i})
-	}
-
-	// since(20) should return events with seq 21-25 → 5 events.
-	events := rb.since(20)
-	if len(events) != 5 {
-		t.Fatalf("since(20) returned %d events, want 5", len(events))
-	}
-	if events[0].Data != 21 {
-		t.Errorf("events[0].Data = %v, want 21", events[0].Data)
-	}
-}
-
-func TestRingBuffer_Empty(t *testing.T) {
-	rb := newRingBuffer(100)
-	events := rb.since(0)
-	if len(events) != 0 {
-		t.Fatalf("since(0) on empty buffer returned %d events, want 0", len(events))
-	}
-}
-
-func TestRingBuffer_ExactlyFull(t *testing.T) {
-	rb := newRingBuffer(5)
-
-	for i := 1; i <= 5; i++ {
-		rb.add(Event{Name: "E", Data: i})
-	}
-
-	events := rb.since(0)
-	if len(events) != 5 {
-		t.Fatalf("since(0) returned %d events, want 5", len(events))
-	}
-	if events[0].Data != 1 {
-		t.Errorf("events[0].Data = %v, want 1", events[0].Data)
-	}
-	if events[4].Data != 5 {
-		t.Errorf("events[4].Data = %v, want 5", events[4].Data)
-	}
-}
-
 // ---------------------------------------------------------------------------
 // Subscription Tests
 // ---------------------------------------------------------------------------
 
 func TestSubscribe_AddsUserToGuild(t *testing.T) {
 	m := newTestManager(t, &mockGuildRepo{})
+	for _, uid := range []int64{100, 200, 300} {
+		c := fakeConn(m, uid, "fixture"+string(rune(uid)))
+		defer c.Close()
+	}
 
 	m.SubscribeToGuild(100, 1)
 
@@ -282,6 +156,10 @@ func TestSubscribe_AddsUserToGuild(t *testing.T) {
 
 func TestSubscribe_MultipleUsersToSameGuild(t *testing.T) {
 	m := newTestManager(t, &mockGuildRepo{})
+	for _, uid := range []int64{100, 200, 300} {
+		c := fakeConn(m, uid, "fixture"+string(rune(uid)))
+		defer c.Close()
+	}
 
 	m.SubscribeToGuild(100, 1)
 	m.SubscribeToGuild(200, 1)
@@ -303,6 +181,10 @@ func TestSubscribe_MultipleUsersToSameGuild(t *testing.T) {
 
 func TestUnsubscribe_RemovesUser(t *testing.T) {
 	m := newTestManager(t, &mockGuildRepo{})
+	for _, uid := range []int64{100, 200, 300} {
+		c := fakeConn(m, uid, "fixture"+string(rune(uid)))
+		defer c.Close()
+	}
 
 	m.SubscribeToGuild(100, 1)
 	m.SubscribeToGuild(200, 1)
@@ -350,6 +232,10 @@ func TestUnsubscribe_NonSubscribedUserIsNoop(t *testing.T) {
 
 func TestSubscribe_UserToMultipleGuilds(t *testing.T) {
 	m := newTestManager(t, &mockGuildRepo{})
+	for _, uid := range []int64{100, 200, 300} {
+		c := fakeConn(m, uid, "fixture"+string(rune(uid)))
+		defer c.Close()
+	}
 
 	m.SubscribeToGuild(100, 1)
 	m.SubscribeToGuild(100, 2)
@@ -405,30 +291,6 @@ func TestDispatchToGuild_SendsToAllSubscribed(t *testing.T) {
 	// Verify the event name is correct.
 	if p1[0].Event == nil || *p1[0].Event != EventMessageCreate {
 		t.Errorf("event name = %v, want %q", p1[0].Event, EventMessageCreate)
-	}
-}
-
-func TestDispatchToGuild_StoresInReplayBuffer(t *testing.T) {
-	m := newTestManager(t, &mockGuildRepo{})
-
-	c1 := fakeConn(m, 100, "s1")
-	defer func() { _ = c1.Conn.Close() }()
-	m.SubscribeToGuild(100, 1)
-
-	m.DispatchToGuild(1, EventMessageCreate, "msg1")
-	m.DispatchToGuild(1, EventMessageCreate, "msg2")
-
-	m.replayMu.RLock()
-	rb, ok := m.replayBuffer[1]
-	m.replayMu.RUnlock()
-
-	if !ok {
-		t.Fatal("replay buffer not created for guild 1")
-	}
-
-	events := rb.since(0)
-	if len(events) != 2 {
-		t.Fatalf("replay buffer has %d events, want 2", len(events))
 	}
 }
 
@@ -495,29 +357,6 @@ func TestDispatchToGuildExcept_ExcludesSpecifiedUser(t *testing.T) {
 	}
 }
 
-func TestDispatchToGuildExcept_StoresInReplayBuffer(t *testing.T) {
-	m := newTestManager(t, &mockGuildRepo{})
-
-	c1 := fakeConn(m, 100, "s1")
-	defer func() { _ = c1.Conn.Close() }()
-	m.SubscribeToGuild(100, 1)
-
-	m.DispatchToGuildExcept(1, 100, EventMessageCreate, "msg")
-
-	m.replayMu.RLock()
-	rb, ok := m.replayBuffer[1]
-	m.replayMu.RUnlock()
-
-	if !ok {
-		t.Fatal("replay buffer not created for guild 1")
-	}
-
-	events := rb.since(0)
-	if len(events) != 1 {
-		t.Fatalf("replay buffer has %d events, want 1", len(events))
-	}
-}
-
 func TestDispatchToGuild_NonExistentGuildIsNoop(t *testing.T) {
 	m := newTestManager(t, &mockGuildRepo{})
 
@@ -536,7 +375,7 @@ func TestDispatchToGuildExcept_NonExistentGuildIsNoop(t *testing.T) {
 // Register / Unregister Tests
 // ---------------------------------------------------------------------------
 
-func TestRegister_DisplacesExistingConnection(t *testing.T) {
+func TestRegister_PreservesEveryConnection(t *testing.T) {
 	m := newTestManager(t, &mockGuildRepo{})
 
 	c1 := fakeConn(m, 100, "s1")
@@ -558,11 +397,11 @@ func TestRegister_DisplacesExistingConnection(t *testing.T) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if m.connections[100] != c2 {
-		t.Error("new connection should replace old one")
+	if !m.connections[100][c1] || !m.connections[100][c2] {
+		t.Error("both connections must remain registered")
 	}
-	if _, ok := m.sessions["s1"]; ok {
-		t.Error("old session should be removed")
+	if _, ok := m.sessions["s1"]; !ok {
+		t.Error("old session should stay registered")
 	}
 	if m.sessions["s2"] != c2 {
 		t.Error("new session should be registered")
@@ -586,8 +425,8 @@ func TestUnregister_RemovesFromAllGuildSubscriptions(t *testing.T) {
 	if _, ok := m.connections[100]; ok {
 		t.Error("user should be removed from connections")
 	}
-	if _, ok := m.sessions["s1"]; ok {
-		t.Error("session should be removed")
+	if _, ok := m.sessions["s1"]; !ok {
+		t.Error("session should remain resumable")
 	}
 	for gid, members := range m.subscriptions {
 		if members[100] {
@@ -619,7 +458,7 @@ func TestUnregister_IgnoresMismatchedConnection(t *testing.T) {
 	defer m.mu.RUnlock()
 
 	// c1 should still be registered.
-	if m.connections[100] != c1 {
+	if !m.connections[100][c1] {
 		t.Error("original connection should not be removed by mismatched unregister")
 	}
 }
@@ -627,28 +466,6 @@ func TestUnregister_IgnoresMismatchedConnection(t *testing.T) {
 // ---------------------------------------------------------------------------
 // Store Replay Event Tests
 // ---------------------------------------------------------------------------
-
-func TestStoreReplayEvent_CreatesBufferOnDemand(t *testing.T) {
-	m := newTestManager(t, &mockGuildRepo{})
-
-	m.storeReplayEvent(42, Event{Name: "TEST", Data: "data"})
-
-	m.replayMu.RLock()
-	defer m.replayMu.RUnlock()
-
-	rb, ok := m.replayBuffer[42]
-	if !ok {
-		t.Fatal("replay buffer not created for guild 42")
-	}
-
-	events := rb.since(0)
-	if len(events) != 1 {
-		t.Fatalf("replay buffer has %d events, want 1", len(events))
-	}
-	if events[0].Name != "TEST" {
-		t.Errorf("event name = %q, want %q", events[0].Name, "TEST")
-	}
-}
 
 // ---------------------------------------------------------------------------
 // WebSocket Connection Lifecycle Tests
@@ -831,68 +648,16 @@ func TestWSLifecycle_HeartbeatExchange(t *testing.T) {
 	}
 }
 
-func TestWSLifecycle_ResumeReplaysEvents(t *testing.T) {
-	tokens := auth.NewTokenService("test-secret")
-
-	guilds := &mockGuildRepo{
-		GetByUserIDFn: func(ctx context.Context, userID int64) ([]models.Guild, error) {
-			return []models.Guild{{ID: 1, Name: "Guild A"}}, nil
-		},
-	}
-
-	rdb := newTestRedis(t)
-	m := NewManager(tokens, guilds, nil, rdb)
-
-	// Pre-populate the replay buffer for guild 1 with 3 events.
-	m.storeReplayEvent(1, Event{Name: EventMessageCreate, Data: "msg1"})
-	m.storeReplayEvent(1, Event{Name: EventMessageCreate, Data: "msg2"})
-	m.storeReplayEvent(1, Event{Name: EventMessageCreate, Data: "msg3"})
-
-	srv := setupWSServer(t, m)
-	ws := dialWS(t, srv)
-
-	readPayload(t, ws) // HELLO
-
-	token, err := tokens.GenerateAccessToken(42)
-	if err != nil {
-		t.Fatalf("generate token: %v", err)
-	}
-
-	// Send RESUME with sequence 1 → should replay events with seq > 1 (events 2 and 3).
-	resumeData := mustMarshal(ResumeData{
-		Token:     token,
-		SessionID: "old-session",
-		Sequence:  1,
-	})
-	sendPayload(t, ws, GatewayPayload{Op: OpResume, Data: resumeData})
-
-	// Read replayed events.
-	var replayed []GatewayPayload
-	for i := 0; i < 2; i++ {
-		p := readPayload(t, ws)
-		replayed = append(replayed, p)
-	}
-
-	if len(replayed) != 2 {
-		t.Fatalf("replayed %d events, want 2", len(replayed))
-	}
-
-	for _, p := range replayed {
-		if p.Op != OpDispatch {
-			t.Errorf("replayed event op = %d, want %d", p.Op, OpDispatch)
-		}
-		if p.Event == nil || *p.Event != EventMessageCreate {
-			t.Errorf("replayed event name = %v, want %q", p.Event, EventMessageCreate)
-		}
-	}
-}
-
 // ---------------------------------------------------------------------------
 // Concurrent Safety Test
 // ---------------------------------------------------------------------------
 
 func TestConcurrentSubscribeUnsubscribe(t *testing.T) {
 	m := newTestManager(t, &mockGuildRepo{})
+	for uid := int64(0); uid < 50; uid++ {
+		c := fakeConn(m, uid, "fixture"+string(rune(uid)))
+		defer c.Close()
+	}
 
 	var wg sync.WaitGroup
 	for i := int64(0); i < 50; i++ {
