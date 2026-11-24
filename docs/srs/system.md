@@ -121,3 +121,4 @@ Server logging is SV-NFR-006; metrics are SV-NFR-013; scraping and dashboards ar
 | 1 | 2026-11-23T12:58:05-05:00 | 918f0a8471d3 | INIT | Initial system constraints and qualities SYS-CON-001–SYS-CON-004, SYS-NFR-001–SYS-NFR-005 |
 | 2 | 2026-11-23T15:17:07-05:00 | 701009f47d68 | REVISION | Added SYS-FR-001–SYS-FR-004, SYS-NFR-006, SYS-NFR-007; performance, RPO and licence decisions; SYS-CON-001 Partial (D-25) |
 | 3 | 2026-11-23T22:54:35-05:00 | f4e6409e92a2 | REVISION | PR #53: deployment exposure, origins, outage policy, invite limit, LiveKit defaults and raw OpenAPI; D-10 and API-059 remain separate |
+| 4 | 2026-11-23T22:56:00-05:00 | 23fa99aabf34 | REVISION | Correct delivery columns, retain requirement statements and update PR #53 evidence |
