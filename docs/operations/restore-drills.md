@@ -112,3 +112,30 @@ relation test. These replace the false-positive round-1 regression claims found
 by L31. Perf main exit-gate mutants P4/P5 remain a documented test limitation;
 no perf or production gateway behavior changed, so the accepted performance run
 was retained without re-running it.
+
+
+## L36 Pilot candidate — 2026-11-24
+
+Candidate `26ebe80e934be286300d7838f2f728e2eb0933e6`, Windows 11 / Docker Desktop; source l36pilot, isolated empty-volume target l36restore, unchanged candidate application source. The target Compose invocation rebuilt its project images rather than reusing source image tags; target image IDs were API `sha256:86395706d7033065f7d9737924c148df014838313666fcd0d826addf359364c7` and web `sha256:772cf19e08c2f8d1ae146618440f06c14ea6117ae117c0c2409f1419b1cd70fb`. These differ from the source image IDs; this drill proves source-version equivalence, not reuse of identical image digests. Paired backups `backup_20261124_112000.sql.gz` and `minio_20261124_112000.tar.gz`; backup taken with API stopped, using documented scripts/backup.sh and scripts/restore.sh. Backup artifacts were private temporary files, removed after the drill.
+
+| Check | Before backup | After restore |
+|---|---|---|
+| Users | 2 | 2 |
+| Guilds | 1 | 1 |
+| Messages | 1 | 1 |
+| Health | 200 | 200 |
+
+Restore script exit 0. A newly invited test member registered after these counts were compared; history hydrated the original message and its PNG, decoded inline and downloaded 68 bytes with HTTP 200 over HTTPS Caddy using a fresh signed URL. Subsequent history-paging fixtures are not part of the before/after comparison. No user stack or volume was touched. No daily scheduler or 24-hour RPO measurement was performed. Raw evidence: `.git/agent-handoffs/driver-rc-revive/evidence/L36/restore.log`, `restore-counts-before.txt`, `restore-counts-after.txt`, `restored-client-download.txt/png`, `restored-download.txt`, `l36-drill.sh`. See [full validation](../validation/pilot-2026-11-24.md).
+
+
+## Pilot run 3 — 2026-11-24
+
+Candidate 0f7ee554a0b51d79252ace01ebcb213f5d2b5501, Windows11 Docker Desktop DESKTOP-JRJNV5B. Source l42pilot, fresh target l42restore. Both reused API image sha256:40f45ef0609ccd57988649a333fa76091565a07316b3df51c0fd4652959ad58c and web sha256:8d658ac5fdb4e931ea4ba8fa5d5579377a2f5d06b87554fc673911001554efe6. Documented scheduled wrapper and restore exited0. Paired backup_20261124_145041.sql.gz / minio_20261124_145041.tar.gz; before/after 2 users, 1 guild, 1 message; health200. Fresh invited browser downloaded restored PNG over HTTPS200, 68 bytes. A source message inserted after backup is absent from the target; the prebackup attachment message/file is present. Manual drill proves recovery to the backup point; no installed daily host schedule is claimed. Private scripts/output: evidence/L42/l42-drill.sh, restore.log, restore-counts-before/after.txt, rpo-source/restored.txt and restored-download.txt. See [full validation](../validation/pilot-2026-11-24.md).
+
+## Pilot run 3 round 2 — 2026-11-24
+
+Candidate `511b8cd241fc7fab6a15f9d62364ac8000378104`, DESKTOP-JRJNV5B, Windows 11 / Docker Desktop. The original 0f7ee55 restore/RPO drill is carried by identical Go, storage, migration, compose, Caddy and Dockerfile object ids recorded in `evidence/L42/round2/carry.txt`; it was not rerun on the new candidate.
+
+The documented cron entry itself was installed in an owned sidecar, changing only time fields to two minutes ahead and the documented project placeholder to l42r2open. Captured `crontab -l` uses BACKUP_DIR=/srv/backups/retrocast, the documented scheduled-backup.sh path and append redirection, with no wrapper job or added PATH/COMPOSE_FILE export. It fired at 21:44 UTC. Pair `backup_20261124_214403.sql.gz` / `minio_20261124_214403.tar.gz` passed gzip/tar integrity; the actual cron shell exited 0, observed without altering the job and recorded in backup.log. Private crontab/firing/exit/integrity evidence is under `evidence/L42/round2/`.
+
+This establishes the operator line’s mechanism under cron’s minimal environment, not installation on the actual operator host or 24 elapsed hours. SYS-FR-002 remains Implemented; owner action is the actual daily host schedule and the first two paired backups observed over 24 hours. See [validation record](../validation/pilot-2026-11-24.md).
