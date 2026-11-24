@@ -17,7 +17,7 @@ func NewInviteRepository(pool *pgxpool.Pool) InviteRepository {
 }
 
 func (r *inviteRepo) Create(ctx context.Context, invite *models.Invite) error {
-	_, err := r.pool.Exec(ctx,
+	_, err := queryDB(ctx, r.pool).Exec(ctx,
 		`INSERT INTO invites (code, guild_id, channel_id, creator_id, max_uses, uses, expires_at, created_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 		invite.Code, invite.GuildID, invite.ChannelID, invite.CreatorID,
@@ -28,10 +28,11 @@ func (r *inviteRepo) Create(ctx context.Context, invite *models.Invite) error {
 
 func (r *inviteRepo) GetByCode(ctx context.Context, code string) (*models.Invite, error) {
 	inv := &models.Invite{}
-	err := r.pool.QueryRow(ctx,
-		`SELECT code, guild_id, channel_id, creator_id, max_uses, uses, expires_at, created_at
-		 FROM invites WHERE code = $1`, code,
-	).Scan(
+	query := `SELECT code, guild_id, channel_id, creator_id, max_uses, uses, expires_at, created_at FROM invites WHERE code = $1`
+	if _, ok := ctx.Value(transactionKey{}).(pgx.Tx); ok {
+		query += " FOR UPDATE"
+	}
+	err := queryDB(ctx, r.pool).QueryRow(ctx, query, code).Scan(
 		&inv.Code, &inv.GuildID, &inv.ChannelID, &inv.CreatorID,
 		&inv.MaxUses, &inv.Uses, &inv.ExpiresAt, &inv.CreatedAt,
 	)
@@ -42,7 +43,7 @@ func (r *inviteRepo) GetByCode(ctx context.Context, code string) (*models.Invite
 }
 
 func (r *inviteRepo) GetByGuildID(ctx context.Context, guildID int64) ([]models.Invite, error) {
-	rows, err := r.pool.Query(ctx,
+	rows, err := queryDB(ctx, r.pool).Query(ctx,
 		`SELECT code, guild_id, channel_id, creator_id, max_uses, uses, expires_at, created_at
 		 FROM invites WHERE guild_id = $1
 		 ORDER BY created_at DESC`, guildID,
@@ -67,13 +68,15 @@ func (r *inviteRepo) GetByGuildID(ctx context.Context, guildID int64) ([]models.
 }
 
 func (r *inviteRepo) IncrementUses(ctx context.Context, code string) error {
-	_, err := r.pool.Exec(ctx,
+	_, err := queryDB(ctx, r.pool).Exec(ctx,
 		`UPDATE invites SET uses = uses + 1 WHERE code = $1`, code,
 	)
 	return err
 }
 
 func (r *inviteRepo) Delete(ctx context.Context, code string) error {
-	_, err := r.pool.Exec(ctx, `DELETE FROM invites WHERE code = $1`, code)
+	_, err := queryDB(ctx, r.pool).Exec(ctx, `DELETE FROM invites WHERE code = $1`, code)
 	return err
 }
+
+func (r *inviteRepo) transactionPool() *pgxpool.Pool { return r.pool }

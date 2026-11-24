@@ -58,68 +58,75 @@ func (s *GuildService) CreateGuild(ctx context.Context, userID int64, name strin
 		OwnerID:   userID,
 		CreatedAt: now,
 	}
-	if err := s.guilds.Create(ctx, guild); err != nil {
-		return nil, Internal("INTERNAL", "internal server error")
-	}
+	err := database.InTransaction(ctx, s.guilds, func(ctx context.Context) error {
+		if err := s.guilds.Create(ctx, guild); err != nil {
+			return Internal("INTERNAL", "internal server error")
+		}
 
-	everyoneRole := &models.Role{
-		ID:          s.snowflake.Generate().Int64(),
-		GuildID:     guild.ID,
-		Name:        "@everyone",
-		Permissions: int64(permissions.DefaultEveryonePerms),
-		Position:    0,
-		IsDefault:   true,
-	}
-	if err := s.roles.Create(ctx, everyoneRole); err != nil {
-		return nil, Internal("INTERNAL", "internal server error")
-	}
+		everyoneRole := &models.Role{
+			ID:          s.snowflake.Generate().Int64(),
+			GuildID:     guild.ID,
+			Name:        "@everyone",
+			Permissions: int64(permissions.DefaultEveryonePerms),
+			Position:    0,
+			IsDefault:   true,
+		}
+		if err := s.roles.Create(ctx, everyoneRole); err != nil {
+			return Internal("INTERNAL", "internal server error")
+		}
 
-	adminRole := &models.Role{
-		ID:          s.snowflake.Generate().Int64(),
-		GuildID:     guild.ID,
-		Name:        "Admin",
-		Permissions: int64(permissions.PermAdministrator),
-		Position:    1,
-	}
-	if err := s.roles.Create(ctx, adminRole); err != nil {
-		return nil, Internal("INTERNAL", "internal server error")
-	}
+		adminRole := &models.Role{
+			ID:          s.snowflake.Generate().Int64(),
+			GuildID:     guild.ID,
+			Name:        "Admin",
+			Permissions: int64(permissions.PermAdministrator),
+			Position:    1,
+		}
+		if err := s.roles.Create(ctx, adminRole); err != nil {
+			return Internal("INTERNAL", "internal server error")
+		}
 
-	member := &models.Member{
-		GuildID:  guild.ID,
-		UserID:   userID,
-		JoinedAt: now,
-	}
-	if err := s.members.Create(ctx, member); err != nil {
-		return nil, Internal("INTERNAL", "internal server error")
-	}
+		member := &models.Member{
+			GuildID:  guild.ID,
+			UserID:   userID,
+			JoinedAt: now,
+		}
+		if err := s.members.Create(ctx, member); err != nil {
+			return Internal("INTERNAL", "internal server error")
+		}
 
-	if err := s.members.AddRole(ctx, guild.ID, userID, everyoneRole.ID); err != nil {
-		return nil, Internal("INTERNAL", "internal server error")
-	}
-	if err := s.members.AddRole(ctx, guild.ID, userID, adminRole.ID); err != nil {
-		return nil, Internal("INTERNAL", "internal server error")
-	}
+		if err := s.members.AddRole(ctx, guild.ID, userID, everyoneRole.ID); err != nil {
+			return Internal("INTERNAL", "internal server error")
+		}
+		if err := s.members.AddRole(ctx, guild.ID, userID, adminRole.ID); err != nil {
+			return Internal("INTERNAL", "internal server error")
+		}
 
-	generalText := &models.Channel{
-		ID:       s.snowflake.Generate().Int64(),
-		GuildID:  guild.ID,
-		Name:     "general",
-		Type:     models.ChannelTypeText,
-		Position: 0,
-	}
-	if err := s.channels.Create(ctx, generalText); err != nil {
-		return nil, Internal("INTERNAL", "internal server error")
-	}
+		generalText := &models.Channel{
+			ID:       s.snowflake.Generate().Int64(),
+			GuildID:  guild.ID,
+			Name:     "general",
+			Type:     models.ChannelTypeText,
+			Position: 0,
+		}
+		if err := s.channels.Create(ctx, generalText); err != nil {
+			return Internal("INTERNAL", "internal server error")
+		}
 
-	generalVoice := &models.Channel{
-		ID:       s.snowflake.Generate().Int64(),
-		GuildID:  guild.ID,
-		Name:     "General",
-		Type:     models.ChannelTypeVoice,
-		Position: 1,
-	}
-	if err := s.channels.Create(ctx, generalVoice); err != nil {
+		generalVoice := &models.Channel{
+			ID:       s.snowflake.Generate().Int64(),
+			GuildID:  guild.ID,
+			Name:     "General",
+			Type:     models.ChannelTypeVoice,
+			Position: 1,
+		}
+		if err := s.channels.Create(ctx, generalVoice); err != nil {
+			return Internal("INTERNAL", "internal server error")
+		}
+
+		return nil
+	})
+	if err != nil {
 		return nil, Internal("INTERNAL", "internal server error")
 	}
 

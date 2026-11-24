@@ -17,7 +17,7 @@ func NewMemberRepository(pool *pgxpool.Pool) MemberRepository {
 }
 
 func (r *memberRepo) Create(ctx context.Context, member *models.Member) error {
-	_, err := r.pool.Exec(ctx,
+	_, err := queryDB(ctx, r.pool).Exec(ctx,
 		`INSERT INTO members (guild_id, user_id, nickname, joined_at)
 		 VALUES ($1, $2, $3, $4)`,
 		member.GuildID, member.UserID, member.Nickname, member.JoinedAt,
@@ -27,7 +27,7 @@ func (r *memberRepo) Create(ctx context.Context, member *models.Member) error {
 
 func (r *memberRepo) GetByGuildAndUser(ctx context.Context, guildID, userID int64) (*models.Member, error) {
 	m := &models.Member{}
-	err := r.pool.QueryRow(ctx,
+	err := queryDB(ctx, r.pool).QueryRow(ctx,
 		`SELECT guild_id, user_id, nickname, joined_at
 		 FROM members WHERE guild_id = $1 AND user_id = $2`, guildID, userID,
 	).Scan(&m.GuildID, &m.UserID, &m.Nickname, &m.JoinedAt)
@@ -47,7 +47,7 @@ func (r *memberRepo) GetByGuildAndUser(ctx context.Context, guildID, userID int6
 }
 
 func (r *memberRepo) GetByGuildID(ctx context.Context, guildID int64, limit, offset int) ([]models.Member, error) {
-	rows, err := r.pool.Query(ctx,
+	rows, err := queryDB(ctx, r.pool).Query(ctx,
 		`SELECT guild_id, user_id, nickname, joined_at
 		 FROM members WHERE guild_id = $1
 		 ORDER BY joined_at
@@ -75,7 +75,7 @@ func (r *memberRepo) GetByGuildID(ctx context.Context, guildID int64, limit, off
 }
 
 func (r *memberRepo) Update(ctx context.Context, member *models.Member) error {
-	_, err := r.pool.Exec(ctx,
+	_, err := queryDB(ctx, r.pool).Exec(ctx,
 		`UPDATE members SET nickname = $3
 		 WHERE guild_id = $1 AND user_id = $2`,
 		member.GuildID, member.UserID, member.Nickname,
@@ -84,14 +84,14 @@ func (r *memberRepo) Update(ctx context.Context, member *models.Member) error {
 }
 
 func (r *memberRepo) Delete(ctx context.Context, guildID, userID int64) error {
-	_, err := r.pool.Exec(ctx,
+	_, err := queryDB(ctx, r.pool).Exec(ctx,
 		`DELETE FROM members WHERE guild_id = $1 AND user_id = $2`, guildID, userID,
 	)
 	return err
 }
 
 func (r *memberRepo) AddRole(ctx context.Context, guildID, userID, roleID int64) error {
-	_, err := r.pool.Exec(ctx,
+	_, err := queryDB(ctx, r.pool).Exec(ctx,
 		`INSERT INTO member_roles (guild_id, user_id, role_id)
 		 VALUES ($1, $2, $3)
 		 ON CONFLICT DO NOTHING`,
@@ -101,7 +101,7 @@ func (r *memberRepo) AddRole(ctx context.Context, guildID, userID, roleID int64)
 }
 
 func (r *memberRepo) RemoveRole(ctx context.Context, guildID, userID, roleID int64) error {
-	_, err := r.pool.Exec(ctx,
+	_, err := queryDB(ctx, r.pool).Exec(ctx,
 		`DELETE FROM member_roles WHERE guild_id = $1 AND user_id = $2 AND role_id = $3`,
 		guildID, userID, roleID,
 	)
@@ -109,7 +109,7 @@ func (r *memberRepo) RemoveRole(ctx context.Context, guildID, userID, roleID int
 }
 
 func (r *memberRepo) getMemberRoles(ctx context.Context, guildID, userID int64) ([]int64, error) {
-	rows, err := r.pool.Query(ctx,
+	rows, err := queryDB(ctx, r.pool).Query(ctx,
 		`SELECT role_id FROM member_roles WHERE guild_id = $1 AND user_id = $2`,
 		guildID, userID,
 	)
@@ -128,3 +128,5 @@ func (r *memberRepo) getMemberRoles(ctx context.Context, guildID, userID int64) 
 	}
 	return roles, rows.Err()
 }
+
+func (r *memberRepo) transactionPool() *pgxpool.Pool { return r.pool }
