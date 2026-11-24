@@ -246,14 +246,9 @@ func TestLogin_UserNotFound(t *testing.T) {
 }
 
 func TestLogoutRedisDeadline(t *testing.T) {
-	mr := miniredis.RunT(t)
-	rdb, err := redisclient.NewClient("redis://" + mr.Addr())
-	if err != nil {
-		t.Fatal(err)
-	}
+	rdb := newSilentRedis(t)
 	defer func() { _ = rdb.Close() }()
 	svc := service.NewAuthService(&mockUserRepo{}, auth.NewTokenService("logout-deadline-fixture"), rdb, testSnowflake())
-	mr.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
 	defer cancel()
 	c, rec := newTestContext(http.MethodPost, "/api/v1/auth/logout", strings.NewReader(`{"refresh_token":"fixture"}`))
@@ -262,10 +257,11 @@ func TestLogoutRedisDeadline(t *testing.T) {
 	if err := NewAuthHandler(svc).Logout(c); err != nil {
 		t.Fatal(err)
 	}
-	if rec.Code != 204 {
-		t.Fatal("logout must remain best effort")
-	}
-	if elapsed := time.Since(start); elapsed > 3*time.Second {
+	if elapsed := time.Since(start); elapsed > 2750*time.Millisecond {
 		t.Fatalf("logout Redis deadline exceeded: %s", elapsed)
 	}
+	if rec.Code != 503 {
+		t.Fatal("logout must return 503 for transport failures")
+	}
+
 }

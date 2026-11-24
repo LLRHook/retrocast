@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -97,6 +98,8 @@ func (c *Client) storeRefresh(ctx context.Context, token string, userID int64, e
 
 // consumeRefreshScript is shared by rotation, consume and logout. Redis executes
 // the generation check, deletion and replacement without an invalidation gap.
+var ErrInvalidToken = errors.New("invalid token")
+
 var consumeRefreshScript = goredis.NewScript(`
 local value = redis.call("GET", KEYS[1])
 if not value then return redis.error_reply("invalid token") end
@@ -121,6 +124,9 @@ func (c *Client) RotateRefreshToken(ctx context.Context, old, next string, expir
 	defer cancel()
 	val, err := consumeRefreshScript.Run(ctx, c.rdb, []string{refreshTokenPrefix + old, refreshTokenPrefix + next}, expiry.Milliseconds()).Text()
 	if err != nil {
+		if err.Error() == "invalid token" {
+			return 0, ErrInvalidToken
+		}
 		return 0, fmt.Errorf("consuming refresh token: %w", err)
 	}
 	return strconv.ParseInt(val, 10, 64)

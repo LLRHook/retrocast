@@ -35,6 +35,8 @@ func mapServiceError(c echo.Context, err error) error {
 	if errors.As(err, &svcErr) {
 		status := http.StatusInternalServerError
 		switch {
+		case errors.Is(svcErr.Err, service.ErrUnavailable):
+			status = http.StatusServiceUnavailable
 		case errors.Is(svcErr.Err, service.ErrNotFound):
 			status = http.StatusNotFound
 		case errors.Is(svcErr.Err, service.ErrForbidden):

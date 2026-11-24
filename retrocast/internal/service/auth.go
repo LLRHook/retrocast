@@ -184,7 +184,10 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (*Refres
 	}
 	userID, err := s.redis.RotateRefreshToken(ctx, refreshToken, newRefresh, s.tokens.RefreshExpiry())
 	if err != nil {
-		return nil, Unauthorized("INVALID_TOKEN", "invalid or expired refresh token")
+		if errors.Is(err, redis.ErrInvalidToken) {
+			return nil, Unauthorized("INVALID_TOKEN", "invalid or expired refresh token")
+		}
+		return nil, Unavailable()
 	}
 	accessToken, err := s.tokens.GenerateAccessToken(userID)
 	if err != nil {
@@ -198,10 +201,16 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (*Refres
 }
 
 // Logout deletes the given refresh token.
-func (s *AuthService) Logout(ctx context.Context, refreshToken string) {
+func (s *AuthService) Logout(ctx context.Context, refreshToken string) error {
 	if refreshToken != "" {
-		_ = s.redis.DeleteRefreshToken(ctx, refreshToken)
+		if err := s.redis.DeleteRefreshToken(ctx, refreshToken); err != nil {
+			if errors.Is(err, redis.ErrInvalidToken) {
+				return Unauthorized("INVALID_TOKEN", "invalid or expired refresh token")
+			}
+			return Unavailable()
+		}
 	}
+	return nil
 }
 
 func (s *AuthService) issueTokens(ctx context.Context, user *models.User, generation ...int64) (*AuthResult, error) {
@@ -222,7 +231,7 @@ func (s *AuthService) issueTokens(ctx context.Context, user *models.User, genera
 		storeErr = s.redis.StoreRefreshToken(ctx, refreshToken, user.ID, s.tokens.RefreshExpiry())
 	}
 	if storeErr != nil {
-		return nil, Internal("INTERNAL", "internal server error")
+		return nil, Unavailable()
 	}
 
 	return &AuthResult{
@@ -260,7 +269,7 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID int64, current,
 		return nil, Internal("INTERNAL", "password update unavailable")
 	}
 	if err := s.redis.AdvanceRefreshGeneration(ctx, userID); err != nil {
-		return nil, Internal("INTERNAL", "could not revoke sessions")
+		return nil, Unavailable()
 	}
 	changed, err := repo.CompareAndSwapPassword(ctx, userID, user.PasswordHash, hash)
 	if err != nil {
@@ -272,7 +281,7 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID int64, current,
 	// The pre-CAS epoch cannot revoke a login that read the old hash during
 	// the CAS wait. Advance again after commit to close that MVCC window.
 	if err := s.redis.AdvanceRefreshGeneration(ctx, userID); err != nil {
-		return nil, Internal("INTERNAL", "could not revoke sessions")
+		return nil, Unavailable()
 	}
 	return s.issueTokens(ctx, user)
 }
