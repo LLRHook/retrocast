@@ -54,13 +54,14 @@ services:
 
   livekit:
     image: livekit/livekit-server:latest
+    command: --bind 0.0.0.0 --udp-port 50000:50100
     ports:
       - "7880:7880"
       - "7881:7881"
       - "50000-50100:50000-50100/udp"
     env_file: .env
     environment:
-      - LIVEKIT_KEYS=${LIVEKIT_API_KEY}:${LIVEKIT_API_SECRET}
+      - "LIVEKIT_KEYS=${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
     restart: unless-stopped
 
   web:
