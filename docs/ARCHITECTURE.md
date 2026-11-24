@@ -446,3 +446,4 @@ See [SRS §1.3](SRS.md) and §5.3.
 | 18 | 2026-11-24T01:58:10-05:00 | 76ad98d47a9d | REVISION | PR #55 round 2: post-CAS session revocation, conditional restore clearing, contract and evidence corrections |
 | 19 | 2026-11-24T03:21:06-05:00 | 400bb085e781 | REVISION | B5b: moderation UI, atomic removal and target notification; session transport mapping and bounded cross-tab recovery |
 | 20 | 2026-11-24T04:24:31-05:00 | 73cb40662507 | REVISION | PR 56 round 2: clear removed guild channel state; document session 503 and late-winner residual; strengthen moderation transaction evidence |
+| 21 | 2026-11-24T05:50:46-05:00 | 591c4747c5e7 | REVISION | B5c: host schedules, MinIO archive helper, restore drill, live monitoring, gateway deadline fix #58 and measured capacity/latency |
