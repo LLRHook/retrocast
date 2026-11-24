@@ -128,3 +128,4 @@ Server logging is SV-NFR-006; metrics are SV-NFR-013; scraping and dashboards ar
 | 5 | 2026-11-23T23:28:58-05:00 | 2f78d18e5e62 | REVISION | PR #53 round 2: supported LiveKit UDP range; local demo TLS and standalone proxy; deployment drift and requirement provenance repaired; Redis deadline regression |
 | 6 | 2026-11-24T05:50:46-05:00 | 591c4747c5e7 | REVISION | B5c: host schedules, MinIO archive helper, restore drill, live monitoring, gateway deadline fix #58 and measured capacity/latency |
 | 7 | 2026-11-24T07:02:55-05:00 | 0f5851ab8ae2 | REVISION | PR #59 round 2: fail-fast retention/restore regressions, complete archive and compose preflight, transactional restore and evidence corrections |
+| 8 | 2026-11-24T09:13:39-05:00 | 0edca0aaeafa | REVISION | PR #62 round 2: missing/deleted guild status and permission-before-lock; GET-only downloads and lowercase host; manager create positioning and no-room guidance; contract, operational and D-10 drift repaired |
