@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"errors"
+	"github.com/jackc/pgx/v5"
 	"strconv"
 
 	"github.com/victorivanov/retrocast/internal/database"
@@ -241,49 +243,74 @@ func (s *MemberService) UpdateMember(ctx context.Context, guildID, callerID, tar
 
 // KickMember removes a member from the guild.
 func (s *MemberService) KickMember(ctx context.Context, guildID, callerID, targetUserID int64) error {
-	if err := s.perms.RequireGuildPermission(ctx, guildID, callerID, int64(permissions.PermKickMembers)); err != nil {
+	check := func(ctx context.Context) error {
+		if err := s.perms.RequireGuildPermission(ctx, guildID, callerID, int64(permissions.PermKickMembers)); err != nil {
+			return err
+		}
+
+		if callerID == targetUserID {
+			return BadRequest("CANNOT_KICK_SELF", "cannot kick yourself")
+		}
+
+		guild, err := s.guilds.GetByID(ctx, guildID)
+		if err != nil {
+			return Internal("INTERNAL", "internal server error")
+		}
+		if guild == nil {
+			return NotFound("NOT_FOUND", "guild not found")
+		}
+
+		if guild != nil && guild.OwnerID == targetUserID {
+			return Forbidden("FORBIDDEN", "cannot kick the guild owner")
+		}
+
+		member, err := s.members.GetByGuildAndUser(ctx, guildID, targetUserID)
+		if err != nil {
+			return Internal("INTERNAL", "internal server error")
+		}
+		if member == nil {
+			return NotFound("NOT_FOUND", "member not found")
+		}
+
+		if guild.OwnerID != callerID {
+			callerPos, err := s.perms.HighestRolePosition(ctx, guildID, callerID)
+			if err != nil {
+				return err
+			}
+			targetPos, err := s.perms.HighestRolePosition(ctx, guildID, targetUserID)
+			if err != nil {
+				return err
+			}
+			if callerPos <= targetPos {
+				return RoleHierarchyError("cannot kick a member at or above your highest role")
+			}
+		}
+
+		return nil
+	}
+	if err := check(ctx); err != nil {
 		return err
 	}
-
-	if callerID == targetUserID {
-		return BadRequest("CANNOT_KICK_SELF", "cannot kick yourself")
-	}
-
-	guild, err := s.guilds.GetByID(ctx, guildID)
-	if err != nil {
-		return Internal("INTERNAL", "internal server error")
-	}
-	if guild == nil {
-		return NotFound("NOT_FOUND", "guild not found")
-	}
-
-	if guild != nil && guild.OwnerID == targetUserID {
-		return Forbidden("FORBIDDEN", "cannot kick the guild owner")
-	}
-
-	member, err := s.members.GetByGuildAndUser(ctx, guildID, targetUserID)
-	if err != nil {
-		return Internal("INTERNAL", "internal server error")
-	}
-	if member == nil {
-		return NotFound("NOT_FOUND", "member not found")
-	}
-
-	if guild.OwnerID != callerID {
-		callerPos, err := s.perms.HighestRolePosition(ctx, guildID, callerID)
-		if err != nil {
+	err := database.InTransaction(ctx, s.members, func(ctx context.Context) error {
+		if err := database.LockGuildForModeration(ctx, s.members, guildID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return NotFound("UNKNOWN_GUILD", "guild no longer exists")
+			}
 			return err
 		}
-		targetPos, err := s.perms.HighestRolePosition(ctx, guildID, targetUserID)
-		if err != nil {
+		if err := database.LockMemberForModeration(ctx, s.members, guildID, targetUserID); err != nil {
 			return err
 		}
-		if callerPos <= targetPos {
-			return RoleHierarchyError("cannot kick a member at or above your highest role")
+		if err := check(ctx); err != nil {
+			return err
 		}
-	}
-
-	if err := s.members.Delete(ctx, guildID, targetUserID); err != nil {
+		return s.members.Delete(ctx, guildID, targetUserID)
+	})
+	if err != nil {
+		var se *ServiceError
+		if errors.As(err, &se) {
+			return se
+		}
 		return Internal("INTERNAL", "internal server error")
 	}
 
