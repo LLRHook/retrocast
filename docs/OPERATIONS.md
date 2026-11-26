@@ -237,9 +237,9 @@ start. Plan a maintenance window and take a private backup before rotation:
    MINIO_ROOT_PASSWORD together, then recreate it. The pinned October release
    takes root credentials from the environment on startup, including existing
    data volumes; objects and IAM configuration remain. Recreate minio-init to
-   update the dedicated signing user's secret and policy. Retire any old signer
-   account after its 15-minute URLs expire if its key ID changed; do not retain
-   a known compromised account. Keep original credentials only in a protected
+   update the dedicated signing user's secret and policy. Before restarting the API, disable the old signer account if its key ID
+   changed, using `mc admin user disable` with the old key ID. A known
+   placeholder account must be disabled immediately; do not wait for URLs to expire. Keep original credentials only in a protected
    rollback record until the release drill is complete.
 4. LiveKit: update LIVEKIT_API_KEY / LIVEKIT_API_SECRET and recreate the service;
    old signed tokens cease to authenticate. Active voice sessions may reconnect.
