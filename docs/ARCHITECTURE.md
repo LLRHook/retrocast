@@ -71,7 +71,7 @@ and refreshed dependencies within the same major versions.
 | Object store client | minio-go | v7 | retrocast/go.mod |
 | Database | PostgreSQL | 17 | retrocast/docker-compose.yml; CI service |
 | Cache and ephemeral state | Redis | 7 | retrocast/docker-compose.yml; CI service |
-| Object store | MinIO | unpinned (`latest`) | retrocast/docker-compose.yml |
+| Object store | MinIO | RELEASE.2025-10-15T17-29-55Z (verified source build) | retrocast/Dockerfile.minio |
 | Voice | LiveKit server | unpinned (`latest`) | retrocast/docker-compose.yml |
 | Edge | Caddy | 2 | retrocast/docker-compose.yml; retrocast/Caddyfile |
 | Web client | React, React Router, Zustand, Tailwind CSS, react-markdown | 19, 7, 5, 4, 10 | retrocast-web/package.json |
@@ -411,7 +411,7 @@ they affect stay Later.
 
 Other debt: the `refresh_tokens` and `device_tokens` tables have no code; op 4 is defined
 but unhandled; username uniqueness is case-sensitive; invite codes carry 32 random bits;
-compose images for MinIO, LiveKit, Prometheus and Grafana are unpinned; CI installs
+compose images for LiveKit, Prometheus and Grafana are unpinned; CI installs
 `migrate@latest`; no formatter gate; no web test runner; no iOS build in CI. PR #23 aligned
 the Go version in go.mod, CI and the Dockerfile; rev 2 updates README.md to match. The older
 prose docs moved to `docs/legacy/` with a pointer to their successor (Q-034). Documentation

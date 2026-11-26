@@ -46,6 +46,7 @@ jobs:
       - name: Operator script and dashboard regressions
         working-directory: retrocast
         run: |
+          systemd-analyze --user verify scripts/retrocast-backup.service scripts/retrocast-backup.timer
           bash scripts/test-operations.sh
           python3 scripts/test-monitoring.py
       - name: Run tests

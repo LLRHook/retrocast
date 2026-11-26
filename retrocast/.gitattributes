@@ -1,0 +1,2 @@
+scripts/retrocast-backup.service text eol=lf
+scripts/retrocast-backup.timer text eol=lf

@@ -18,6 +18,8 @@ RUN go build -p 2 -trimpath -buildvcs=false -ldflags '-s -w -X github.com/minio/
 FROM alpine:3.24
 RUN apk add --no-cache ca-certificates curl tzdata
 COPY --from=source /out/minio /out/mc /usr/bin/
+COPY --from=source /minio/LICENSE /usr/share/licenses/minio/LICENSE
+COPY --from=source /mc/LICENSE /usr/share/licenses/mc/LICENSE
 ENV MINIO_UPDATE=off
 VOLUME /data
 EXPOSE 9000 9001

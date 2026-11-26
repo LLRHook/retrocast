@@ -1,0 +1,11 @@
+[Unit]
+Description=Retrocast daily backup
+
+[Service]
+Type=oneshot
+Environment="BACKUP_DIR=/ABSOLUTE/backups/retrocast"
+Environment="COMPOSE_PROJECT_NAME=retrocast"
+ExecStart=/bin/bash /ABSOLUTE/retrocast/retrocast/scripts/scheduled-backup.sh
+UMask=0077
+StandardOutput=append:/ABSOLUTE/backups/retrocast/backup.log
+StandardError=append:/ABSOLUTE/backups/retrocast/backup.log

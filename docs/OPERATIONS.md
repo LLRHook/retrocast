@@ -19,6 +19,34 @@ the five cron fields once, then check both archives and exit status. Check the
 log daily; a sleeping or powered-off Linux host misses cron runs. A daily successful
 job gives an RPO of at most 24 hours; failures need operator attention.
 
+On Linux hosts with systemd but no cron, use the user timer in
+`scripts/retrocast-backup.service` and `scripts/retrocast-backup.timer`.
+Replace every `/ABSOLUTE` path in the service and set `COMPOSE_PROJECT_NAME`
+to the deployed project name. Create `BACKUP_DIR` with mode 700 first; both
+output streams append to its `backup.log`. The wrapper sets PATH, cwd and umask.
+For multiple compose files add `Environment="COMPOSE_FILE=/absolute/base.yml:/absolute/override.yml"`
+and `Environment="COMPOSE_PATH_SEPARATOR=:"` under `[Service]`.
+Copy both units to `~/.config/systemd/user/`, then run:
+
+```sh
+systemd-analyze --user verify ~/.config/systemd/user/retrocast-backup.{service,timer}
+systemctl --user daemon-reload
+systemctl --user start retrocast-backup.service
+systemctl --user show -p Result,ExecMainStatus retrocast-backup.service
+# Expect Result=success and ExecMainStatus=0; inspect backup.log and both new archives.
+gzip -t /absolute/backups/retrocast/backup_TIMESTAMP.sql.gz /absolute/backups/retrocast/minio_TIMESTAMP.tar.gz
+tar -tzf /absolute/backups/retrocast/minio_TIMESTAMP.tar.gz
+systemctl --user enable --now retrocast-backup.timer
+systemctl --user list-timers retrocast-backup.timer
+```
+
+Use the actual destination and paired timestamp for the archive checks. The timer
+runs daily at 03:00 local time; `Persistent=true` catches a missed run on wake.
+User timers run only while the user has a session unless lingering is enabled
+with `loginctl enable-linger`, which may need administrator rights. Docker must
+remain available. Remove with `systemctl --user disable --now retrocast-backup.timer`,
+delete both copied units, then run `systemctl --user daemon-reload`.
+
 On macOS copy `scripts/org.retrocast.backup.plist` to
 `~/Library/LaunchAgents/org.retrocast.backup.plist`, replace every `/ABSOLUTE`
 path, set the deployed compose project name, create the private destination,
@@ -38,7 +66,8 @@ For multiple compose files on Windows set `COMPOSE_PATH_SEPARATOR=';'` and
 Do not schedule overlapping backup/restore runs.
 
 A backup dumps PostgreSQL and archives the MinIO named volume through the
-on-demand `backup-tools` Alpine container, since MinIO's minimal image has no tar.
+on-demand `backup-tools` Alpine container so volume archives can be read or restored
+from a separate container while MinIO is stopped.
 Retention removes only top-level regular files matching `backup_*.sql.gz`
 and `minio_*.tar.gz` whose mtime is over 30 whole days old; it leaves nested
 archives and unrelated files alone; archive names alone do not determine age. This is a sequential
