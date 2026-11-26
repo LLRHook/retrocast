@@ -23,42 +23,46 @@ import (
 )
 
 type Config struct {
-	Domain           string
-	MinIORegion      string
-	RegistrationMode string
-	AllowedOrigins   string
-	DatabaseURL      string
-	RedisURL         string
-	JWTSecret        string
-	ServerAddr       string
-	LogLevel         slog.Level
-	LiveKitURL       string
-	LiveKitAPIKey    string
-	LiveKitAPISecret string
-	MinIOEndpoint    string
-	MinIOAccessKey   string
-	MinIOSecretKey   string
+	Domain               string
+	MinIORegion          string
+	RegistrationMode     string
+	AllowedOrigins       string
+	DatabaseURL          string
+	RedisURL             string
+	JWTSecret            string
+	ServerAddr           string
+	LogLevel             slog.Level
+	LiveKitURL           string
+	LiveKitAPIKey        string
+	LiveKitAPISecret     string
+	MinIOEndpoint        string
+	MinIOAccessKey       string
+	MinIOSecretKey       string
+	MinIOSignerAccessKey string
+	MinIOSignerSecretKey string
 }
 
 func Load() *Config {
 	fileVals := loadConfigFile()
 
 	cfg := &Config{
-		Domain:           resolve("DOMAIN", fileVals, "localhost"),
-		MinIORegion:      resolve("MINIO_REGION", fileVals, "us-east-1"),
-		RegistrationMode: resolve("REGISTRATION_MODE", fileVals, "invite"),
-		AllowedOrigins:   resolve("ALLOWED_ORIGINS", fileVals, ""),
-		DatabaseURL:      resolve("DATABASE_URL", fileVals, ""),
-		RedisURL:         resolve("REDIS_URL", fileVals, "redis://localhost:6379"),
-		JWTSecret:        resolve("JWT_SECRET", fileVals, ""),
-		ServerAddr:       resolve("SERVER_ADDR", fileVals, ":8080"),
-		LogLevel:         parseLogLevel(resolve("LOG_LEVEL", fileVals, "")),
-		LiveKitURL:       resolve("LIVEKIT_URL", fileVals, ""),
-		LiveKitAPIKey:    resolve("LIVEKIT_API_KEY", fileVals, ""),
-		LiveKitAPISecret: resolve("LIVEKIT_API_SECRET", fileVals, ""),
-		MinIOEndpoint:    resolve("MINIO_ENDPOINT", fileVals, ""),
-		MinIOAccessKey:   resolve("MINIO_ACCESS_KEY", fileVals, ""),
-		MinIOSecretKey:   resolve("MINIO_SECRET_KEY", fileVals, ""),
+		Domain:               resolve("DOMAIN", fileVals, "localhost"),
+		MinIORegion:          resolve("MINIO_REGION", fileVals, "us-east-1"),
+		RegistrationMode:     resolve("REGISTRATION_MODE", fileVals, "invite"),
+		AllowedOrigins:       resolve("ALLOWED_ORIGINS", fileVals, ""),
+		DatabaseURL:          resolve("DATABASE_URL", fileVals, ""),
+		RedisURL:             resolve("REDIS_URL", fileVals, "redis://localhost:6379"),
+		JWTSecret:            resolve("JWT_SECRET", fileVals, ""),
+		ServerAddr:           resolve("SERVER_ADDR", fileVals, ":8080"),
+		LogLevel:             parseLogLevel(resolve("LOG_LEVEL", fileVals, "")),
+		LiveKitURL:           resolve("LIVEKIT_URL", fileVals, ""),
+		LiveKitAPIKey:        resolve("LIVEKIT_API_KEY", fileVals, ""),
+		LiveKitAPISecret:     resolve("LIVEKIT_API_SECRET", fileVals, ""),
+		MinIOEndpoint:        resolve("MINIO_ENDPOINT", fileVals, ""),
+		MinIOAccessKey:       resolve("MINIO_ACCESS_KEY", fileVals, ""),
+		MinIOSecretKey:       resolve("MINIO_SECRET_KEY", fileVals, ""),
+		MinIOSignerAccessKey: resolve("MINIO_SIGNER_ACCESS_KEY", fileVals, ""),
+		MinIOSignerSecretKey: resolve("MINIO_SIGNER_SECRET_KEY", fileVals, ""),
 	}
 
 	switch cfg.RegistrationMode {

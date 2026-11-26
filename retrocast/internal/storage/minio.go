@@ -20,12 +20,18 @@ type MinIOClient struct {
 }
 
 // NewMinIOClient creates a MinIO client and ensures the bucket exists.
-func NewMinIOClient(endpoint, accessKey, secretKey, bucket, domain, region string) (*MinIOClient, error) {
+func NewMinIOClient(endpoint, accessKey, secretKey, bucket, domain, region, signerAccessKey, signerSecretKey string) (*MinIOClient, error) {
+	if signerAccessKey == "" || signerSecretKey == "" {
+		return nil, fmt.Errorf("MINIO_SIGNER_ACCESS_KEY and MINIO_SIGNER_SECRET_KEY are required")
+	}
+	if signerAccessKey == accessKey {
+		return nil, fmt.Errorf("MinIO signer must use a dedicated account")
+	}
 	domain = strings.ToLower(domain)
 	if domain == "" || strings.ContainsAny(domain, ":/?#@ ") {
 		return nil, fmt.Errorf("DOMAIN must be a host without scheme, path or port")
 	}
-	signer, err := minio.New(domain, &minio.Options{Creds: credentials.NewStaticV4(accessKey, secretKey, ""), Secure: true, Region: region})
+	signer, err := minio.New(domain, &minio.Options{Creds: credentials.NewStaticV4(signerAccessKey, signerSecretKey, ""), Secure: true, Region: region})
 	if err != nil {
 		return nil, fmt.Errorf("minio public signer: %w", err)
 	}

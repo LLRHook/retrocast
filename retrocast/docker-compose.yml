@@ -20,6 +20,8 @@ services:
       - MINIO_REGION=${MINIO_REGION:-us-east-1}
       - LIVEKIT_URL=ws://livekit:7880
     depends_on:
+      minio-init:
+        condition: service_completed_successfully
       db:
         condition: service_healthy
       redis:
@@ -67,6 +69,23 @@ services:
       - MINIO_ROOT_USER=retrocast
       - MINIO_REGION_NAME=${MINIO_REGION:-us-east-1}
     restart: unless-stopped
+
+  # Required credentials; no root fallback. Logs never include mc output.
+  minio-init:
+    image: minio/minio:latest
+    entrypoint: ["/bin/sh", "/init/minio-signer.sh"]
+    env_file: .env
+    environment:
+      - MINIO_ROOT_USER=retrocast
+      - MINIO_SIGNER_ACCESS_KEY=${MINIO_SIGNER_ACCESS_KEY:?set MINIO_SIGNER_ACCESS_KEY}
+      - MINIO_SIGNER_SECRET_KEY=${MINIO_SIGNER_SECRET_KEY:?set MINIO_SIGNER_SECRET_KEY}
+    volumes:
+      - ./scripts/minio-signer.sh:/init/minio-signer.sh:ro
+      - ./minio-signer-policy.json:/init/policy.json:ro
+    depends_on:
+      minio:
+        condition: service_started
+    restart: "no"
 
   livekit:
     image: livekit/livekit-server:latest

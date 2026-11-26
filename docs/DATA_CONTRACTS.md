@@ -33,6 +33,7 @@ server stops at start with an error naming the keys.
 | `ALLOWED_ORIGINS` | no | Comma-separated browser origins allowed besides the server's own (SV-NFR-011). Read from environment or config file; empty by default; exact scheme/host/effective-port match, no wildcards |
 | `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY` | yes for uploads | Object store; bucket `retrocast` is created at start |
 | `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | yes for voice | Token minting (§7.1) |
+| `MINIO_SIGNER_ACCESS_KEY`, `MINIO_SIGNER_SECRET_KEY` | yes | Dedicated download signer, required in all environments; no root fallback (SV-NFR-008, ADR-019) |
 | `POSTGRES_PASSWORD`, `MINIO_ROOT_PASSWORD` | compose only | Service passwords used by `docker-compose.yml` |
 | `DOMAIN` | Caddy only | Site address in `retrocast/Caddyfile` (default `localhost`) |
 | `GRAFANA_ADMIN_PASSWORD` | compose only | Grafana admin password (`docker-compose.yml` falls back to a development default) |
