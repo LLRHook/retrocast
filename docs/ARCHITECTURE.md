@@ -423,6 +423,17 @@ features done that fail at runtime, RISK-002), SYSTEM_DESIGN.md (SvelteKit web c
 ## 10. Glossary
 See [SRS §1.3](SRS.md) and §5.3.
 
+Startup configuration (#79, SV-NFR-002): the repository API image runs the shared
+`check-env` validator as a one-shot Compose gate. API, Postgres, MinIO, LiveKit and
+Grafana wait for successful completion. Explicit environment selectors give the
+gate and each consumer the same shell-or-file value. Secrets require at least
+32 characters and cannot equal committed placeholders or CI/test values. The
+MinIO root ID follows MINIO_ACCESS_KEY; the write/root secrets must match and
+MC_HOST-incompatible characters are refused before MinIO or init starts. The
+API uses the same validation on resolved environment/config-file values. Setup
+generates private random credentials; existing data requires in-place database
+rotation before replacing the deployment environment (OPERATIONS).
+
 ## Revision history
 | Rev | Date | Commit | Mode | Summary |
 |---|---|---|---|---|

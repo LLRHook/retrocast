@@ -43,8 +43,11 @@ the API image's `check-env` command to complete successfully.
 
 Values come from `retrocast/.env` (template `retrocast/.env.example`). The example files are templates whose secret placeholders are rejected.
 Run `scripts/init-env.sh` for private generated values; see OPERATIONS for
-existing-volume credential rotation. Key IDs are not secrets; supplied passwords
-in database or Redis URLs follow SV-NFR-002.
+existing-volume credential rotation. Key IDs are not secrets; userinfo in database or Redis URLs requires a password
+following SV-NFR-002. Keyword DSNs are refused. Compose explicitly selects the
+same secret values for the gate and consumers, including shell overrides.
+MINIO_ACCESS_KEY and root/write secrets must fit the pinned mc MC_HOST parser;
+see OPERATIONS for the supported character set and rotation.
 
 ## 2. Conceptual model
 
