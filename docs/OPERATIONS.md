@@ -6,6 +6,36 @@ as the deployed stack. Backups contain password hashes and private conversations
 keep the destination private, outside the checkout, and monitor job exit status.
 Redis is intentionally excluded (ADR-018). Backups remain on this host.
 
+Attachment signing (SV-NFR-008, ADR-019): before upgrading, add
+`MINIO_SIGNER_ACCESS_KEY` and `MINIO_SIGNER_SECRET_KEY` to `.env`, then run the
+usual `docker compose up -d --build`. Use a new account ID distinct from the
+root user and `MINIO_ACCESS_KEY`. `.env.example` includes development placeholders.
+The pinned mc client parses MC_HOST credentials literally, without URL decoding.
+Root key IDs cannot contain colon, LF or ASCII control characters other than HTAB;
+root passwords cannot contain colon or LF. Rotate incompatible MINIO_ACCESS_KEY
+or MINIO_ROOT_PASSWORD with init-env-style values first. #91 refuses these in
+init; #94 also refuses them in the shared startup validator before consumers start.
+Missing or empty signer credentials fail Compose and API storage initialization
+in every environment; there is no root fallback.
+
+The one-shot `minio-init` uses Compose's existing root credentials, waits for MinIO,
+creates/updates the signer user and policy and attaches it. The API waits for
+successful completion; rerunning `up` repeats initialization safely. The policy
+allows only `s3:GetObject` on `arn:aws:s3:::retrocast/*`; unlisted actions and resources
+are denied by default. Use a dedicated account with no other policies or groups. No list, put, delete, other-bucket reads or admin actions are allowed.
+Uploads and deletion use the original write client. Neither secret is logged;
+the signer access key ID appears in signed URLs as expected for SigV4.
+
+Keep the two variables with the deployment configuration on restore. The MinIO
+volume archive includes `.minio.sys` IAM configuration; backup/restore scripts
+and the isolated restore-drill procedure remain unchanged. After restoring an
+older archive without the account, run `docker compose up -d minio-init` before
+starting the API. Rollback to `b1514a3` ignores the new account and variables and
+uses its original signer; keep original root credentials unchanged.
+Go unit tests use explicit fixture signer arguments; the opt-in stack test reads
+signer variables from its environment. CI does not start MinIO or require signer
+variables for ordinary Go tests.
+
 Daily schedule (SYS-FR-002, ADR-018): install this in the operator's crontab after
 replacing both absolute paths and the project name. The wrapper sets PATH, cwd
 and umask. Docker Desktop must be running and the operator must have Docker access.
@@ -152,3 +182,12 @@ CI builds this image to catch unavailable sources or build failures. Source
 builds retain MinIO's AGPLv3 license. Upstream is archived; choosing a maintained
 replacement is a separate product decision. Backup and restore commands above
 still archive and restore the complete data volume, including IAM configuration.
+
+The signer is a regular MinIO user, not a root-derived service account. `mc cat`
+may fail its bucket-location discovery because s3:GetBucketLocation is deliberately
+not granted. The API sets the region explicitly and signs GET locally; do not
+broaden the signer policy to support diagnostic client discovery.
+
+Use the ordinary Allow statement without NotAction: the pinned server can accept
+a NotAction policy at runtime but fails to reload it from disk. Restart and restore
+checks must include a real signer GET, not only root-based /health.

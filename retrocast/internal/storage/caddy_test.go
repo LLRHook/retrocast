@@ -18,7 +18,7 @@ func TestCaddySignedDownloads(t *testing.T) {
 	if os.Getenv("L34_STACK_TEST") != "1" {
 		t.Skip("owned Caddy stack required")
 	}
-	m, err := NewMinIOClient("minio:9000", "retrocast", "changeme", "retrocast", "localhost", "us-east-1")
+	m, err := NewMinIOClient("minio:9000", "retrocast", "changeme", "retrocast", "localhost", "us-east-1", "retrocast-signer", "signer-changeme")
 	if err != nil {
 		t.Fatal(err)
 	}

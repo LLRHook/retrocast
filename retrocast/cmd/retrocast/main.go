@@ -88,7 +88,7 @@ func main() {
 	// --- Storage ---
 
 	minioClient, err := storage.NewMinIOClient(
-		cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey, "retrocast", cfg.Domain, cfg.MinIORegion,
+		cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey, "retrocast", cfg.Domain, cfg.MinIORegion, cfg.MinIOSignerAccessKey, cfg.MinIOSignerSecretKey,
 	)
 	if err != nil {
 		slog.Error("minio connection failed", "error", err)
