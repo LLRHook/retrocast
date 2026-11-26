@@ -21,6 +21,11 @@ type ErrorDetail struct {
 
 // Error sends a JSON error response.
 func Error(c echo.Context, status int, code, message string) error {
+	if bodyLimitExceeded(c) {
+		status = http.StatusRequestEntityTooLarge
+		code = "PAYLOAD_TOO_LARGE"
+		message = "request body too large"
+	}
 	return c.JSON(status, ErrorResponse{
 		Error: ErrorDetail{Code: code, Message: message},
 	})
@@ -79,6 +84,11 @@ func HTTPErrorHandler(err error, c echo.Context) {
 				message = m
 			}
 		}
+	}
+	var tooLarge *http.MaxBytesError
+	if errors.As(err, &tooLarge) {
+		status = http.StatusRequestEntityTooLarge
+		message = "request body too large"
 	}
 	code := "INTERNAL"
 	if status >= 400 && status < 500 {
