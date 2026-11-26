@@ -30,3 +30,6 @@ Thumbs.db
 bin/
 /dist/
 retrocast/retrocast
+
+# Security audit scratch output (security-audit skill)
+.security-audit/
