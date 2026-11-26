@@ -16,8 +16,8 @@ in every environment; there is no root fallback.
 The one-shot `minio-init` uses Compose's existing root credentials, waits for MinIO,
 creates/updates the signer user and policy and attaches it. The API waits for
 successful completion; rerunning `up` repeats initialization safely. The policy
-allows only `s3:GetObject` on `arn:aws:s3:::retrocast/*`; explicit denies bound
-other grants. No list, put, delete, other-bucket reads or admin actions are allowed.
+allows only `s3:GetObject` on `arn:aws:s3:::retrocast/*`; unlisted actions and resources
+are denied by default. Use a dedicated account with no other policies or groups. No list, put, delete, other-bucket reads or admin actions are allowed.
 Uploads and deletion use the original write client. Neither secret is logged;
 the signer access key ID appears in signed URLs as expected for SigV4.
 
@@ -182,3 +182,7 @@ The signer is a regular MinIO user, not a root-derived service account. `mc cat`
 may fail its bucket-location discovery because s3:GetBucketLocation is deliberately
 not granted. The API sets the region explicitly and signs GET locally; do not
 broaden the signer policy to support diagnostic client discovery.
+
+Use the ordinary Allow statement without NotAction: the pinned server can accept
+a NotAction policy at runtime but fails to reload it from disk. Restart and restore
+checks must include a real signer GET, not only root-based /health.
