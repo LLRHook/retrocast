@@ -41,6 +41,8 @@ jobs:
         env:
           DATABASE_URL: postgres://retrocast:password@localhost:5432/retrocast?sslmode=disable
         run: go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest -path=migrations -database "$DATABASE_URL" up
+      - name: Build pinned MinIO and mc from source
+        run: docker build --pull -f retrocast/Dockerfile.minio -t retrocast-minio:ci retrocast
       - name: Operator script and dashboard regressions
         working-directory: retrocast
         run: |

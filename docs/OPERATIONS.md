@@ -113,3 +113,14 @@ Credential refresh before measurement also honors Retry-After; the single sender
 refreshes again before its separate phase. Default setup plus load takes about 23
 minutes. Use a fresh stack for repeated runs: fixture users/data are left behind.
 Results and limitations belong in `docs/operations/performance.md`.
+
+MinIO image (issue #77): Compose builds `Dockerfile.minio` from the official
+server `RELEASE.2025-10-15T17-29-55Z` and mc `RELEASE.2025-08-13T08-35-41Z`
+source releases. Their exact module versions and checksums are pinned in that
+file and verified through the Go sum database. Docker Hub's removed MinIO images
+are not required. Run `docker compose up -d --build` on upgrade; the existing
+`minio-data` volume, root credentials, region and internal ports remain in use.
+CI builds this image to catch unavailable sources or build failures. Source
+builds retain MinIO's AGPLv3 license. Upstream is archived; choosing a maintained
+replacement is a separate product decision. Backup and restore commands above
+still archive and restore the complete data volume, including IAM configuration.
