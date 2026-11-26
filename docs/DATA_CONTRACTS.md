@@ -188,7 +188,7 @@ are as documented in OpenAPI; where the code differs, the Notes column says so.
 | API-025 | editMessage | PATCH /channels/{channelId}/messages/{messageId} | 200 message | yes | | SV-FR-029 |
 | API-026 | deleteMessage | DELETE /channels/{channelId}/messages/{messageId} | 204 | — | | SV-FR-030 |
 | API-027 | uploadAttachment | POST /channels/{channelId}/attachments | 201 attachment | yes | Guild upload; Q-017 types only, at most 10 MB; returns pending attachment (message_id null); link through API-022 attachment_ids | SV-FR-051 |
-| API-028 | triggerTyping | POST /channels/{channelId}/typing | 204 | — | MessageService.Typing: guild SEND_MESSAGES after overrides; DM participants only; 403 for unauthorized callers, 404 for unknown channels; writes Redis marker before dispatch | SV-FR-031 |
+| API-028 | triggerTyping | POST /channels/{channelId}/typing | 204 | — | MessageService.Typing: guild VIEW_CHANNEL and SEND_MESSAGES after overrides; DM participants only; 403 for unauthorized callers, 404 for unknown channels; writes Redis marker before dispatch | SV-FR-031 |
 | API-029 | ackMessage | PUT /channels/{channelId}/ack/{messageId} | 204 | — | | SV-FR-076 |
 | API-030 | addReaction | PUT /channels/{channelId}/messages/{messageId}/reactions/{emoji}/@me | 204 | — | | SV-FR-074 |
 | API-031 | removeReaction | DELETE /channels/{channelId}/messages/{messageId}/reactions/{emoji}/@me | 204 | — | | SV-FR-074 |
@@ -422,3 +422,4 @@ together with the iOS client (Q-025); APNs is the one optional outside service G
 | 25 | 2026-11-24T12:48:31-05:00 | dcb540ca8410 | REVISION | B7 round 2 (E339): API-049 preview guild_id in unreleased 2.2.0; API-050 unchanged; SV-IR-001/005/007 trace API-060 |
 | 26 | 2026-11-24T13:22:47-05:00 | 2b64e5b68b82 | REVISION | B8 L40: Pilot clause test index; SV-IR-001 documented success criterion; WEB-FR-009 name wording; optional public member identity per E347 |
 | 27 | 2026-11-24T14:31:40-05:00 | 23ec2de281ea | REVISION | B8 round 2: required response fields document existing non-omitempty emission within REST 2.2.0 |
+| 28 | 2026-11-26T05:26:29-05:00 | e6a0d837dd0f | REVISION | D17 B11 PR #92: VIEW_CHANNEL on REST messages and uploads; current membership for edit/delete (#80, #84); typing contract reconciled |

@@ -52,15 +52,9 @@ func (s *MessageService) SetTypingStore(store TypingStore) { s.typingStore = sto
 
 // SendMessage creates a message in a guild or DM channel.
 func (s *MessageService) SendMessage(ctx context.Context, channelID, userID int64, content string, attachmentIDs ...int64) (*models.MessageWithAuthor, error) {
-	channel, isDM, err := s.resolveChannelAccess(ctx, channelID, userID)
+	channel, isDM, err := s.resolveChannelAccess(ctx, channelID, userID, permissions.PermSendMessages)
 	if err != nil {
 		return nil, err
-	}
-
-	if !isDM {
-		if err := s.perms.RequireChannelPermission(ctx, channel.GuildID, channelID, userID, permissions.PermSendMessages); err != nil {
-			return nil, err
-		}
 	}
 
 	if len(attachmentIDs) > 0 {
@@ -110,15 +104,9 @@ func (s *MessageService) SendMessage(ctx context.Context, channelID, userID int6
 
 // GetMessages returns messages from a channel with cursor-based pagination.
 func (s *MessageService) GetMessages(ctx context.Context, channelID, userID int64, before *int64, limit int) ([]models.MessageWithAuthor, error) {
-	channel, isDM, err := s.resolveChannelAccess(ctx, channelID, userID)
+	_, _, err := s.resolveChannelAccess(ctx, channelID, userID, permissions.PermReadMessageHistory)
 	if err != nil {
 		return nil, err
-	}
-
-	if !isDM {
-		if err := s.perms.RequireChannelPermission(ctx, channel.GuildID, channelID, userID, permissions.PermReadMessageHistory); err != nil {
-			return nil, err
-		}
 	}
 
 	messages, err := s.messages.GetByChannelID(ctx, channelID, before, limit)
@@ -136,15 +124,9 @@ func (s *MessageService) GetMessages(ctx context.Context, channelID, userID int6
 
 // GetMessage returns a single message by ID.
 func (s *MessageService) GetMessage(ctx context.Context, channelID, msgID, userID int64) (*models.MessageWithAuthor, error) {
-	channel, isDM, err := s.resolveChannelAccess(ctx, channelID, userID)
+	_, _, err := s.resolveChannelAccess(ctx, channelID, userID, permissions.PermReadMessageHistory)
 	if err != nil {
 		return nil, err
-	}
-
-	if !isDM {
-		if err := s.perms.RequireChannelPermission(ctx, channel.GuildID, channelID, userID, permissions.PermReadMessageHistory); err != nil {
-			return nil, err
-		}
 	}
 
 	msg, err := s.messages.GetByID(ctx, msgID)
@@ -163,7 +145,7 @@ func (s *MessageService) GetMessage(ctx context.Context, channelID, msgID, userI
 
 // EditMessage edits a message. Only the author can edit.
 func (s *MessageService) EditMessage(ctx context.Context, channelID, msgID, userID int64, content string) (*models.MessageWithAuthor, error) {
-	channel, isDM, err := s.resolveChannelAccess(ctx, channelID, userID)
+	channel, isDM, err := s.resolveChannelAccess(ctx, channelID, userID, permissions.PermViewChannel)
 	if err != nil {
 		return nil, err
 	}
@@ -215,7 +197,7 @@ func (s *MessageService) EditMessage(ctx context.Context, channelID, msgID, user
 // DeleteMessage deletes a message. Author can always delete their own;
 // in guilds, MANAGE_MESSAGES permission allows deleting others' messages.
 func (s *MessageService) DeleteMessage(ctx context.Context, channelID, msgID, userID int64) error {
-	channel, isDM, err := s.resolveChannelAccess(ctx, channelID, userID)
+	channel, isDM, err := s.resolveChannelAccess(ctx, channelID, userID, permissions.PermViewChannel)
 	if err != nil {
 		return err
 	}
@@ -257,15 +239,9 @@ func (s *MessageService) DeleteMessage(ctx context.Context, channelID, msgID, us
 
 // Typing dispatches a typing indicator event.
 func (s *MessageService) Typing(ctx context.Context, channelID, userID int64) error {
-	channel, isDM, err := s.resolveChannelAccess(ctx, channelID, userID)
+	channel, isDM, err := s.resolveChannelAccess(ctx, channelID, userID, permissions.PermSendMessages)
 	if err != nil {
 		return err
-	}
-
-	if !isDM {
-		if err := s.perms.RequireChannelPermission(ctx, channel.GuildID, channelID, userID, permissions.PermSendMessages); err != nil {
-			return err
-		}
 	}
 
 	if s.typingStore != nil {
@@ -299,7 +275,7 @@ func (s *MessageService) Typing(ctx context.Context, channelID, userID int64) er
 
 // resolveChannelAccess returns the guild channel (if any) and whether this is a DM.
 // It also verifies the user has access to the channel (membership or DM recipient).
-func (s *MessageService) resolveChannelAccess(ctx context.Context, channelID, userID int64) (*models.Channel, bool, error) {
+func (s *MessageService) resolveChannelAccess(ctx context.Context, channelID, userID int64, required permissions.Permission) (*models.Channel, bool, error) {
 	channel, err := s.channels.GetByID(ctx, channelID)
 	if err != nil {
 		return nil, false, Internal("INTERNAL", "internal server error")
@@ -325,6 +301,9 @@ func (s *MessageService) resolveChannelAccess(ctx context.Context, channelID, us
 		return nil, false, NotFound("NOT_FOUND", "channel not found")
 	}
 
+	if err := s.perms.RequireChannelPermission(ctx, channel.GuildID, channelID, userID, permissions.PermViewChannel|required); err != nil {
+		return nil, false, err
+	}
 	return channel, false, nil
 }
 

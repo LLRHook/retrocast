@@ -289,7 +289,8 @@ Permission bitfields on roles and per-channel allow and deny overrides
 (DATA_CONTRACTS §3.1). Owner and Administrator bypass every check (SV-FR-046). Channel checks
 follow DATA_CONTRACTS section 3.2; guild checks include the default role and role management requires MANAGE_ROLES (PR #44).
 Kick and ban act only on members ranked below the caller (SV-FR-070; kick fixed in PR #44).
-Resolution is in Go (ADR-009).
+Resolution is in Go (ADR-009). All guild message REST operations, including attachment upload, require channel-resolved
+`VIEW_CHANNEL` in addition to their operation-specific permissions (#80).
 
 ### 7.3 Real-time delivery
 In-process fan-out from services to gateway connections, keyed by current guild membership; IDENTIFY retries a snapshot if a join or removal changed the user membership epoch before registration. Per-connection send buffer of 256 frames. A 100-event replay
@@ -449,3 +450,4 @@ See [SRS §1.3](SRS.md) and §5.3.
 | 22 | 2026-11-24T07:02:55-05:00 | 0f5851ab8ae2 | REVISION | PR #59 round 2: fail-fast retention/restore regressions, complete archive and compose preflight, transactional restore and evidence corrections |
 | 23 | 2026-11-24T08:06:57-05:00 | 23eea2497fd6 | REVISION | B6: atomic keyboard role ordering (API-060) and public HTTPS signed downloads (D-10); transactional and Caddy regressions plus owned browser evidence |
 | 24 | 2026-11-24T09:13:39-05:00 | 0edca0aaeafa | REVISION | PR #62 round 2: missing/deleted guild status and permission-before-lock; GET-only downloads and lowercase host; manager create positioning and no-room guidance; contract, operational and D-10 drift repaired |
+| 25 | 2026-11-26T05:26:29-05:00 | e6a0d837dd0f | REVISION | D17 B11 PR #92: VIEW_CHANNEL on REST messages and uploads; current membership for edit/delete (#80, #84); typing contract reconciled |

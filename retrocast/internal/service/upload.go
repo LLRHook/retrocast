@@ -66,7 +66,7 @@ func (s *UploadService) UploadFile(ctx context.Context, channelID, userID int64,
 		return nil, NotFound("NOT_FOUND", "channel not found")
 	}
 
-	if err := s.perms.RequireChannelPermission(ctx, channel.GuildID, channelID, userID, permissions.PermAttachFiles); err != nil {
+	if err := s.perms.RequireChannelPermission(ctx, channel.GuildID, channelID, userID, permissions.PermViewChannel|permissions.PermAttachFiles); err != nil {
 		return nil, err
 	}
 
