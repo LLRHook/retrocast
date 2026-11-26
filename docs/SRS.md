@@ -120,7 +120,7 @@ The operator sets secrets and endpoints in `retrocast/.env` (template `.env.exam
   `Must`; iOS ones are `Should` and sit outside the Pilot.
 - Phase 1 of SYSTEM_DESIGN.md plus kick and ban, operator health and backups is the MVP
   (Q-003).
-- Docker Compose, PostgreSQL 17, Redis 7, MinIO is built from its archived official source release through the Go module proxy; the LiveKit image stays available.
+- Docker Compose, PostgreSQL 17, Redis 7 and LiveKit images stay available; MinIO is built from its archived official source release through the Go module proxy.
 - Existing guilds keep their stored `@everyone` permissions when SV-FR-008 is fixed (spec
   lead's assumption; nothing has been released).
 

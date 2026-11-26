@@ -66,8 +66,7 @@ For multiple compose files on Windows set `COMPOSE_PATH_SEPARATOR=';'` and
 Do not schedule overlapping backup/restore runs.
 
 A backup dumps PostgreSQL and archives the MinIO named volume through the
-on-demand `backup-tools` Alpine container so volume archives can be read or restored
-from a separate container while MinIO is stopped.
+on-demand `backup-tools` Alpine container to archive or restore the volume from a separate container; restore stops MinIO first.
 Retention removes only top-level regular files matching `backup_*.sql.gz`
 and `minio_*.tar.gz` whose mtime is over 30 whole days old; it leaves nested
 archives and unrelated files alone; archive names alone do not determine age. This is a sequential

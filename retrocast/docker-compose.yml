@@ -1,5 +1,5 @@
 services:
-  # Archive the data volume from a separate container while MinIO is stopped.
+  # Archive or restore the volume from a separate container; restore stops MinIO first.
   # Run only on demand; --rm removes every one-off container.
   backup-tools:
     image: alpine:3.24
