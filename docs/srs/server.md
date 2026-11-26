@@ -107,6 +107,12 @@ All guild message REST operations (send, list, get, edit, delete, typing and att
 `VIEW_CHANNEL` resolved with channel overrides; a deny returns 403 `MISSING_PERMISSIONS`.
 Operation-specific checks still apply. DM access remains recipient based. Search and
 reactions already require `VIEW_CHANNEL|READ_MESSAGE_HISTORY`.
+HTTP request bodies are bounded before binding or multipart parsing: 1 MiB for
+ordinary routes, and 10 MiB plus 64 KiB multipart framing for attachment POSTs.
+An oversized request returns 413 `PAYLOAD_TOO_LARGE` in the standard error envelope.
+The file limit remains 10 MiB (the existing implementation of SV-FR-051); files
+above that limit but within the framing allowance still receive 400 `FILE_TOO_LARGE`.
+The WebSocket gateway already caps inbound messages at 4096 bytes.
 
 #### 3.1.8 Roles and permissions (CAP-014, CAP-015, CAP-016)
 

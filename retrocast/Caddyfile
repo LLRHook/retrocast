@@ -12,11 +12,28 @@
         respond 405
     }
 
+    @upload {
+        method POST
+        path /api/v1/channels/*/attachments
+    }
+    handle @upload {
+        request_body {
+            max_size 10551296
+        }
+        reverse_proxy api:8080
+    }
+
     handle /api/* {
+        request_body {
+            max_size 1048576
+        }
         reverse_proxy api:8080
     }
 
     handle /gateway {
+        request_body {
+            max_size 1048576
+        }
         reverse_proxy api:8080
     }
 
@@ -25,11 +42,25 @@
     }
 
     handle /docs* {
+        request_body {
+            max_size 1048576
+        }
         reverse_proxy api:8080
     }
 
     handle /health {
+        request_body {
+            max_size 1048576
+        }
         reverse_proxy api:8080
+    }
+
+    handle_errors {
+        @large expression {err.status_code} == 413
+        handle @large {
+            header Content-Type application/json
+            respond `{"error":{"code":"PAYLOAD_TOO_LARGE","message":"request body too large"}}` 413
+        }
     }
 
     handle {

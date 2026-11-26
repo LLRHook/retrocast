@@ -61,6 +61,7 @@ func SetupRouter(e *echo.Echo, deps *Dependencies) {
 	// reverse proxy's X-Forwarded-For header; see ClientIPExtractor.
 	e.IPExtractor = ClientIPExtractor()
 	e.HTTPErrorHandler = HTTPErrorHandler
+	e.Use(RequestBodyLimit)
 
 	// Health check — deep: pings Postgres and Redis
 	e.GET("/health", func(c echo.Context) error {
