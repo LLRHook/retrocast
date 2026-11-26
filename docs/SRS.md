@@ -120,7 +120,7 @@ The operator sets secrets and endpoints in `retrocast/.env` (template `.env.exam
   `Must`; iOS ones are `Should` and sit outside the Pilot.
 - Phase 1 of SYSTEM_DESIGN.md plus kick and ban, operator health and backups is the MVP
   (Q-003).
-- Docker Compose, PostgreSQL 17, Redis 7, MinIO and LiveKit images stay available.
+- Docker Compose, PostgreSQL 17, Redis 7 and LiveKit images stay available; MinIO is built from its archived official source release through the Go module proxy.
 - Existing guilds keep their stored `@everyone` permissions when SV-FR-008 is fixed (spec
   lead's assumption; nothing has been released).
 
@@ -272,3 +272,4 @@ Run 3 round 2 candidate `511b8cd`: [Pilot validation record](validation/pilot-20
 | 9 | 2026-11-24T12:07:01-05:00 | 6e9507a02345 | REVISION | B7: copied invite routing and server selection; REST contract 2.2.0 and SV-IR-008 version equality through API-060 |
 | 10 | 2026-11-24T15:12:09-05:00 | 33dc349ad91a | REVISION | L42 round 1 candidate 0f7ee55: provisional all 107 Must claim, corrected by round 2 with acceptance-mapped CI/runtime evidence; accelerated cron, restore/RPO, offline flows and 10-minute performance; explicit Should and readiness gaps |
 | 11 | 2026-11-24T16:49:53-05:00 | 3c40e51fe9a3 | REVISION | L42 round 2 candidate 511b8cd: 106 Musts Verified; SYS-FR-002 Implemented pending operator host schedule over 24 hours; exact cron line, deployed invite/channel/history/refresh probes, explicit backend carry and SRS readiness corrections |
+| 12 | 2026-11-26T06:34:49-05:00 | ca3c0693a9a2 | REVISION | D16/D19: pinned MinIO source availability and corrected operator/redistribution guidance |

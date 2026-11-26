@@ -1,0 +1,3 @@
+scripts/retrocast-backup.service text eol=lf
+scripts/retrocast-backup.timer text eol=lf
+scripts/verify-systemd.sh text eol=lf
