@@ -42,7 +42,7 @@ func TestSecretStartupPolicy(t *testing.T) {
 		t.Fatal("strong credentials refused")
 	}
 	// The contract counts characters, not UTF-8 bytes.
-	if err := ValidateSecrets(map[string]string{"fixture": strings.Repeat("?", 31)}); err == nil {
+	if err := ValidateSecrets(map[string]string{"fixture": strings.Repeat("\u754c", 31)}); err == nil {
 		t.Fatal("31 multibyte characters accepted")
 	}
 	if err := ValidateSecrets(map[string]string{"fixture": randomUnicode(t)}); err != nil {

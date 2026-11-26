@@ -12,7 +12,7 @@ import (
 // ValidateSecrets applies the same startup policy to server and Compose secrets.
 // Errors contain variable names only, never credential values or URLs.
 func ValidateSecrets(values map[string]string) error {
-	placeholders := map[string]bool{"change-me-in-production": true, "changeme": true, "devsecret": true, "password": true, "retrocast": true, "minioadmin": true, "signer-changeme": true, strings.Repeat("test-only-", 4): true, strings.Repeat("compose-test-", 3): true, "retrocast-ci-postgres-test-only-2026": true, "storage-root-test-only-secret-123456": true, "storage-signer-test-only-secret-1234": true, strings.Repeat("?", 32): true}
+	placeholders := map[string]bool{"change-me-in-production": true, "changeme": true, "devsecret": true, "password": true, "retrocast": true, "minioadmin": true, "signer-changeme": true, strings.Repeat("test-only-", 4): true, strings.Repeat("compose-test-", 3): true, "retrocast-ci-postgres-test-only-2026": true, "storage-root-test-only-secret-123456": true, "storage-signer-test-only-secret-1234": true, strings.Repeat("?", 32): true, strings.Repeat("\u754c", 32): true}
 	var invalid []string
 	for name, value := range values {
 		if utf8.RuneCountInString(strings.TrimSpace(value)) < 32 || placeholders[value] {
