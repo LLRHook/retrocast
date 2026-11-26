@@ -15,7 +15,7 @@ func ValidateSecrets(values map[string]string) error {
 	placeholders := map[string]bool{"change-me-in-production": true, "changeme": true, "devsecret": true, "password": true, "retrocast": true, "minioadmin": true, "signer-changeme": true, strings.Repeat("test-only-", 4): true, strings.Repeat("compose-test-", 3): true, "retrocast-ci-postgres-test-only-2026": true, "storage-root-test-only-secret-123456": true, "storage-signer-test-only-secret-1234": true, strings.Repeat("?", 32): true, strings.Repeat("\u754c", 32): true}
 	var invalid []string
 	for name, value := range values {
-		if utf8.RuneCountInString(strings.TrimSpace(value)) < 32 || placeholders[value] {
+		if utf8.RuneCountInString(strings.TrimSpace(value)) < 32 || placeholders[strings.TrimSpace(value)] {
 			invalid = append(invalid, name)
 		}
 	}
@@ -27,6 +27,9 @@ func ValidateSecrets(values map[string]string) error {
 }
 
 func credentialPasswords(values map[string]string, databaseURL, redisURL string) error {
+	if value, set := os.LookupEnv("PGPASSWORD"); set {
+		values["PGPASSWORD"] = value
+	}
 	for name, raw := range map[string]string{"DATABASE_URL": databaseURL, "REDIS_URL": redisURL} {
 		if raw == "" {
 			continue
@@ -35,6 +38,9 @@ func credentialPasswords(values map[string]string, databaseURL, redisURL string)
 		validScheme := err == nil && ((name == "DATABASE_URL" && (u.Scheme == "postgres" || u.Scheme == "postgresql")) || (name == "REDIS_URL" && (u.Scheme == "redis" || u.Scheme == "rediss")))
 		if !validScheme || u.Opaque != "" {
 			return fmt.Errorf("%s must be a valid connection URL; keyword DSNs are not supported", name)
+		}
+		if u.Query().Has("password") {
+			return fmt.Errorf("%s password query parameter is not supported; use URL userinfo", name)
 		}
 		if u.User != nil {
 			password, _ := u.User.Password()

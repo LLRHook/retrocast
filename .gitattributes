@@ -1,1 +1,1 @@
-retrocast/scripts/init-env.sh text eol=lf
+retrocast/scripts/*.sh text eol=lf

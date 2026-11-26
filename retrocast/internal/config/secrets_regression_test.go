@@ -113,3 +113,39 @@ func TestMinIOHostCompatibility(t *testing.T) {
 		})
 	}
 }
+
+func TestPaddedCommittedSecret(t *testing.T) {
+	if ValidateSecrets(map[string]string{"LIVEKIT_API_SECRET": "retrocast-ci-postgres-test-only-2026 "}) == nil {
+		t.Fatal("padded committed credential accepted")
+	}
+}
+func TestQueryCredentialRefused(t *testing.T) {
+	for _, name := range []string{"DATABASE_URL", "REDIS_URL"} {
+		t.Run(name, func(t *testing.T) {
+			strongEnvironment(t)
+			raw := "postgres://localhost/db?password=short"
+			if name == "REDIS_URL" {
+				raw = "redis://localhost?password=short"
+			}
+			t.Setenv(name, raw)
+			defer func() {
+				v := recover()
+				if v == nil || !strings.Contains(fmt.Sprint(v), name) {
+					t.Fatal("query credential accepted")
+				}
+			}()
+			Load()
+		})
+	}
+}
+func TestPGPasswordValidated(t *testing.T) {
+	strongEnvironment(t)
+	t.Setenv("PGPASSWORD", "short")
+	defer func() {
+		v := recover()
+		if v == nil || !strings.Contains(fmt.Sprint(v), "PGPASSWORD") {
+			t.Fatal("PGPASSWORD accepted")
+		}
+	}()
+	Load()
+}

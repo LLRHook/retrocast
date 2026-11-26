@@ -9,7 +9,9 @@ Redis is intentionally excluded (ADR-018). Backups remain on this host.
 Attachment signing (SV-NFR-008, ADR-019): before upgrading, add
 `MINIO_SIGNER_ACCESS_KEY`, `MINIO_SIGNER_SECRET_KEY` and `GRAFANA_ADMIN_PASSWORD`
 to `.env`, then run the
-usual `docker compose up -d --build`. Use a new account ID distinct from the
+usual `docker compose up -d --build`. For every Grafana volume initialized before
+this change, also perform the mandatory admin reset below, even if other secrets
+already meet the policy. Adding the variable does not reset an existing database. Use a new account ID distinct from the
 root user and `MINIO_ACCESS_KEY`. `.env.example` is a template only; its placeholders are refused. Run
 `bash scripts/init-env.sh` for a new install.
 The pinned mc client parses MC_HOST credentials literally, without URL decoding.
@@ -17,7 +19,7 @@ Root key IDs cannot contain colon, LF or ASCII control characters other than HTA
 root passwords cannot contain colon or LF. Rotate incompatible MINIO_ACCESS_KEY
 or MINIO_ROOT_PASSWORD with init-env-style values first. #91 refuses these in
 init; #94 also refuses them in the shared startup validator before consumers start.
-Every secret under 32 characters, including an otherwise strong 20?31-character
+Every secret under 32 characters, including an otherwise strong 20-31-character
 value, now refuses startup by variable name. Missing or empty signer credentials fail Compose and API storage initialization
 in every environment; there is no root fallback.
 
@@ -34,7 +36,11 @@ volume archive includes `.minio.sys` IAM configuration; backup/restore scripts
 and the isolated restore-drill procedure remain unchanged. After restoring an
 older archive without the account, run `docker compose up -d minio-init` before
 starting the API. After rotation, rollback to `b1514a3` must keep the rotated
-secrets: do not restore the old placeholder `.env`. Privately record the forward
+secrets: do not restore the old placeholder `.env`. Before upgrading or rotating,
+run `docker image inspect minio/minio:latest`. Rollback requires that image cached
+locally because Docker Hub no longer serves it. If absent, stop the upgrade and
+obtain a trusted saved image from the existing deployment (`docker save`/`docker load`),
+or agree on a separately tested recovery plan before proceeding. Privately record the forward
 MINIO_ACCESS_KEY identifier, set MINIO_ACCESS_KEY to `retrocast` (that revision's
 hardcoded root user), check out `b1514a3`, then run
 `docker compose up -d --build`. Rebuilding is required: the project API image tag
@@ -232,6 +238,20 @@ uses MINIO_SIGNER_ACCESS_KEY / MINIO_SIGNER_SECRET_KEY. Protect the environment
 file and its backups. MSYS, MINGW and Cygwin cannot enforce mode 600 through
 NTFS: the script prints a warning there; restrict the file ACL to the operator.
 
+Mandatory Grafana upgrade reset: for **every Grafana volume initialized before
+this change**, supply the new GRAFANA_ADMIN_PASSWORD privately on stdin after
+upgrading, even when all other secrets are already strong:
+
+```sh
+docker exec -i "$(docker compose ps -q grafana)" grafana cli admin reset-admin-password --password-from-stdin
+```
+
+Enter the value from the private deployment environment, then end stdin. Verify
+that signing in to Grafana as admin accepts the new value and refuses the old
+committed default. Do not consider the upgrade complete until the old default
+is refused. The rotation procedure below resets the same stored password before
+recreation; it also requires this login check.
+
 Existing deployments whose secrets already have at least 32 characters and are
 not committed values keep them; do not run the init script over the deployed
 environment. Placeholder deployments now refuse to start. Add the required
@@ -272,10 +292,16 @@ in order, using the same project, volume names and Compose overrides throughout:
    minio-init together with the new root credentials; init updates the new signer
    and policy. Check env-check exits 0. Do not start a partial new configuration
    before installing the replacement file.
-6. If the signer key ID changed, disable the old account now using
-   `mc admin user disable local <old-signer-key-id>` from a private admin context
-   authenticated with the new root credentials. Do not put secrets on mc argv;
-   use MC_HOST_local in the environment with the raw supported credentials.
+6. If the signer key ID changed, disable the old account now, replacing the
+   identifier placeholder with its recorded key ID:
+
+   ```sh
+   docker compose exec -T minio sh -c 'MC_HOST_local="http://${MINIO_ROOT_USER}:${MINIO_ROOT_PASSWORD}@localhost:9000" mc admin user disable local <old-signer-key-id>'
+   ```
+
+   Replace the whole `<old-signer-key-id>` token, including angle brackets, before
+   running. The single quotes keep root credentials expanding inside the container,
+   off host argv; mc is supplied by that image and uses the private local endpoint.
    A b1514a3 installation has no dedicated signer to disable. Confirm `/health`
    200, sign in again, upload an attachment and verify exact signed-download bytes.
 
