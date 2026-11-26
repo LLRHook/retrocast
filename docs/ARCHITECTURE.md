@@ -289,7 +289,7 @@ Permission bitfields on roles and per-channel allow and deny overrides
 (DATA_CONTRACTS §3.1). Owner and Administrator bypass every check (SV-FR-046). Channel checks
 follow DATA_CONTRACTS section 3.2; guild checks include the default role and role management requires MANAGE_ROLES (PR #44).
 Kick and ban act only on members ranked below the caller (SV-FR-070; kick fixed in PR #44).
-Resolution is in Go (ADR-009). All guild message REST operations require channel-resolved
+Resolution is in Go (ADR-009). All guild message REST operations, including attachment upload, require channel-resolved
 `VIEW_CHANNEL` in addition to their operation-specific permissions (#80).
 
 ### 7.3 Real-time delivery

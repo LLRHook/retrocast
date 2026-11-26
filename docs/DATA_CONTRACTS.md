@@ -188,7 +188,7 @@ are as documented in OpenAPI; where the code differs, the Notes column says so.
 | API-025 | editMessage | PATCH /channels/{channelId}/messages/{messageId} | 200 message | yes | | SV-FR-029 |
 | API-026 | deleteMessage | DELETE /channels/{channelId}/messages/{messageId} | 204 | — | | SV-FR-030 |
 | API-027 | uploadAttachment | POST /channels/{channelId}/attachments | 201 attachment | yes | Guild upload; Q-017 types only, at most 10 MB; returns pending attachment (message_id null); link through API-022 attachment_ids | SV-FR-051 |
-| API-028 | triggerTyping | POST /channels/{channelId}/typing | 204 | — | MessageService.Typing: guild SEND_MESSAGES after overrides; DM participants only; 403 for unauthorized callers, 404 for unknown channels; writes Redis marker before dispatch | SV-FR-031 |
+| API-028 | triggerTyping | POST /channels/{channelId}/typing | 204 | — | MessageService.Typing: guild VIEW_CHANNEL and SEND_MESSAGES after overrides; DM participants only; 403 for unauthorized callers, 404 for unknown channels; writes Redis marker before dispatch | SV-FR-031 |
 | API-029 | ackMessage | PUT /channels/{channelId}/ack/{messageId} | 204 | — | | SV-FR-076 |
 | API-030 | addReaction | PUT /channels/{channelId}/messages/{messageId}/reactions/{emoji}/@me | 204 | — | | SV-FR-074 |
 | API-031 | removeReaction | DELETE /channels/{channelId}/messages/{messageId}/reactions/{emoji}/@me | 204 | — | | SV-FR-074 |
