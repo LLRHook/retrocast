@@ -451,3 +451,4 @@ See [SRS §1.3](SRS.md) and §5.3.
 | 23 | 2026-11-24T08:06:57-05:00 | 23eea2497fd6 | REVISION | B6: atomic keyboard role ordering (API-060) and public HTTPS signed downloads (D-10); transactional and Caddy regressions plus owned browser evidence |
 | 24 | 2026-11-24T09:13:39-05:00 | 0edca0aaeafa | REVISION | PR #62 round 2: missing/deleted guild status and permission-before-lock; GET-only downloads and lowercase host; manager create positioning and no-room guidance; contract, operational and D-10 drift repaired |
 | 25 | 2026-11-26T05:26:29-05:00 | e6a0d837dd0f | REVISION | D17 B11 PR #92: VIEW_CHANNEL on REST messages and uploads; current membership for edit/delete (#80, #84); typing contract reconciled |
+| 26 | 2026-11-26T06:34:49-05:00 | ca3c0693a9a2 | REVISION | D16/D19: pinned MinIO source availability and corrected operator/redistribution guidance |
