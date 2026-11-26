@@ -61,7 +61,6 @@ func SetupRouter(e *echo.Echo, deps *Dependencies) {
 	// reverse proxy's X-Forwarded-For header; see ClientIPExtractor.
 	e.IPExtractor = ClientIPExtractor()
 	e.HTTPErrorHandler = HTTPErrorHandler
-	e.Use(RequestBodyLimit)
 
 	// Health check — deep: pings Postgres and Redis
 	e.GET("/health", func(c echo.Context) error {
@@ -85,6 +84,7 @@ func SetupRouter(e *echo.Echo, deps *Dependencies) {
 
 	// Prometheus metrics
 	e.Use(echoprometheus.NewMiddleware("retrocast"))
+	e.Use(RequestBodyLimit)
 	e.GET("/metrics", echoprometheus.NewHandler())
 
 	// Swagger UI — serves the embedded OpenAPI spec
@@ -103,25 +103,27 @@ func SetupRouter(e *echo.Echo, deps *Dependencies) {
 	// Auth routes — no auth middleware, stricter rate limit
 	authGroup := v1.Group("/auth",
 		RateLimitMiddleware(deps.Redis, 5, time.Minute),
+		ReadRequestBody,
 	)
 	authGroup.POST("/register", deps.Auth.Register)
 	authGroup.POST("/login", deps.Auth.Login)
 	authGroup.POST("/refresh", deps.Auth.Refresh)
 
 	// Public invite info — no auth required
-	v1.GET("/invites/:code", deps.Invites.GetInvite, RateLimitMiddleware(deps.Redis, 5, time.Minute))
+	v1.GET("/invites/:code", deps.Invites.GetInvite, RateLimitMiddleware(deps.Redis, 5, time.Minute), ReadRequestBody)
 
 	// Protected routes — require JWT auth + general rate limit
 	authMw := deps.TokenService.Middleware()
 	protected := v1.Group("", authMw,
 		RateLimitMiddleware(deps.Redis, 50, time.Minute),
+		ReadRequestBody,
 	)
 
 	// Auth (protected)
 	protected.POST("/auth/logout", deps.Auth.Logout)
 
 	// Users
-	v1.PUT("/users/@me/password", deps.Auth.ChangePassword, authMw, RateLimitMiddleware(deps.Redis, 5, time.Minute))
+	v1.PUT("/users/@me/password", deps.Auth.ChangePassword, authMw, RateLimitMiddleware(deps.Redis, 5, time.Minute), ReadRequestBody)
 	protected.GET("/users/@me", deps.Users.GetMe)
 	protected.PATCH("/users/@me", deps.Users.UpdateMe)
 	protected.GET("/users/@me/guilds", deps.Guilds.ListMyGuilds)

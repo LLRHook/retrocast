@@ -3,9 +3,10 @@ package api
 import (
 	"bytes"
 	"errors"
-	"github.com/labstack/echo/v4"
 	"io"
 	"net/http"
+
+	"github.com/labstack/echo/v4"
 )
 
 // Ordinary requests allow 1 MiB. Uploads allow the 10 MiB file maximum
@@ -13,23 +14,57 @@ import (
 const JSONBodyLimit int64 = 1 << 20
 const UploadBodyLimit int64 = (10 << 20) + (64 << 10)
 
-// RequestBodyLimit bounds reads before handlers bind JSON or parse multipart.
-// Reading the bounded body here also catches chunked requests and trailing JSON
-// bytes before handlers can swallow a bind error or perform a mutation.
+func requestBodyLimit(c echo.Context) int64 {
+	if c.Request().Method == http.MethodPost && c.Path() == "/api/v1/channels/:id/attachments" {
+		return UploadBodyLimit
+	}
+	return JSONBodyLimit
+}
+
+type limitedBody struct {
+	io.ReadCloser
+	exceeded bool
+}
+
+func (b *limitedBody) Read(p []byte) (int, error) {
+	n, err := b.ReadCloser.Read(p)
+	var tooLarge *http.MaxBytesError
+	if errors.As(err, &tooLarge) {
+		b.exceeded = true
+	}
+	return n, err
+}
+
+func bodyLimitExceeded(c echo.Context) bool {
+	b, ok := c.Request().Body.(*limitedBody)
+	return ok && b.exceeded
+}
+
+// RequestBodyLimit only wraps the body. It does not read bytes or reject a
+// Content-Length before authentication and rate limiting have run.
 func RequestBodyLimit(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
-		limit := JSONBodyLimit
-		if c.Request().Method == http.MethodPost && c.Path() == "/api/v1/channels/:id/attachments" {
-			limit = UploadBodyLimit
-		}
 		req := c.Request()
-		if req.ContentLength > limit {
+		if req.Body != nil {
+			req.Body = &limitedBody{ReadCloser: http.MaxBytesReader(c.Response(), req.Body, requestBodyLimit(c))}
+		}
+		return next(c)
+	}
+}
+
+// ReadRequestBody runs inside route groups AFTER their auth and rate limit
+// middleware. The bounded copy detects trailing JSON bytes and prevents handlers
+// (including optional-body binders) from swallowing overflow and mutating state.
+func ReadRequestBody(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		req := c.Request()
+		if req.ContentLength > requestBodyLimit(c) {
 			return echo.ErrStatusRequestEntityTooLarge
 		}
 		if req.Body == nil {
 			return next(c)
 		}
-		body, err := io.ReadAll(http.MaxBytesReader(c.Response(), req.Body, limit))
+		body, err := io.ReadAll(req.Body)
 		if err != nil {
 			var tooLarge *http.MaxBytesError
 			if errors.As(err, &tooLarge) {
