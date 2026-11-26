@@ -1,0 +1,25 @@
+# Official archived releases, fetched through the Go proxy and verified by sumdb.
+FROM golang:1.26.11-alpine AS source
+ENV GOPROXY=https://proxy.golang.org GOSUMDB=sum.golang.org CGO_ENABLED=0
+RUN apk add --no-cache ca-certificates
+RUN go mod download -json github.com/minio/minio@v0.0.0-20251015172955-9e49d5e7a648 > /tmp/minio.json \
+ && grep -F '"Sum": "h1:6TdolSCLSs2nwm8i0PpWDqf9iX2Ty9WQK8wmr7dCnUM="' /tmp/minio.json \
+ && cp -R /go/pkg/mod/github.com/minio/minio@v0.0.0-20251015172955-9e49d5e7a648 /minio
+WORKDIR /minio
+# RELEASE.2025-10-15T17-29-55Z (official commit 9e49d5e7a648).
+RUN go build -p 2 -trimpath -buildvcs=false -ldflags '-s -w -X github.com/minio/minio/cmd.Version=2025-10-15T17:29:55Z -X github.com/minio/minio/cmd.ReleaseTag=RELEASE.2025-10-15T17-29-55Z -X github.com/minio/minio/cmd.CommitID=9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a' -o /out/minio .
+RUN go mod download -json github.com/minio/mc@v0.0.0-20250813083541-7394ce0dd2a8 > /tmp/mc.json \
+ && grep -F '"Sum": "h1:9tuRE4iEaDkuxatxe7pddYYh1SX5mT0/D0haofZFeTY="' /tmp/mc.json \
+ && cp -R /go/pkg/mod/github.com/minio/mc@v0.0.0-20250813083541-7394ce0dd2a8 /mc
+WORKDIR /mc
+# RELEASE.2025-08-13T08-35-41Z (official commit 7394ce0dd2a8).
+RUN go build -p 2 -trimpath -buildvcs=false -ldflags '-s -w -X github.com/minio/mc/cmd.Version=2025-08-13T08:35:41Z -X github.com/minio/mc/cmd.ReleaseTag=RELEASE.2025-08-13T08-35-41Z -X github.com/minio/mc/cmd.CommitID=7394ce0dd2a80935aded936b09fa12cbb3cb8096' -o /out/mc .
+
+FROM alpine:3.24
+RUN apk add --no-cache ca-certificates curl tzdata
+COPY --from=source /out/minio /out/mc /usr/bin/
+ENV MINIO_UPDATE=off
+VOLUME /data
+EXPOSE 9000 9001
+ENTRYPOINT ["/usr/bin/minio"]
+CMD ["server", "/data", "--console-address", ":9001"]
