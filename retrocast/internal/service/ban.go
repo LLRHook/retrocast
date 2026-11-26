@@ -48,32 +48,39 @@ func (s *BanService) BanMember(ctx context.Context, guildID, callerID, targetUse
 		return BadRequest("CANNOT_BAN_SELF", "you cannot ban yourself")
 	}
 
-	if err := s.perms.RequireGuildPermissionByPerm(ctx, guildID, callerID, permissions.PermBanMembers); err != nil {
+	check := func(ctx context.Context) error {
+		if err := s.perms.RequireGuildPermissionByPerm(ctx, guildID, callerID, permissions.PermBanMembers); err != nil {
+			return err
+		}
+
+		guild, err := s.guilds.GetByID(ctx, guildID)
+		if err != nil {
+			return Internal("INTERNAL", "internal server error")
+		}
+		if guild == nil {
+			return NotFound("NOT_FOUND", "guild not found")
+		}
+		if guild.OwnerID == targetUserID {
+			return Forbidden("FORBIDDEN", "cannot ban the guild owner")
+		}
+
+		callerRoles, err := s.roles.GetByMember(ctx, guildID, callerID)
+		if err != nil {
+			return Internal("INTERNAL", "internal server error")
+		}
+		targetRoles, err := s.roles.GetByMember(ctx, guildID, targetUserID)
+		if err != nil {
+			return Internal("INTERNAL", "internal server error")
+		}
+
+		if guild.OwnerID != callerID && highestPosition(targetRoles) >= highestPosition(callerRoles) {
+			return RoleHierarchyError("your highest role must be above the target's highest role")
+		}
+
+		return nil
+	}
+	if err := check(ctx); err != nil {
 		return err
-	}
-
-	guild, err := s.guilds.GetByID(ctx, guildID)
-	if err != nil {
-		return Internal("INTERNAL", "internal server error")
-	}
-	if guild == nil {
-		return NotFound("NOT_FOUND", "guild not found")
-	}
-	if guild.OwnerID == targetUserID {
-		return Forbidden("FORBIDDEN", "cannot ban the guild owner")
-	}
-
-	callerRoles, err := s.roles.GetByMember(ctx, guildID, callerID)
-	if err != nil {
-		return Internal("INTERNAL", "internal server error")
-	}
-	targetRoles, err := s.roles.GetByMember(ctx, guildID, targetUserID)
-	if err != nil {
-		return Internal("INTERNAL", "internal server error")
-	}
-
-	if guild.OwnerID != callerID && highestPosition(targetRoles) >= highestPosition(callerRoles) {
-		return RoleHierarchyError("your highest role must be above the target's highest role")
 	}
 
 	ban := &models.Ban{
@@ -84,11 +91,17 @@ func (s *BanService) BanMember(ctx context.Context, guildID, callerID, targetUse
 		CreatedAt: time.Now(),
 	}
 
-	err = database.InTransaction(ctx, s.bans, func(ctx context.Context) error {
+	err := database.InTransaction(ctx, s.bans, func(ctx context.Context) error {
 		if err := database.LockGuildForModeration(ctx, s.bans, guildID); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return NotFound("UNKNOWN_GUILD", "guild no longer exists")
 			}
+			return err
+		}
+		if err := database.LockMemberForModeration(ctx, s.members, guildID, targetUserID); err != nil {
+			return err
+		}
+		if err := check(ctx); err != nil {
 			return err
 		}
 		if err := s.members.Delete(ctx, guildID, targetUserID); err != nil {

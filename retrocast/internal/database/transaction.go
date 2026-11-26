@@ -67,3 +67,19 @@ func LockGuildForModeration(ctx context.Context, repository any, guildID int64) 
 	var id int64
 	return queryDB(ctx, source.transactionPool()).QueryRow(ctx, "SELECT id FROM guilds WHERE id=$1 FOR UPDATE", guildID).Scan(&id)
 }
+
+// LockMemberForModeration follows the guild lock. FOR UPDATE conflicts with
+// the FK KEY SHARE lock of a concurrent member_roles insertion. A missing
+// member is allowed here because banning a non-member is supported.
+func LockMemberForModeration(ctx context.Context, repository any, guildID, userID int64) error {
+	source, ok := repository.(interface{ transactionPool() *pgxpool.Pool })
+	if !ok {
+		return nil
+	}
+	var id int64
+	err := queryDB(ctx, source.transactionPool()).QueryRow(ctx, "SELECT user_id FROM members WHERE guild_id=$1 AND user_id=$2 FOR UPDATE", guildID, userID).Scan(&id)
+	if err == pgx.ErrNoRows {
+		return nil
+	}
+	return err
+}
