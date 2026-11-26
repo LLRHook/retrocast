@@ -417,3 +417,4 @@ Scraping and dashboards are SYS-FR-001 in [system.md](system.md).
 | 27 | 2026-11-24T16:49:53-05:00 | 3c40e51fe9a3 | REVISION | L42 round 2 candidate 511b8cd: 106 Musts Verified; SYS-FR-002 Implemented pending operator host schedule over 24 hours; exact cron line, deployed invite/channel/history/refresh probes, explicit backend carry and SRS readiness corrections |
 | 28 | 2026-11-26T05:26:29-05:00 | e6a0d837dd0f | REVISION | D17 B11 PR #92: VIEW_CHANNEL on REST messages and uploads; current membership for edit/delete (#80, #84); typing contract reconciled |
 | 29 | 2026-11-26T05:51:05-05:00 | 637354918316 | REVISION | D17 B11 PR #93: SV-IR-001 request caps after auth/rate checks and 413 envelope; rebased after PR #92 rev 28 |
+| 30 | 2026-11-26T06:52:37-05:00 | 32f7a6437424 | REVISION | D16: dedicated least-privilege signer and argv-safe bootstrap; required credentials; SV-NFR-008 / ADR-019 |
