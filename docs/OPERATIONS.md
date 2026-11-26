@@ -177,3 +177,8 @@ CI builds this image to catch unavailable sources or build failures. Source
 builds retain MinIO's AGPLv3 license. Upstream is archived; choosing a maintained
 replacement is a separate product decision. Backup and restore commands above
 still archive and restore the complete data volume, including IAM configuration.
+
+The signer is a regular MinIO user, not a root-derived service account. `mc cat`
+may fail its bucket-location discovery because s3:GetBucketLocation is deliberately
+not granted. The API sets the region explicitly and signs GET locally; do not
+broaden the signer policy to support diagnostic client discovery.
