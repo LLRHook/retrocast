@@ -107,9 +107,9 @@ In `open` mode the server ignores `invite_code`; use API-050 after registering t
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DATABASE_URL` | `postgres://retrocast:password@localhost:5432/retrocast?sslmode=disable` | PostgreSQL connection string |
+| `DATABASE_URL` | generated local URL | PostgreSQL connection string with a strong password |
 | `REDIS_URL` | `redis://localhost:6379` | Redis connection string |
-| `JWT_SECRET` | `change-me-in-production` | Secret for signing JWT tokens |
+| `JWT_SECRET` | generated | At least 32 characters; template placeholders are refused |
 | `REGISTRATION_MODE` | `invite` | `open`, `invite` or `closed`; unknown values stop startup |
 | `ALLOWED_ORIGINS` | empty | Comma-separated additional browser origins, e.g. `http://localhost:5173` |
 | `SERVER_ADDR` | `:8080` | HTTP listen address |

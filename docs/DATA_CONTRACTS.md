@@ -19,29 +19,32 @@ The server reads configuration from environment variables, which override an opt
 which overrides the defaults (`retrocast/internal/config/config.go`). The file is the first
 found of `$RETROCAST_CONFIG`, `./retrocast.toml` and `/etc/retrocast/config.toml`. It holds
 `KEY = VALUE` lines: lines starting with `#` or `[` are skipped and surrounding quotes are
-removed, so it is a flat subset of TOML. If `DATABASE_URL` or `JWT_SECRET` is missing the
-server stops at start with an error naming the keys.
+removed, so it is a flat subset of TOML. Missing `DATABASE_URL` or unsafe required secrets stop startup with an error naming
+the keys. SV-NFR-002 defines the shared secret policy; Compose consumers wait for
+the API image's `check-env` command to complete successfully.
 
 | Key | Required | Purpose |
 |---|---|---|
 | `DATABASE_URL` | yes | PostgreSQL connection string |
-| `JWT_SECRET` | yes | HMAC key for access tokens (no minimum length is enforced) |
+| `JWT_SECRET` | yes | HMAC key for access tokens; required, at least 32 characters, no committed placeholders (SV-NFR-002) |
 | `REDIS_URL` | no | Redis connection (default `redis://localhost:6379`) |
 | `SERVER_ADDR` | no | Listen address (default `:8080`; compose keeps it internal) |
 | `LOG_LEVEL` | no | slog level (default `info`) |
 | `REGISTRATION_MODE` | no | `open`, `invite` or `closed` (default `invite`); any other value stops the server at start (SV-FR-062). Implemented in PR #54; validated at startup |
 | `ALLOWED_ORIGINS` | no | Comma-separated browser origins allowed besides the server's own (SV-NFR-011). Read from environment or config file; empty by default; exact scheme/host/effective-port match, no wildcards |
 | `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY` | yes for uploads | Object store; bucket `retrocast` is created at start |
-| `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | yes for voice | Token minting (§7.1) |
+| `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | secret required at startup | Token minting (§7.1) |
 | `MINIO_SIGNER_ACCESS_KEY`, `MINIO_SIGNER_SECRET_KEY` | yes | Dedicated download signer, required in all environments; no root fallback (SV-NFR-008, ADR-019) |
-| `POSTGRES_PASSWORD`, `MINIO_ROOT_PASSWORD` | compose only | Service passwords used by `docker-compose.yml` |
+| `POSTGRES_PASSWORD`, `MINIO_ROOT_PASSWORD` | compose only | Required strong service passwords checked by `check-env`; root/write MinIO secret values must match |
 | `DOMAIN` | Caddy only | Site address in `retrocast/Caddyfile` (default `localhost`) |
-| `GRAFANA_ADMIN_PASSWORD` | compose only | Grafana admin password (`docker-compose.yml` falls back to a development default) |
+| `GRAFANA_ADMIN_PASSWORD` | compose only | Required strong Grafana admin password checked before Compose startup |
 | `BACKUP_DIR` | backup script only | Where `scripts/backup.sh` writes archives (default the current directory) |
 | `SERVER_URL` | CLI only | Base URL for `retrocast-cli health` (default `http://localhost:8080`; set it to the public `https://` address for compose) |
 
-Values come from `retrocast/.env` (template `retrocast/.env.example`). The example files hold
-development defaults; they are not repeated here.
+Values come from `retrocast/.env` (template `retrocast/.env.example`). The example files are templates whose secret placeholders are rejected.
+Run `scripts/init-env.sh` for private generated values; see OPERATIONS for
+existing-volume credential rotation. Key IDs are not secrets; supplied passwords
+in database or Redis URLs follow SV-NFR-002.
 
 ## 2. Conceptual model
 
