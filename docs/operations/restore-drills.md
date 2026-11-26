@@ -130,7 +130,7 @@ docker volume rm l59-gocache
 
 The drill stopped at N-1. All owned containers, networks, volumes and image tags,
 the clone, private files and paired archives were removed. Both protected MinIO
-image tags remained present. Generated-secret/key-ID scan: 0 exact matches;
+image tags remained present. Generated-secret/key-ID-shaped scan: 0 hits;
 concrete token-shaped scan: 0 hits.
 
 OPERATIONS corrections: none. Before the successful clean run, harness incidents
