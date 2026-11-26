@@ -2,7 +2,7 @@
 
 ## D18 release rollback drill — 2026-11-26
 
-PASS on DESKTOP-JRJNV5B, Windows 11 / Docker Desktop, Engine 29.9.3
+PASS on a Windows 11 host / Docker Desktop, Engine 29.9.3
 linux/amd64, Compose v5.7.0. N-1:
 `b1514a3699e05aa11f9e82d20bab92fc4ce23f74`; N:
 `d4b8d065b2d9627b8931cbcaf2e4786505a72bc2`.
@@ -58,7 +58,7 @@ docker compose up -d --build --wait
 docker compose stop api livekit
 bash scripts/scheduled-backup.sh
 gzip -t "$BACKUP_DIR"/*.gz
-tar -tzf /c/Users/Victor/AppData/Local/Temp/l59-private/backups/minio_*.tar.gz | wc -l
+tar --force-local -tzf "$BACKUP_DIR"/minio_*.tar.gz | wc -l
 sha256sum "$BACKUP_DIR"/*.gz
 docker compose start --wait api livekit
 # Health and counts after backup.
@@ -66,6 +66,8 @@ docker compose start --wait api livekit
 
 The scheduled wrapper exited 0. Both gzip checks and tar listing exited 0;
 tar listed 25 entries. API and LiveKit were quiescent during the paired backup.
+On Windows, --force-local stops tar from treating C: as a remote host, as
+observed in the first harness attempt.
 
 | Archive | SHA-256 |
 |---|---|
