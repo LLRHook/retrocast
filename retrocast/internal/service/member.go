@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"github.com/jackc/pgx/v5"
 	"strconv"
 
 	"github.com/victorivanov/retrocast/internal/database"
@@ -292,6 +293,9 @@ func (s *MemberService) KickMember(ctx context.Context, guildID, callerID, targe
 	}
 	err := database.InTransaction(ctx, s.members, func(ctx context.Context) error {
 		if err := database.LockGuildForModeration(ctx, s.members, guildID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return NotFound("UNKNOWN_GUILD", "guild no longer exists")
+			}
 			return err
 		}
 		if err := database.LockMemberForModeration(ctx, s.members, guildID, targetUserID); err != nil {
