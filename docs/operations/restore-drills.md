@@ -7,6 +7,10 @@ linux/amd64, Compose v5.7.0. N-1:
 `b1514a3699e05aa11f9e82d20bab92fc4ce23f74`; N:
 `d4b8d065b2d9627b8931cbcaf2e4786505a72bc2`.
 The final running revision was N-1, with the rotated secrets retained.
+The record branch was rebased onto main
+4910b846439ee164967dc3a66e05f1769f52e30c after the drill. Relative to N,
+that main adds only SECURITY_AUDIT.md and its .gitignore line; application code
+is identical. The tested N remains d4b8d06.
 
 A separate GitHub clone used
 `git -c core.autocrlf=false clone -c core.autocrlf=false https://github.com/LLRHook/retrocast.git "$ROOT"`.
