@@ -1,5 +1,155 @@
 # Restore drills
 
+## D18 release rollback drill — 2026-11-26
+
+PASS on a Windows 11 host / Docker Desktop, Engine 29.9.3
+linux/amd64, Compose v5.7.0. N-1:
+`b1514a3699e05aa11f9e82d20bab92fc4ce23f74`; N:
+`d4b8d065b2d9627b8931cbcaf2e4786505a72bc2`.
+The final running revision was N-1, with the rotated secrets retained.
+The record branch was rebased onto main
+4910b846439ee164967dc3a66e05f1769f52e30c after the drill. Relative to N,
+that main adds only SECURITY_AUDIT.md and its .gitignore line; application code
+is identical. The tested N remains d4b8d06.
+
+A separate GitHub clone used
+`git -c core.autocrlf=false clone -c core.autocrlf=false https://github.com/LLRHook/retrocast.git "$ROOT"`.
+The second option persists LF checkout settings. The successful run had zero
+tracked CRLF files. Project `l59drill` retained the same volumes throughout.
+Operator overrides bound Caddy HTTPS to `127.0.0.1:15943` and Grafana to
+`127.0.0.1:15900` (checked free), removed LiveKit host ports, and gave N's MinIO
+build its own `l59-minio:candidate` tag. Registration was open for this isolated
+fixture; operator settings and region were retained during rotation.
+BACKUP_DIR was private and outside the clone. No production resources were used.
+
+| Check | N-1 start | After backup | N before upload | N after upload | Rollback N-1 |
+|---|---:|---:|---:|---:|---:|
+| Health HTTP | 200 | 200 | 200 | 200 | 200 |
+| users | 2 | 2 | 2 | 2 | 2 |
+| guilds | 1 | 1 | 1 | 1 | 1 |
+| channels | 2 | 2 | 2 | 2 | 2 |
+| messages | 4 | 4 | 4 | 5 | 5 |
+| attachments | 1 | 1 | 1 | 2 | 2 |
+
+REST seeded two users, one guild (including its text channel), three plain
+messages and an attachment message. N added an attachment message, explaining
+the only row-count increases. At every snapshot the query was:
+
+```sql
+SELECT (SELECT count(*) FROM users), (SELECT count(*) FROM guilds),
+       (SELECT count(*) FROM channels), (SELECT count(*) FROM messages),
+       (SELECT count(*) FROM attachments);
+```
+
+Commands ran in Git Bash from `$ROOT/retrocast`; `$PRIVATE` denotes the owned
+private temporary directory. Each commented check below was performed by the
+captured probe or snapshot helper, not left for later execution.
+
+```sh
+export COMPOSE_PROJECT_NAME=l59drill COMPOSE_PATH_SEPARATOR=';'
+export COMPOSE_FILE="$ROOT/retrocast/docker-compose.yml;$PRIVATE/override.yml"
+export BACKUP_DIR="$PRIVATE/backups"
+git checkout b1514a3699e05aa11f9e82d20bab92fc4ce23f74
+cp .env.example .env
+# Fixture-only REGISTRATION_MODE=open; retain placeholder secrets.
+docker image inspect minio/minio:latest --format '{{.Id}}'
+docker compose up -d --build --wait
+# REST seed, signed download, health and SQL snapshot.
+docker compose stop api livekit
+bash scripts/scheduled-backup.sh
+gzip -t "$BACKUP_DIR"/*.gz
+tar --force-local -tzf "$BACKUP_DIR"/minio_*.tar.gz | wc -l
+sha256sum "$BACKUP_DIR"/*.gz
+docker compose start --wait api livekit
+# Health and counts after backup.
+```
+
+The scheduled wrapper exited 0. Both gzip checks and tar listing exited 0;
+tar listed 25 entries. API and LiveKit were quiescent during the paired backup.
+On Windows, --force-local stops tar from treating C: as a remote host, as
+observed in the first harness attempt.
+
+| Archive | SHA-256 |
+|---|---|
+| `backup_20261126_084249.sql.gz` | `9ad3b02dc23220198274d0d00f1b7e32f9ceae523b84766a727e5b5cf84ceac4` |
+| `minio_20261126_084249.tar.gz` | `da8fee96e5ff10cbbbeaef8eab61741dd1645f9af642a97aa6d62125c4f20169` |
+
+OPERATIONS rotation steps 1–6 ran in order:
+
+```sh
+docker image inspect minio/minio:latest --format '{{.Id}}'
+db_id=$(docker compose ps -q db)
+redis_id=$(docker compose ps -q redis)
+grafana_id=$(docker compose ps -q grafana)
+docker compose stop api livekit
+git checkout d4b8d065b2d9627b8931cbcaf2e4786505a72bc2
+bash scripts/init-env.sh "$PRIVATE/new.env"
+# Retain operator settings; old deployed .env stays until step 5.
+docker exec -i "$db_id" psql -U retrocast retrocast
+# Execute \password retrocast; replacement POSTGRES_PASSWORD twice on stdin.
+docker exec "$redis_id" redis-cli FLUSHDB
+docker exec -i "$grafana_id" grafana cli admin reset-admin-password --password-from-stdin
+# Supply replacement GRAFANA_ADMIN_PASSWORD on stdin.
+# Privately assert changed root, LiveKit and signer pairs; root/write secrets match.
+cp "$PRIVATE/new.env" .env
+chmod 600 .env
+# Install N's image-tag override at the same override path.
+docker compose up -d --build --force-recreate
+docker compose up -d --wait
+docker inspect l59drill-env-check-1 --format '{{.State.ExitCode}}'
+# Step 6: b1514a3 has no dedicated signer to disable.
+# Health, counts, sign in again, upload and exact signed downloads.
+```
+
+The automated psql session used `-i` in place of interactive `-it`, providing
+both private responses on stdin to the same `\password` command in the existing
+container. No secret reached argv or evidence. FLUSHDB returned OK; Grafana's
+CLI reported a successful password reset; env-check exited 0. After recreation,
+Grafana `/api/user` refused the committed default (401) and accepted the new
+password (200). The old dedicated-signer disable command was inapplicable.
+
+| Attachment | SHA-256 | N-1 GET | N GET | Rollback GET |
+|---|---|---|---|---|
+| Initial fixture | `b47e6ddc4d0f057460eeae0da3acefe26a392866cef0de8baad6d38fd3b40911` | 200, exact, `retrocast` | 200, exact, dedicated signer | 200, exact, `retrocast` |
+| N upload | `eb528450312080a6a43253b12b8896eca09a70c96335d3c918458da1668452b7` | Not yet created | upload 201; GET 200, exact, dedicated signer | 200, exact, `retrocast` |
+
+The probe fetched fresh signed HTTPS URLs from authenticated history, classified
+the credential internally and checked each response against the original fixture
+SHA-256. It saved neither URLs nor tokens. Only the isolated localhost probe
+accepted Caddy's development certificate.
+
+```sh
+# Privately record forward MINIO_ACCESS_KEY; set MINIO_ACCESS_KEY=retrocast.
+git -c core.autocrlf=false checkout b1514a3699e05aa11f9e82d20bab92fc4ce23f74
+# Restore N-1's override at the same path; retain rotated secrets and region.
+docker compose up -d --build
+docker compose up -d --wait
+# Health 200, unchanged counts, 2/2 exact signed downloads by retrocast.
+docker compose down -v --remove-orphans
+docker image rm l59drill-api:latest l59drill-web:latest l59-minio:candidate
+docker volume rm l59-gocache
+```
+
+The drill stopped at N-1. All owned containers, networks, volumes and image tags,
+the clone, private files and paired archives were removed. Both protected MinIO
+image tags remained present. Generated-secret/key-ID-shaped scan: 0 hits;
+concrete token-shaped scan: 0 hits.
+
+OPERATIONS corrections: none. Before the successful clean run, harness incidents
+were a 201 expectation for valid 200 registration, Windows tar treating `C:` as a
+remote archive, an override missing a newline, and a command-local autocrlf
+setting that did not persist for later checkouts. Those resources were removed
+and the whole drill repeated from an empty-volume, persistently LF clone.
+The successful run above supersedes that attempt.
+
+Private evidence: `.git/agent-handoffs/driver-rc-revive/evidence/L59/` contains
+`01-start.log`, `02-backup.log`, `04-rotate.log`, `06-grafana.log`,
+`07-rollback.log`, `08-cleanup.log`, `metadata.txt`, `secret-scan.txt` and
+`scripts/`; superseded logs are in `attempt1/`. This drill does not claim an
+archive restore into another stack, a host scheduler installation or a 24-hour
+RPO observation.
+
+
 ## B5c candidate — 2026-11-24 (Windows 11, Docker Desktop)
 
 Source baseline: `140c236b08b311b382ac4489771b84ef16fd0aca`; procedure implemented
