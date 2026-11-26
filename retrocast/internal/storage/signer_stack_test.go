@@ -25,7 +25,7 @@ func TestLeastPrivilegeSignerStack(t *testing.T) {
 	}
 	ctx := context.Background()
 	key, secret := os.Getenv("MINIO_SIGNER_ACCESS_KEY"), os.Getenv("MINIO_SIGNER_SECRET_KEY")
-	if key == "" || secret == "" || key == "retrocast" {
+	if key == "" || secret == "" || key == os.Getenv("MINIO_ACCESS_KEY") {
 		t.Fatal("expected dedicated signer inputs")
 	}
 	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
@@ -116,7 +116,7 @@ func TestLeastPrivilegeSignerStack(t *testing.T) {
 		t.Fatalf("signed GET status %d; byte equality %v", res.StatusCode, bytes.Equal(got, fixture))
 	}
 	t.Logf("Caddy multipart upload 201; signed GET 200 exact %d bytes; credential ID %s (not root)", len(got), id)
-	root, err := minio.New("minio:9000", &minio.Options{Creds: credentials.NewStaticV4("retrocast", os.Getenv("MINIO_ROOT_PASSWORD"), ""), Region: "us-east-1"})
+	root, err := minio.New("minio:9000", &minio.Options{Creds: credentials.NewStaticV4(os.Getenv("MINIO_ACCESS_KEY"), os.Getenv("MINIO_ROOT_PASSWORD"), ""), Region: "us-east-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
