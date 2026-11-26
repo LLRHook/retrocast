@@ -7,10 +7,7 @@ import (
 )
 
 func TestRegistrationMode(t *testing.T) {
-	t.Setenv("DATABASE_URL", "fixture")
-	for _, name := range []string{"JWT_SECRET", "MINIO_SECRET_KEY", "MINIO_SIGNER_SECRET_KEY", "LIVEKIT_API_SECRET"} {
-		t.Setenv(name, strings.Repeat("test-only-", 4))
-	}
+	strongEnvironment(t)
 	t.Setenv("RETROCAST_CONFIG", t.TempDir()+"/absent")
 	for _, mode := range []string{"", "open", "invite", "closed", "public"} {
 		t.Run(mode, func(t *testing.T) {

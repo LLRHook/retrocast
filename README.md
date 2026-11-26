@@ -137,4 +137,4 @@ This project is unlicensed. All rights reserved.
 
 Attachment downloads use 15-minute signed HTTPS URLs through Caddy. Set `DOMAIN` in `retrocast/.env` to the public hostname (default `localhost`, no scheme, path or port); Compose passes it to both Caddy and the API. Set `MINIO_REGION` consistently (default `us-east-1`). Only the `retrocast` bucket download path is proxied; MinIO remains private.
 
-Existing deployments: add `MINIO_SIGNER_ACCESS_KEY` and `MINIO_SIGNER_SECRET_KEY` before upgrading; see [attachment signing operations](docs/OPERATIONS.md). New installs run `bash scripts/init-env.sh`; the example is a template whose placeholders are rejected at startup.
+Existing deployments: add `MINIO_SIGNER_ACCESS_KEY`, `MINIO_SIGNER_SECRET_KEY` and `GRAFANA_ADMIN_PASSWORD` before upgrading; see [attachment signing operations](docs/OPERATIONS.md). New installs run `bash scripts/init-env.sh`; the example is a template whose placeholders are rejected at startup. Every secret under 32 characters, even an otherwise strong one, stops startup with a variable-only error.

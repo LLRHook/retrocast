@@ -11,7 +11,7 @@ import (
 
 func TestSecretStartupPolicy(t *testing.T) {
 	keys := []string{"JWT_SECRET", "MINIO_SECRET_KEY", "MINIO_SIGNER_SECRET_KEY", "LIVEKIT_API_SECRET"}
-	strong := strings.Repeat("test-only-", 4)
+	strong := freshSecret(t)
 	for _, key := range keys {
 		for _, bad := range []string{"", "short", "change-me-in-production", "changeme", "devsecret", "signer-changeme"} {
 			t.Run(key+fmt.Sprint(len(bad)), func(t *testing.T) {
@@ -45,14 +45,14 @@ func TestSecretStartupPolicy(t *testing.T) {
 	if err := ValidateSecrets(map[string]string{"fixture": strings.Repeat("?", 31)}); err == nil {
 		t.Fatal("31 multibyte characters accepted")
 	}
-	if err := ValidateSecrets(map[string]string{"fixture": strings.Repeat("?", 32)}); err != nil {
+	if err := ValidateSecrets(map[string]string{"fixture": randomUnicode(t)}); err != nil {
 		t.Fatal("32 multibyte characters refused")
 	}
 }
 
 func TestComposeSecretPolicy(t *testing.T) {
 	keys := []string{"JWT_SECRET", "MINIO_SECRET_KEY", "MINIO_SIGNER_SECRET_KEY", "LIVEKIT_API_SECRET", "POSTGRES_PASSWORD", "MINIO_ROOT_PASSWORD", "GRAFANA_ADMIN_PASSWORD"}
-	strong := strings.Repeat("compose-test-", 3)
+	strong := freshSecret(t)
 	for _, key := range keys {
 		t.Setenv(key, strong)
 	}
@@ -114,5 +114,18 @@ func TestInitEnvironmentFile(t *testing.T) {
 	after, _ := os.ReadFile(path)
 	if string(before) != string(after) {
 		t.Fatal("existing environment changed")
+	}
+}
+
+func TestInitEnvironmentWindowsWarning(t *testing.T) {
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "uname"), []byte("#!/bin/sh\necho MSYS_NT-10.0\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	cmd := exec.Command("bash", "../../scripts/init-env.sh", filepath.Join(t.TempDir(), ".env"))
+	out, err := cmd.CombinedOutput()
+	if err != nil || !strings.Contains(string(out), "NTFS") || strings.Contains(string(out), "Created private") {
+		t.Fatal("missing Windows permissions warning")
 	}
 }

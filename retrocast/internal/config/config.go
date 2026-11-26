@@ -82,8 +82,13 @@ func Load() *Config {
 	}
 
 	values := map[string]string{"JWT_SECRET": cfg.JWTSecret, "MINIO_SECRET_KEY": cfg.MinIOSecretKey, "MINIO_SIGNER_SECRET_KEY": cfg.MinIOSignerSecretKey, "LIVEKIT_API_SECRET": cfg.LiveKitAPISecret}
-	credentialPasswords(values, cfg.DatabaseURL, cfg.RedisURL)
+	if err := credentialPasswords(values, cfg.DatabaseURL, cfg.RedisURL); err != nil {
+		panic(err.Error())
+	}
 	if err := ValidateSecrets(values); err != nil {
+		panic(err.Error())
+	}
+	if err := validateMinIOHost(cfg.MinIOAccessKey, map[string]string{"MINIO_SECRET_KEY": cfg.MinIOSecretKey}); err != nil {
 		panic(err.Error())
 	}
 	return cfg

@@ -41,4 +41,7 @@ done < "$server_dir/.env.example"
 exec 3>&-
 chmod 600 "$destination"
 trap - EXIT
-echo 'Created private environment file. Keep it private; see docs/OPERATIONS.md before upgrading an existing data volume.'
+case "$(uname -s)" in
+ MSYS*|MINGW*|CYGWIN*) echo 'Created environment file. Warning: mode 600 cannot enforce NTFS permissions here; restrict the file ACL to the operator. See docs/OPERATIONS.md before upgrading an existing volume.';;
+ *) echo 'Created private environment file. Keep it private; see docs/OPERATIONS.md before upgrading an existing data volume.';;
+esac
