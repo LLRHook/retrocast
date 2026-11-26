@@ -431,3 +431,4 @@ together with the iOS client (Q-025); APNs is the one optional outside service G
 | 27 | 2026-11-24T14:31:40-05:00 | 23ec2de281ea | REVISION | B8 round 2: required response fields document existing non-omitempty emission within REST 2.2.0 |
 | 28 | 2026-11-26T05:26:29-05:00 | e6a0d837dd0f | REVISION | D17 B11 PR #92: VIEW_CHANNEL on REST messages and uploads; current membership for edit/delete (#80, #84); typing contract reconciled |
 | 29 | 2026-11-26T06:52:37-05:00 | 32f7a6437424 | REVISION | D16: dedicated least-privilege signer and argv-safe bootstrap; required credentials; SV-NFR-008 / ADR-019 |
+| 30 | 2026-11-26T07:07:55-05:00 | 152aa153c9b9 | REVISION | D17 #79 round 3: selected-value startup gate, MC_HOST compatibility, private generation and rotation-aware rollback |

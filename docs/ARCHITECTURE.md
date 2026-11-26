@@ -464,3 +464,4 @@ rotation before replacing the deployment environment (OPERATIONS).
 | 25 | 2026-11-26T05:26:29-05:00 | e6a0d837dd0f | REVISION | D17 B11 PR #92: VIEW_CHANNEL on REST messages and uploads; current membership for edit/delete (#80, #84); typing contract reconciled |
 | 26 | 2026-11-26T06:34:49-05:00 | ca3c0693a9a2 | REVISION | D16/D19: pinned MinIO source availability and corrected operator/redistribution guidance |
 | 27 | 2026-11-26T06:52:37-05:00 | 32f7a6437424 | REVISION | D16: dedicated least-privilege signer and argv-safe bootstrap; required credentials; SV-NFR-008 / ADR-019 |
+| 28 | 2026-11-26T07:07:55-05:00 | 152aa153c9b9 | REVISION | D17 #79 round 3: selected-value startup gate, MC_HOST compatibility, private generation and rotation-aware rollback |
