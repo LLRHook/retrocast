@@ -10,6 +10,11 @@ Attachment signing (SV-NFR-008, ADR-019): before upgrading, add
 `MINIO_SIGNER_ACCESS_KEY` and `MINIO_SIGNER_SECRET_KEY` to `.env`, then run the
 usual `docker compose up -d --build`. Use a new account ID distinct from the
 root user and `MINIO_ACCESS_KEY`. `.env.example` includes development placeholders.
+The pinned mc client parses MC_HOST credentials literally, without URL decoding.
+Root key IDs cannot contain colon, LF or ASCII control characters other than HTAB;
+root passwords cannot contain colon or LF. Rotate incompatible MINIO_ACCESS_KEY
+or MINIO_ROOT_PASSWORD with init-env-style values first. #91 refuses these in
+init; #94 also refuses them in the shared startup validator before consumers start.
 Missing or empty signer credentials fail Compose and API storage initialization
 in every environment; there is no root fallback.
 

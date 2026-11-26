@@ -6,10 +6,18 @@ set -eu
 : "${MINIO_ROOT_USER:?required}"
 : "${MINIO_ROOT_PASSWORD:?required}"
 [ "$MINIO_SIGNER_ACCESS_KEY" != "$MINIO_ROOT_USER" ] || { echo 'Signer must be a dedicated account' >&2; exit 1; }
+# Backstop for the pinned MC_HOST parser and HTTP credential headers.
+# PR #94 also rejects these in the shared validator before services start.
+newline='
+'
+case "$MINIO_ROOT_USER" in *:*|*"$newline"*) echo 'MINIO_ROOT_USER contains an unsupported character; rotate MINIO_ACCESS_KEY' >&2; exit 1;; esac
+if printf '%s' "$MINIO_ROOT_USER" | LC_ALL=C tr -d '\011' | LC_ALL=C grep -q '[[:cntrl:]]'; then
+ echo 'MINIO_ROOT_USER contains an unsupported control character; rotate MINIO_ACCESS_KEY' >&2; exit 1
+fi
+case "$MINIO_ROOT_PASSWORD" in *:*|*"$newline"*) echo 'MINIO_ROOT_PASSWORD contains an unsupported character; rotate it' >&2; exit 1;; esac
 trap 'echo "MinIO signer initialization failed" >&2' EXIT
-# Encode through stdin-only utilities so punctuation in credentials is safe too.
-encode() { printf '%s' "$1" | od -An -tx1 | tr -d ' \n' | sed 's/../%&/g'; }
-export MC_HOST_local="http://$(encode "$MINIO_ROOT_USER"):$(encode "$MINIO_ROOT_PASSWORD")@minio:9000"
+# MC_HOST is parsed literally by the pinned client; do not URL-encode it.
+export MC_HOST_local="http://${MINIO_ROOT_USER}:${MINIO_ROOT_PASSWORD}@minio:9000"
 n=0
 until mc ready local >/dev/null 2>&1; do
  n=$((n+1)); [ "$n" -lt 60 ] || exit 1
