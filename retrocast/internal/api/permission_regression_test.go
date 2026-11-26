@@ -272,7 +272,7 @@ func TestPermissionRegressionTyping(t *testing.T) {
 	for _, kind := range []string{"guild", "dm", "unknown"} {
 		for _, actor := range []int64{100, 200, 300, 400, 500} {
 			t.Run(fmt.Sprintf("%s/%d", kind, actor), func(t *testing.T) {
-				g, m, r, o := permMocks(permissions.PermSendMessages)
+				g, m, r, o := permMocks(permissions.PermSendMessages | permissions.PermViewChannel)
 				g.GetByIDFn = func(context.Context, int64) (*models.Guild, error) { return &models.Guild{OwnerID: 100}, nil }
 				m.GetByGuildAndUserFn = func(_ context.Context, g, u int64) (*models.Member, error) {
 					if u == 500 {
@@ -371,7 +371,7 @@ func TestPermissionRegressionTypingRoute(t *testing.T) {
 	prometheus.DefaultGatherer = registry
 	t.Cleanup(func() { prometheus.DefaultRegisterer = oldRegisterer; prometheus.DefaultGatherer = oldGatherer })
 
-	g, m, r, o := permMocks(permissions.PermSendMessages)
+	g, m, r, o := permMocks(permissions.PermSendMessages | permissions.PermViewChannel)
 	m.GetByGuildAndUserFn = func(context.Context, int64, int64) (*models.Member, error) { return nil, nil }
 	h := newMessageHandler(&mockMessageRepo{}, channelMock(), m, r, g, o, &mockGateway{})
 	ts := auth.NewTokenService("local-routing-test")

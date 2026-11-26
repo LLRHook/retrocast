@@ -404,10 +404,7 @@ func TestGetMessage_WrongChannel(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestEditMessage_AsAuthor(t *testing.T) {
-	guilds := &mockGuildRepo{}
-	members := &mockMemberRepo{}
-	roles := &mockRoleRepo{}
-	overrides := &mockChannelOverrideRepo{}
+	guilds, members, roles, overrides := permMocks(permissions.PermViewChannel)
 	channels := channelMock()
 	gw := &mockGateway{}
 
@@ -457,10 +454,7 @@ func TestEditMessage_AsAuthor(t *testing.T) {
 }
 
 func TestEditMessage_NotAuthor(t *testing.T) {
-	guilds := &mockGuildRepo{}
-	members := &mockMemberRepo{}
-	roles := &mockRoleRepo{}
-	overrides := &mockChannelOverrideRepo{}
+	guilds, members, roles, overrides := permMocks(permissions.PermViewChannel)
 	channels := channelMock()
 	gw := &mockGateway{}
 
@@ -495,10 +489,7 @@ func TestEditMessage_NotAuthor(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestDeleteMessage_AsAuthor(t *testing.T) {
-	guilds := &mockGuildRepo{}
-	members := &mockMemberRepo{}
-	roles := &mockRoleRepo{}
-	overrides := &mockChannelOverrideRepo{}
+	guilds, members, roles, overrides := permMocks(permissions.PermViewChannel)
 	channels := channelMock()
 	gw := &mockGateway{}
 

@@ -179,7 +179,7 @@ func (f *fakeTypingStore) SetTyping(context.Context, int64, int64) error { f.cal
 func TestTypingMarkerAuthorization(t *testing.T) {
 	for _, mode := range []string{"allowed", "refused", "storeFailure"} {
 		t.Run(mode, func(t *testing.T) {
-			bits := permissions.PermSendMessages
+			bits := permissions.PermSendMessages | permissions.PermViewChannel
 			if mode == "refused" {
 				bits = 0
 			}
