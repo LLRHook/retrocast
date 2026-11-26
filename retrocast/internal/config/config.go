@@ -81,6 +81,11 @@ func Load() *Config {
 		panic(fmt.Sprintf("required environment variables not set: %s", strings.Join(missing, ", ")))
 	}
 
+	values := map[string]string{"JWT_SECRET": cfg.JWTSecret, "MINIO_SECRET_KEY": cfg.MinIOSecretKey, "MINIO_SIGNER_SECRET_KEY": cfg.MinIOSignerSecretKey, "LIVEKIT_API_SECRET": cfg.LiveKitAPISecret}
+	credentialPasswords(values, cfg.DatabaseURL, cfg.RedisURL)
+	if err := ValidateSecrets(values); err != nil {
+		panic(err.Error())
+	}
 	return cfg
 }
 

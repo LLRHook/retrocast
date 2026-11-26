@@ -9,7 +9,8 @@ Redis is intentionally excluded (ADR-018). Backups remain on this host.
 Attachment signing (SV-NFR-008, ADR-019): before upgrading, add
 `MINIO_SIGNER_ACCESS_KEY` and `MINIO_SIGNER_SECRET_KEY` to `.env`, then run the
 usual `docker compose up -d --build`. Use a new account ID distinct from the
-root user and `MINIO_ACCESS_KEY`. `.env.example` includes development placeholders.
+root user and `MINIO_ACCESS_KEY`. `.env.example` is a template only; its placeholders are refused. Run
+`bash scripts/init-env.sh` for a new install.
 The pinned mc client parses MC_HOST credentials literally, without URL decoding.
 Root key IDs cannot contain colon, LF or ASCII control characters other than HTAB;
 root passwords cannot contain colon or LF. Rotate incompatible MINIO_ACCESS_KEY
@@ -191,3 +192,69 @@ broaden the signer policy to support diagnostic client discovery.
 Use the ordinary Allow statement without NotAction: the pinned server can accept
 a NotAction policy at runtime but fails to reload it from disk. Restart and restore
 checks must include a real signer GET, not only root-based /health.
+
+Startup secret policy (SV-NFR-002, #79): every configured secret must have at
+least 32 characters and must not equal a committed placeholder. The API checks
+JWT_SECRET, MINIO_SECRET_KEY, MINIO_SIGNER_SECRET_KEY and LIVEKIT_API_SECRET,
+plus passwords embedded in DATABASE_URL or REDIS_URL when supplied. Key IDs are
+identifiers, not secrets. The Compose `env-check` subcommand additionally checks
+POSTGRES_PASSWORD, MINIO_ROOT_PASSWORD and GRAFANA_ADMIN_PASSWORD, requires the
+MinIO root/write secret pair to match, and gates API, Postgres, MinIO, LiveKit and
+Grafana startup. It runs the same repository API image without opening connections.
+Errors name variables only. No development bypass exists. Go tests use separate
+long test-only values and the generator test proves real generated values work.
+
+New installations, from `retrocast/`:
+
+```sh
+bash scripts/init-env.sh
+docker compose up -d --build
+```
+
+The script requires Bash and openssl, refuses an existing destination, prints no
+values and writes `.env` with mode 600. It generates 33 characters (a letter plus 32 hexadecimal characters)
+for each secret and 20 for key IDs. These fit the pinned MinIO credential rules
+and LiveKit's YAML string map. MINIO_ROOT_USER in both MinIO services comes from
+the same MINIO_ACCESS_KEY used by the API write client. The dedicated signer
+uses MINIO_SIGNER_ACCESS_KEY / MINIO_SIGNER_SECRET_KEY. Protect the environment
+file and its backups; on Windows also restrict its NTFS ACL to the operator.
+
+Existing deployments with strong credentials keep them; do not run the init
+script over the deployed environment. Placeholder deployments now refuse to
+start. Plan a maintenance window and take a private backup before rotation:
+
+1. Stop API, LiveKit and MinIO writers. Prepare a private replacement `.env`
+   outside the deployed path with `bash scripts/init-env.sh /private/new.env`;
+   retain operator settings (DOMAIN, origins, registration, storage region,
+   LiveKit endpoint and resource names). Never paste secret values into logs.
+2. Postgres: POSTGRES_PASSWORD applies only when the volume is initialized.
+   Before replacing the environment, connect over the local socket with
+   `docker compose exec db psql -U retrocast retrocast` and run `\password retrocast`.
+   Enter the new POSTGRES_PASSWORD privately twice; this issues ALTER ROLE on
+   the existing database. Update DATABASE_URL's password consistently for any
+   direct server process. Do not recreate the database volume.
+3. MinIO: stop MinIO, replace MINIO_ACCESS_KEY and both MINIO_SECRET_KEY and
+   MINIO_ROOT_PASSWORD together, then recreate it. The pinned October release
+   takes root credentials from the environment on startup, including existing
+   data volumes; objects and IAM configuration remain. Recreate minio-init to
+   update the dedicated signing user's secret and policy. Retire any old signer
+   account after its 15-minute URLs expire if its key ID changed; do not retain
+   a known compromised account. Keep original credentials only in a protected
+   rollback record until the release drill is complete.
+4. LiveKit: update LIVEKIT_API_KEY / LIVEKIT_API_SECRET and recreate the service;
+   old signed tokens cease to authenticate. Active voice sessions may reconnect.
+5. JWT: changing JWT_SECRET invalidates access tokens and ends existing sessions;
+   clear the Redis refresh-token state or restart with an empty Redis token
+   store during the maintenance window to force everyone to sign in again.
+6. Grafana: GF_SECURITY_ADMIN_PASSWORD initializes only a new Grafana database.
+   For an existing volume run `docker compose exec grafana grafana cli admin
+   reset-admin-password --password-from-stdin` and supply the new value privately;
+   then update GRAFANA_ADMIN_PASSWORD consistently. This covers #88's default
+   Grafana password; the LiveKit token lifetime portion remains open.
+7. Install the replacement `.env` with mode 600, then run
+   `docker compose up -d --build --force-recreate`. Check env-check exits 0,
+   /health returns 200, attachment upload/download works, and sign in again.
+
+The old-value Postgres and MinIO volumes were exercised in L48's round-2 rotation
+check before this requirement was marked implemented. Changing `.env` alone does
+not rotate an existing Postgres or Grafana database password.

@@ -28,6 +28,13 @@ import (
 )
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "check-env" {
+		if err := config.CheckEnvironment(); err != nil {
+			slog.Error("startup refused", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
 	cfg := config.Load()
 
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.LogLevel})))
