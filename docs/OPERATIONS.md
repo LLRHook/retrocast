@@ -7,15 +7,20 @@ keep the destination private, outside the checkout, and monitor job exit status.
 Redis is intentionally excluded (ADR-018). Backups remain on this host.
 
 Attachment signing (SV-NFR-008, ADR-019): before upgrading, add
-`MINIO_SIGNER_ACCESS_KEY` and `MINIO_SIGNER_SECRET_KEY` to `.env`, then run the
-usual `docker compose up -d --build`. Use a new account ID distinct from the
-root user and `MINIO_ACCESS_KEY`. `.env.example` includes development placeholders.
+`MINIO_SIGNER_ACCESS_KEY`, `MINIO_SIGNER_SECRET_KEY` and `GRAFANA_ADMIN_PASSWORD`
+to `.env`, then run the
+usual `docker compose up -d --build`. For every Grafana volume initialized before
+this change, also perform the mandatory admin reset below, even if other secrets
+already meet the policy. Adding the variable does not reset an existing database. Use a new account ID distinct from the
+root user and `MINIO_ACCESS_KEY`. `.env.example` is a template only; its placeholders are refused. Run
+`bash scripts/init-env.sh` for a new install.
 The pinned mc client parses MC_HOST credentials literally, without URL decoding.
 Root key IDs cannot contain colon, LF or ASCII control characters other than HTAB;
 root passwords cannot contain colon or LF. Rotate incompatible MINIO_ACCESS_KEY
 or MINIO_ROOT_PASSWORD with init-env-style values first. #91 refuses these in
 init; #94 also refuses them in the shared startup validator before consumers start.
-Missing or empty signer credentials fail Compose and API storage initialization
+Every secret under 32 characters, including an otherwise strong 20-31-character
+value, now refuses startup by variable name. Missing or empty signer credentials fail Compose and API storage initialization
 in every environment; there is no root fallback.
 
 The one-shot `minio-init` uses Compose's existing root credentials, waits for MinIO,
@@ -30,8 +35,20 @@ Keep the two variables with the deployment configuration on restore. The MinIO
 volume archive includes `.minio.sys` IAM configuration; backup/restore scripts
 and the isolated restore-drill procedure remain unchanged. After restoring an
 older archive without the account, run `docker compose up -d minio-init` before
-starting the API. Rollback to `b1514a3` ignores the new account and variables and
-uses its original signer; keep original root credentials unchanged.
+starting the API. After rotation, rollback to `b1514a3` must keep the rotated
+secrets: do not restore the old placeholder `.env`. Before upgrading or rotating,
+run `docker image inspect minio/minio:latest`. Rollback requires that image cached
+locally because Docker Hub no longer serves it. If absent, stop the upgrade and
+obtain a trusted saved image from the existing deployment (`docker save`/`docker load`),
+or agree on a separately tested recovery plan before proceeding. Privately record the forward
+MINIO_ACCESS_KEY identifier, set MINIO_ACCESS_KEY to `retrocast` (that revision's
+hardcoded root user), check out `b1514a3`, then run
+`docker compose up -d --build`. Rebuilding is required: the project API image tag
+otherwise reuses the newer binary. Keep the same project, volumes and region.
+Verify `/health` 200 and exact attachment bytes. To roll forward, check out the
+approved new revision, restore the recorded MINIO_ACCESS_KEY identifier, then run
+`docker compose up -d --build --force-recreate`; verify health and attachments
+again. Postgres keeps its rotated role password throughout both directions.
 Go unit tests use explicit fixture signer arguments; the opt-in stack test reads
 signer variables from its environment. CI does not start MinIO or require signer
 variables for ordinary Go tests.
@@ -191,3 +208,103 @@ broaden the signer policy to support diagnostic client discovery.
 Use the ordinary Allow statement without NotAction: the pinned server can accept
 a NotAction policy at runtime but fails to reload it from disk. Restart and restore
 checks must include a real signer GET, not only root-based /health.
+
+Startup secret policy (SV-NFR-002, #79): every configured secret must have at
+least 32 characters and must not equal a committed placeholder. The API checks
+JWT_SECRET, MINIO_SECRET_KEY, MINIO_SIGNER_SECRET_KEY and LIVEKIT_API_SECRET,
+plus passwords embedded in DATABASE_URL or REDIS_URL. URL userinfo requires a
+password. Only postgres/postgresql and redis/rediss connection URLs are supported;
+keyword DSNs are refused by variable name. Key IDs are
+identifiers, not secrets. The Compose `env-check` subcommand additionally checks
+POSTGRES_PASSWORD, MINIO_ROOT_PASSWORD and GRAFANA_ADMIN_PASSWORD, requires the
+MinIO root/write secret pair to match, and gates API, Postgres, MinIO, LiveKit and
+Grafana startup. It runs the same repository API image without opening connections.
+Errors name variables only. No development bypass exists. Committed CI/test secrets
+are also refused; positive startup tests use fresh random values and the generator test proves real generated values work.
+
+New installations, from `retrocast/`:
+
+```sh
+bash scripts/init-env.sh
+docker compose up -d --build
+```
+
+The script requires Bash and openssl, refuses an existing destination, prints no
+values and writes `.env` with mode 600. It generates 33 characters (a letter plus 32 hexadecimal characters)
+for each secret and 20 for key IDs. These fit the pinned MinIO credential rules
+and LiveKit's YAML string map. MINIO_ROOT_USER in both MinIO services comes from
+the same MINIO_ACCESS_KEY used by the API write client. The dedicated signer
+uses MINIO_SIGNER_ACCESS_KEY / MINIO_SIGNER_SECRET_KEY. Protect the environment
+file and its backups. MSYS, MINGW and Cygwin cannot enforce mode 600 through
+NTFS: the script prints a warning there; restrict the file ACL to the operator.
+
+Mandatory Grafana upgrade reset: for **every Grafana volume initialized before
+this change**, supply the new GRAFANA_ADMIN_PASSWORD privately on stdin after
+upgrading, even when all other secrets are already strong:
+
+```sh
+docker exec -i "$(docker compose ps -q grafana)" grafana cli admin reset-admin-password --password-from-stdin
+```
+
+Enter the value from the private deployment environment, then end stdin. Verify
+that signing in to Grafana as admin accepts the new value and refuses the old
+committed default. Do not consider the upgrade complete until the old default
+is refused. The rotation procedure below resets the same stored password before
+recreation; it also requires this login check.
+
+Existing deployments whose secrets already have at least 32 characters and are
+not committed values keep them; do not run the init script over the deployed
+environment. Placeholder deployments now refuse to start. Add the required
+GRAFANA_ADMIN_PASSWORD even when Grafana was initialized previously. Plan a
+maintenance window and take a private backup before rotation. Run the following
+in order, using the same project, volume names and Compose overrides throughout:
+
+1. On the running old revision, record the existing service container IDs before
+   changing code: `db_id=$(docker compose ps -q db)`,
+   `redis_id=$(docker compose ps -q redis)` and
+   `grafana_id=$(docker compose ps -q grafana)`. Stop API and LiveKit with
+   `docker compose stop api livekit`; stop other application writers. Check out
+   the approved new revision while those data services keep running. Prepare a
+   private replacement file with `bash scripts/init-env.sh /private/new.env`;
+   retain operator settings (DOMAIN, origins, registration, region and endpoints).
+   Keep the deployed old `.env` in place until step 5. Do not invoke the new
+   Compose configuration with that old file: interpolation and env-check refuse it.
+2. Postgres: POSTGRES_PASSWORD applies only on volume initialization. Connect to
+   the already running container with `docker exec -it "$db_id" psql -U retrocast retrocast`
+   and run `\password retrocast`. Enter the replacement POSTGRES_PASSWORD privately
+   twice; this issues ALTER ROLE inside the existing volume. Update any external
+   DATABASE_URL to the same password. Do not recreate the database volume.
+3. JWT: the new JWT_SECRET ends access-token sessions. Clear refresh tokens on
+   the running old Redis with `docker exec "$redis_id" redis-cli FLUSHDB`.
+   This database is dedicated to Retrocast transient state (ADR-018); all users
+   must sign in again. Grafana's environment password only initializes a new
+   database: run `docker exec -i "$grafana_id" grafana cli admin reset-admin-password --password-from-stdin`
+   and supply the replacement GRAFANA_ADMIN_PASSWORD privately on stdin. This
+   covers #88's default Grafana password; its LiveKit token lifetime remains open.
+4. Confirm the replacement file changes MINIO_ACCESS_KEY and both
+   MINIO_SECRET_KEY / MINIO_ROOT_PASSWORD together (the two secrets must match),
+   plus LIVEKIT_API_KEY / LIVEKIT_API_SECRET and the dedicated signer pair.
+   The pinned October MinIO release reads root credentials on startup even on
+   existing volumes. LiveKit's recreated service rejects old tokens; voice sessions
+   may reconnect. Record the previous signer key ID if this version had one.
+5. Install the replacement as `.env` with private permissions, then run
+   `docker compose up -d --build --force-recreate`. This recreates MinIO and
+   minio-init together with the new root credentials; init updates the new signer
+   and policy. Check env-check exits 0. Do not start a partial new configuration
+   before installing the replacement file.
+6. If the signer key ID changed, disable the old account now, replacing the
+   identifier placeholder with its recorded key ID:
+
+   ```sh
+   docker compose exec -T minio sh -c 'MC_HOST_local="http://${MINIO_ROOT_USER}:${MINIO_ROOT_PASSWORD}@localhost:9000" mc admin user disable local <old-signer-key-id>'
+   ```
+
+   Replace the whole `<old-signer-key-id>` token, including angle brackets, before
+   running. The single quotes keep root credentials expanding inside the container,
+   off host argv; mc is supplied by that image and uses the private local endpoint.
+   A b1514a3 installation has no dedicated signer to disable. Confirm `/health`
+   200, sign in again, upload an attachment and verify exact signed-download bytes.
+
+The Postgres and MinIO rotations and rollback/forward sequence are verified on
+volumes created under b1514a3's placeholder configuration. Changing `.env` alone
+does not rotate an existing Postgres or Grafana database password.

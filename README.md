@@ -60,7 +60,7 @@ migrations/            SQL schema migrations (up/down)
 
 ```bash
 cd retrocast
-cp .env.example .env # replace development secrets before exposing the host
+bash scripts/init-env.sh # create a private .env with fresh secrets
 docker compose up --build
 ```
 
@@ -107,9 +107,9 @@ In `open` mode the server ignores `invite_code`; use API-050 after registering t
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DATABASE_URL` | `postgres://retrocast:password@localhost:5432/retrocast?sslmode=disable` | PostgreSQL connection string |
+| `DATABASE_URL` | generated local URL | PostgreSQL connection string with a strong password |
 | `REDIS_URL` | `redis://localhost:6379` | Redis connection string |
-| `JWT_SECRET` | `change-me-in-production` | Secret for signing JWT tokens |
+| `JWT_SECRET` | generated | At least 32 characters; template placeholders are refused |
 | `REGISTRATION_MODE` | `invite` | `open`, `invite` or `closed`; unknown values stop startup |
 | `ALLOWED_ORIGINS` | empty | Comma-separated additional browser origins, e.g. `http://localhost:5173` |
 | `SERVER_ADDR` | `:8080` | HTTP listen address |
@@ -137,4 +137,4 @@ This project is unlicensed. All rights reserved.
 
 Attachment downloads use 15-minute signed HTTPS URLs through Caddy. Set `DOMAIN` in `retrocast/.env` to the public hostname (default `localhost`, no scheme, path or port); Compose passes it to both Caddy and the API. Set `MINIO_REGION` consistently (default `us-east-1`). Only the `retrocast` bucket download path is proxied; MinIO remains private.
 
-Existing deployments: add `MINIO_SIGNER_ACCESS_KEY` and `MINIO_SIGNER_SECRET_KEY` before upgrading; see [attachment signing operations](docs/OPERATIONS.md). New installs use the development placeholders in `.env.example`.
+Existing deployments: add `MINIO_SIGNER_ACCESS_KEY`, `MINIO_SIGNER_SECRET_KEY` and `GRAFANA_ADMIN_PASSWORD` before upgrading; every existing Grafana volume also needs the mandatory admin password reset and old-default refusal check in [attachment signing operations](docs/OPERATIONS.md). New installs run `bash scripts/init-env.sh`; the example is a template whose placeholders are rejected at startup. Every secret under 32 characters, even an otherwise strong one, stops startup with a variable-only error.

@@ -7,8 +7,7 @@ import (
 )
 
 func TestRegistrationMode(t *testing.T) {
-	t.Setenv("DATABASE_URL", "fixture")
-	t.Setenv("JWT_SECRET", "fixture")
+	strongEnvironment(t)
 	t.Setenv("RETROCAST_CONFIG", t.TempDir()+"/absent")
 	for _, mode := range []string{"", "open", "invite", "closed", "public"} {
 		t.Run(mode, func(t *testing.T) {

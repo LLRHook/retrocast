@@ -13,7 +13,7 @@ jobs:
         image: postgres:17
         env:
           POSTGRES_USER: retrocast
-          POSTGRES_PASSWORD: password
+          POSTGRES_PASSWORD: retrocast-ci-postgres-test-only-2026
           POSTGRES_DB: retrocast
         ports:
           - 5432:5432
@@ -39,7 +39,7 @@ jobs:
       - name: Run migrations
         working-directory: retrocast
         env:
-          DATABASE_URL: postgres://retrocast:password@localhost:5432/retrocast?sslmode=disable
+          DATABASE_URL: postgres://retrocast:retrocast-ci-postgres-test-only-2026@localhost:5432/retrocast?sslmode=disable
         run: go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest -path=migrations -database "$DATABASE_URL" up
       - name: Build pinned MinIO and mc from source
         run: docker build --pull -f retrocast/Dockerfile.minio -t retrocast-minio:ci retrocast
@@ -52,7 +52,7 @@ jobs:
       - name: Run tests
         working-directory: retrocast
         env:
-          DATABASE_URL: postgres://retrocast:password@localhost:5432/retrocast?sslmode=disable
+          DATABASE_URL: postgres://retrocast:retrocast-ci-postgres-test-only-2026@localhost:5432/retrocast?sslmode=disable
           REDIS_URL: redis://localhost:6379
         run: go test -v -race ./...
       - name: Build

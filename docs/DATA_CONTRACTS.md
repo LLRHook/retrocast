@@ -19,29 +19,35 @@ The server reads configuration from environment variables, which override an opt
 which overrides the defaults (`retrocast/internal/config/config.go`). The file is the first
 found of `$RETROCAST_CONFIG`, `./retrocast.toml` and `/etc/retrocast/config.toml`. It holds
 `KEY = VALUE` lines: lines starting with `#` or `[` are skipped and surrounding quotes are
-removed, so it is a flat subset of TOML. If `DATABASE_URL` or `JWT_SECRET` is missing the
-server stops at start with an error naming the keys.
+removed, so it is a flat subset of TOML. Missing `DATABASE_URL` or unsafe required secrets stop startup with an error naming
+the keys. SV-NFR-002 defines the shared secret policy; Compose consumers wait for
+the API image's `check-env` command to complete successfully.
 
 | Key | Required | Purpose |
 |---|---|---|
 | `DATABASE_URL` | yes | PostgreSQL connection string |
-| `JWT_SECRET` | yes | HMAC key for access tokens (no minimum length is enforced) |
+| `JWT_SECRET` | yes | HMAC key for access tokens; required, at least 32 characters, no committed placeholders (SV-NFR-002) |
 | `REDIS_URL` | no | Redis connection (default `redis://localhost:6379`) |
 | `SERVER_ADDR` | no | Listen address (default `:8080`; compose keeps it internal) |
 | `LOG_LEVEL` | no | slog level (default `info`) |
 | `REGISTRATION_MODE` | no | `open`, `invite` or `closed` (default `invite`); any other value stops the server at start (SV-FR-062). Implemented in PR #54; validated at startup |
 | `ALLOWED_ORIGINS` | no | Comma-separated browser origins allowed besides the server's own (SV-NFR-011). Read from environment or config file; empty by default; exact scheme/host/effective-port match, no wildcards |
 | `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY` | yes for uploads | Object store; bucket `retrocast` is created at start |
-| `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | yes for voice | Token minting (§7.1) |
+| `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | secret required at startup | Token minting (§7.1) |
 | `MINIO_SIGNER_ACCESS_KEY`, `MINIO_SIGNER_SECRET_KEY` | yes | Dedicated download signer, required in all environments; no root fallback (SV-NFR-008, ADR-019) |
-| `POSTGRES_PASSWORD`, `MINIO_ROOT_PASSWORD` | compose only | Service passwords used by `docker-compose.yml` |
+| `POSTGRES_PASSWORD`, `MINIO_ROOT_PASSWORD` | compose only | Required strong service passwords checked by `check-env`; root/write MinIO secret values must match |
 | `DOMAIN` | Caddy only | Site address in `retrocast/Caddyfile` (default `localhost`) |
-| `GRAFANA_ADMIN_PASSWORD` | compose only | Grafana admin password (`docker-compose.yml` falls back to a development default) |
+| `GRAFANA_ADMIN_PASSWORD` | compose only | Required strong Grafana admin password checked before Compose startup |
 | `BACKUP_DIR` | backup script only | Where `scripts/backup.sh` writes archives (default the current directory) |
 | `SERVER_URL` | CLI only | Base URL for `retrocast-cli health` (default `http://localhost:8080`; set it to the public `https://` address for compose) |
 
-Values come from `retrocast/.env` (template `retrocast/.env.example`). The example files hold
-development defaults; they are not repeated here.
+Values come from `retrocast/.env` (template `retrocast/.env.example`). The example files are templates whose secret placeholders are rejected.
+Run `scripts/init-env.sh` for private generated values; see OPERATIONS for
+existing-volume credential rotation. Key IDs are not secrets; userinfo in database or Redis URLs requires a password
+following SV-NFR-002. Keyword DSNs are refused. Compose explicitly selects the
+same secret values for the gate and consumers, including shell overrides.
+MINIO_ACCESS_KEY and root/write secrets must fit the pinned mc MC_HOST parser;
+see OPERATIONS for the supported character set and rotation.
 
 ## 2. Conceptual model
 
@@ -425,3 +431,4 @@ together with the iOS client (Q-025); APNs is the one optional outside service G
 | 27 | 2026-11-24T14:31:40-05:00 | 23ec2de281ea | REVISION | B8 round 2: required response fields document existing non-omitempty emission within REST 2.2.0 |
 | 28 | 2026-11-26T05:26:29-05:00 | e6a0d837dd0f | REVISION | D17 B11 PR #92: VIEW_CHANNEL on REST messages and uploads; current membership for edit/delete (#80, #84); typing contract reconciled |
 | 29 | 2026-11-26T06:52:37-05:00 | 32f7a6437424 | REVISION | D16: dedicated least-privilege signer and argv-safe bootstrap; required credentials; SV-NFR-008 / ADR-019 |
+| 30 | 2026-11-26T07:07:55-05:00 | 152aa153c9b9 | REVISION | D17 #79 round 3: selected-value startup gate, MC_HOST compatibility, private generation and rotation-aware rollback |

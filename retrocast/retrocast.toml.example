@@ -1,3 +1,4 @@
+# TEMPLATE ONLY: replace every secret with at least 32 characters; placeholders are refused.
 # Retrocast server configuration file.
 #
 # Place this file at one of:
@@ -21,6 +22,8 @@ LOG_LEVEL = "info"
 MINIO_ENDPOINT = "localhost:9000"
 MINIO_ACCESS_KEY = "retrocast"
 MINIO_SECRET_KEY = "changeme"
+MINIO_SIGNER_ACCESS_KEY = "retrocast-signer"
+MINIO_SIGNER_SECRET_KEY = "signer-changeme"
 
 # LiveKit voice server
 LIVEKIT_URL = "ws://localhost:7880"
