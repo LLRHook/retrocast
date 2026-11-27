@@ -257,7 +257,7 @@ ARCHITECTURE §8.
 | WCAG | Web Content Accessibility Guidelines |
 | RPO | Recovery point objective: the most data, in time, a restore may lose |
 
-Run 3 round 2 candidate `511b8cd`: [Pilot validation record](validation/pilot-2026-11-24.md). All 106 Musts other than SYS-FR-002 are Verified; the operator host schedule over 24 hours remains an owner action.
+Run 3 round 2 candidate `511b8cd`: [Pilot validation record](validation/pilot-2026-11-24.md). All 107 Musts are now Verified: SYS-FR-002 was Verified on 2026-11-27 from the accepted [D19 systemd timer observation](operations/restore-drills.md#d19-systemd-user-timer-observation--2026-11-27). The run 3 record remains historical, with a dated addendum for this later evidence.
 
 ## Revision history
 | Rev | Date | Commit | Mode | Summary |

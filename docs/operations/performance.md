@@ -1,4 +1,4 @@
-# B5c capacity, latency and monitoring ? 2026-11-24
+# B5c capacity, latency and monitoring — 2026-11-24
 
 Host: Windows 11 with Docker Desktop's Linux engine (Docker 29.9.3), Intel
 Core i7-14700, 20 physical cores / 28 logical processors, 34,110,279,680 bytes

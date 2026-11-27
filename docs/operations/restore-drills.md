@@ -1,5 +1,136 @@
 # Restore drills
 
+## D19 systemd user timer observation — 2026-11-27
+
+PASS on a Linux host with systemd and no cron daemon (Omarchy, Arch Linux).
+The source reports do not give Docker Engine or Compose versions. The stack was
+bound to loopback only, under Compose project `l51rc`; no production resources
+were used. The REST fixture contained one user, one guild, one message and one
+attachment (a 36-byte PDF linked from that message).
+
+The tested application commit was
+`f916c9060fd344d7f5e4f87536db5592e7b751e1`, with the two unit templates from
+PR #90 copied in. Their SHA-256 values equal the blobs on release baseline
+`7f018a3e2344f78bc6199eec1e982f342dce9acd`:
+
+| Template | SHA-256 |
+|---|---|
+| `retrocast/scripts/retrocast-backup.service` | `f19fe36df09b702f630ae6263af4c12e67d832be9bd16087acd0d4ad4531c886` |
+| `retrocast/scripts/retrocast-backup.timer` | `1744ec79cafb4095cbc0bde6b5a43fe3b7a03100c5dbe3217bd1381a7a373a9e` |
+
+`scheduled-backup.sh` and `backup.sh` are unchanged between `f916c90` and
+`7f018a3`; the Compose `backup-tools` service changed only in comments. Other
+Compose services did change, so this is identity of the scheduled backup path,
+not of the entire stack. The D18 rollback drill below also ran
+`scheduled-backup.sh` on the release code. These checks make this observation
+applicable to the release backup path.
+
+Installation followed [OPERATIONS.md](../OPERATIONS.md), substituting only
+paths and the project name, with its documented `COMPOSE_FILE` and
+`COMPOSE_PATH_SEPARATOR` entries for the loopback override. Here `<clone>`
+denotes the clone and `$BACKUP_DIR` the private destination outside it; paths
+in command transcripts are redacted. The destination was created with mode
+700; both units were copied to `~/.config/systemd/user/`. The service used
+`COMPOSE_PROJECT_NAME=l51rc`,
+`COMPOSE_FILE=<clone>/retrocast/docker-compose.yml:<clone>/l51-compose.yml`,
+`COMPOSE_PATH_SEPARATOR=:`, and
+`ExecStart=/bin/bash <clone>/retrocast/scripts/scheduled-backup.sh`.
+Its destination and append-log paths were replaced consistently. `UMask=0077`
+and the timer's daily 03:00 calendar and `Persistent=true` were unchanged.
+The installed timer matched the template; the installed service differed only
+by those documented substitutions and Compose entries.
+
+```sh
+systemd-analyze --user verify ~/.config/systemd/user/retrocast-backup.{service,timer}
+systemctl --user daemon-reload
+systemctl --user start retrocast-backup.service
+systemctl --user show -p Result,ExecMainStatus retrocast-backup.service
+gzip -t "$BACKUP_DIR/backup_20261126_042202.sql.gz" "$BACKUP_DIR/minio_20261126_042202.tar.gz"
+tar -tzf "$BACKUP_DIR/minio_20261126_042202.tar.gz"
+systemctl --user enable --now retrocast-backup.timer
+systemctl --user list-timers retrocast-backup.timer
+```
+
+Unit verification, reload, manual start, gzip and tar checks exited 0. The
+manual service ran at 2026-11-26 04:22:02–04:22:03 EST, returning
+`Result=success` and `ExecMainStatus=0`. Its pair was timestamped
+`20261126_042202`. Timer enablement started and completed at
+2026-11-26 04:22:21 EST, exit 0, with next run 2026-11-27 03:00:00 EST.
+
+At collection on 2026-11-27 04:36:04 EST, 87,223 wall-clock seconds
+(24 h 13 m 43 s, 24.23 h) had passed since enablement. The records showed:
+
+```text
+ActiveState=active
+NextElapseUSecRealtime=Sat 2026-11-28 03:00:00 EST
+LastTriggerUSec=Fri 2026-11-27 03:00:00 EST
+TriggeredBy=retrocast-backup.timer
+Triggers=retrocast-backup.service
+Result=success
+ExecMainStartTimestamp=Fri 2026-11-27 03:00:00 EST
+ExecMainExitTimestamp=Fri 2026-11-27 03:00:00 EST
+ExecMainStatus=0
+```
+
+The user journal recorded service start and finish at 03:00:00. Attribution
+rests on that matching activation, `LastTriggerUSec` and `TriggeredBy`/`Triggers`;
+there was no separate literal timer-trigger line. No manual service start was
+issued during collection. The new pair was:
+
+| Archive | Bytes | Mode | SHA-256 |
+|---|---:|---|---|
+| `backup_20261127_030000.sql.gz` | 3922 | 600 | `4c616a39ae9368f32ef239c3a77e63cbb025fe33276cc62bb8128c1b378dc03c` |
+| `minio_20261127_030000.tar.gz` | 10332 | 600 | `9a4243ace0e9b4dab3d6493fb7b3c9180192619ddedbda48e599270e5e7531ee` |
+
+`$BACKUP_DIR` was mode 700 and `backup.log` mode 600. `gzip -t` on both
+archives exited 0, `tar -tzf` passed, and `zcat` exited 0. Fixture checks returned:
+
+```text
+CREATE_TABLE_lines=19
+COPY_public_lines=19
+fixture_message_matching_lines=1
+fixture_attachment_rows=1
+attachment_object_key_directory_matches=1
+attachment_object_xl_meta_matches=1
+pair_integrity_and_fixture=PASS
+```
+
+The tar listing contained the fixture's object directory and `xl.meta`:
+`./retrocast/attachments/251638554827034624/251638554843811840/l51-drill.pdf/`.
+`backup.log` contained the manual and timer runs, each ending
+`=== Backup Complete ===`. The log has no exit-code line: exit-0 evidence for
+the timer run is systemd's `Result=success` / `ExecMainStatus=0` above.
+
+The window includes a reboot and a reported 5 h 30 m 16 s clock jump. At
+collection uptime was 13:41. With `Linger=yes`, the enabled timer restarted
+at boot on November 26 at 09:25:08 and still fired at the configured 03:00.
+The lead's sleep inhibitor did not survive the reboot. There was no explicit
+completed suspend/resume record; that absence does not establish no sleep.
+Continuous uptime and a monotonic 24-hour interval were not established.
+The driver accepted this operator case and the systemd exit-status evidence
+on 2026-11-27 (D19 / SYS-FR-002).
+
+After the pair passed, `systemctl --user disable --now retrocast-backup.timer`
+exited 0; the service was already inactive. Both copied units were removed
+and `systemctl --user daemon-reload` exited 0. The timer inventory had no
+Retrocast timer and `list-unit-files "retrocast*"` listed 0 unit files.
+`docker compose down -v --remove-orphans` for `l51rc` exited 0, removing its
+9 containers, 6 volumes and network. The three owned built image tags were
+removed, exit 0. Filtered inventories found no owned Docker resources or
+built images. The clone and backup destination were deleted, with
+`exists_after=false` for both, completing at 2026-11-27T04:38:45-05:00.
+Only private evidence remained; pulled dependency images and build cache were
+retained by instruction. Other owners' inhibitors, Linger, packages and power
+settings were unchanged.
+
+Sources: L51 round-2 installation report and round-3 completion report,
+checked and accepted by the driver as events E575 and E576. These private
+reports are retained with the driver run; raw host evidence was not transferred
+into the repository. Commands and outputs above are drawn from those reports
+with private paths redacted. No restore or attachment download was performed
+in this observation; fixture presence is established by SQL rows and the
+archived object path. Restore coverage remains in the drills below.
+
 ## D18 release rollback drill — 2026-11-26
 
 PASS on a Windows 11 host / Docker Desktop, Engine 29.9.3
@@ -219,7 +350,7 @@ Windows task installation and 24-hour wall-clock scheduling were not performed
 on this Windows test host; their commands and templates are in docs/OPERATIONS.md.
 
 
-## Round 2 ? 2026-11-24 (Windows 11 / Docker Desktop)
+## Round 2 — 2026-11-24 (Windows 11 / Docker Desktop)
 
 Restore implementation: `c0dd2a599760424deb04b1d3bf93a90bdd717c77`.
 Initial full drill completed at 2026-11-24T07:00:16-0500. Source project `l30r2src`,
@@ -280,11 +411,11 @@ Restore script exit 0. A newly invited test member registered after these counts
 
 ## Pilot run 3 — 2026-11-24
 
-Candidate 0f7ee554a0b51d79252ace01ebcb213f5d2b5501, Windows11 Docker Desktop DESKTOP-JRJNV5B. Source l42pilot, fresh target l42restore. Both reused API image sha256:40f45ef0609ccd57988649a333fa76091565a07316b3df51c0fd4652959ad58c and web sha256:8d658ac5fdb4e931ea4ba8fa5d5579377a2f5d06b87554fc673911001554efe6. Documented scheduled wrapper and restore exited0. Paired backup_20261124_145041.sql.gz / minio_20261124_145041.tar.gz; before/after 2 users, 1 guild, 1 message; health200. Fresh invited browser downloaded restored PNG over HTTPS200, 68 bytes. A source message inserted after backup is absent from the target; the prebackup attachment message/file is present. Manual drill proves recovery to the backup point; no installed daily host schedule is claimed. Private scripts/output: evidence/L42/l42-drill.sh, restore.log, restore-counts-before/after.txt, rpo-source/restored.txt and restored-download.txt. See [full validation](../validation/pilot-2026-11-24.md).
+Candidate 0f7ee554a0b51d79252ace01ebcb213f5d2b5501, Windows11 Docker Desktop a Windows 11 host. Source l42pilot, fresh target l42restore. Both reused API image sha256:40f45ef0609ccd57988649a333fa76091565a07316b3df51c0fd4652959ad58c and web sha256:8d658ac5fdb4e931ea4ba8fa5d5579377a2f5d06b87554fc673911001554efe6. Documented scheduled wrapper and restore exited0. Paired backup_20261124_145041.sql.gz / minio_20261124_145041.tar.gz; before/after 2 users, 1 guild, 1 message; health200. Fresh invited browser downloaded restored PNG over HTTPS200, 68 bytes. A source message inserted after backup is absent from the target; the prebackup attachment message/file is present. Manual drill proves recovery to the backup point; no installed daily host schedule is claimed. Private scripts/output: evidence/L42/l42-drill.sh, restore.log, restore-counts-before/after.txt, rpo-source/restored.txt and restored-download.txt. See [full validation](../validation/pilot-2026-11-24.md).
 
 ## Pilot run 3 round 2 — 2026-11-24
 
-Candidate `511b8cd241fc7fab6a15f9d62364ac8000378104`, DESKTOP-JRJNV5B, Windows 11 / Docker Desktop. The original 0f7ee55 restore/RPO drill is carried by identical Go, storage, migration, compose, Caddy and Dockerfile object ids recorded in `evidence/L42/round2/carry.txt`; it was not rerun on the new candidate.
+Candidate `511b8cd241fc7fab6a15f9d62364ac8000378104`, a Windows 11 host, Windows 11 / Docker Desktop. The original 0f7ee55 restore/RPO drill is carried by identical Go, storage, migration, compose, Caddy and Dockerfile object ids recorded in `evidence/L42/round2/carry.txt`; it was not rerun on the new candidate.
 
 The documented cron entry itself was installed in an owned sidecar, changing only time fields to two minutes ahead and the documented project placeholder to l42r2open. Captured `crontab -l` uses BACKUP_DIR=/srv/backups/retrocast, the documented scheduled-backup.sh path and append redirection, with no wrapper job or added PATH/COMPOSE_FILE export. It fired at 21:44 UTC. Pair `backup_20261124_214403.sql.gz` / `minio_20261124_214403.tar.gz` passed gzip/tar integrity; the actual cron shell exited 0, observed without altering the job and recorded in backup.log. Private crontab/firing/exit/integrity evidence is under `evidence/L42/round2/`.
 
