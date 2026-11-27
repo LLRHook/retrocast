@@ -257,7 +257,7 @@ ARCHITECTURE §8.
 | WCAG | Web Content Accessibility Guidelines |
 | RPO | Recovery point objective: the most data, in time, a restore may lose |
 
-Run 3 round 2 candidate `511b8cd`: [Pilot validation record](validation/pilot-2026-11-24.md). All 106 Musts other than SYS-FR-002 are Verified; the operator host schedule over 24 hours remains an owner action.
+Run 3 round 2 candidate `511b8cd`: [Pilot validation record](validation/pilot-2026-11-24.md). SYS-FR-002 was Verified on 2026-11-27 from the accepted [D19 systemd timer observation](operations/restore-drills.md#d19-systemd-user-timer-observation--2026-11-27). Current Delivery: 105 of 107 Pilot Musts are Verified. SV-NFR-002 (Implemented) and SV-NFR-008 (Partial) were reopened when their requirements changed in server.md revs 30–31 (PRs #91 and #94) and await validation on the release code. The run 3 record remains historical, with a dated addendum for the later evidence and current status.
 
 ## Revision history
 | Rev | Date | Commit | Mode | Summary |
@@ -273,3 +273,5 @@ Run 3 round 2 candidate `511b8cd`: [Pilot validation record](validation/pilot-20
 | 10 | 2026-11-24T15:12:09-05:00 | 33dc349ad91a | REVISION | L42 round 1 candidate 0f7ee55: provisional all 107 Must claim, corrected by round 2 with acceptance-mapped CI/runtime evidence; accelerated cron, restore/RPO, offline flows and 10-minute performance; explicit Should and readiness gaps |
 | 11 | 2026-11-24T16:49:53-05:00 | 3c40e51fe9a3 | REVISION | L42 round 2 candidate 511b8cd: 106 Musts Verified; SYS-FR-002 Implemented pending operator host schedule over 24 hours; exact cron line, deployed invite/channel/history/refresh probes, explicit backend carry and SRS readiness corrections |
 | 12 | 2026-11-26T06:34:49-05:00 | ca3c0693a9a2 | REVISION | D16/D19: pinned MinIO source availability and corrected operator/redistribution guidance |
+| 13 | 2026-11-27T04:47:18-05:00 | 3be4c3e3a711 | REVISION | D19: SYS-FR-002 Verified from the accepted systemd timer observation; historical run 3 retained with a dated addendum |
+| 14 | 2026-11-27T04:50:48-05:00 | e49aba7e8602 | REVISION | Correct current Pilot Delivery to 105 of 107 Musts Verified; SV-NFR-002 and SV-NFR-008 await validation after requirement changes in server revs 30–31 |
