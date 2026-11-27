@@ -419,3 +419,4 @@ Scraping and dashboards are SYS-FR-001 in [system.md](system.md).
 | 29 | 2026-11-26T05:51:05-05:00 | 637354918316 | REVISION | D17 B11 PR #93: SV-IR-001 request caps after auth/rate checks and 413 envelope; rebased after PR #92 rev 28 |
 | 30 | 2026-11-26T06:59:05-05:00 | 82d43d52ec6b | REVISION | D16: dedicated least-privilege signer and argv-safe bootstrap; SV-NFR-008 / ADR-019 |
 | 31 | 2026-11-26T07:08:19-05:00 | 4935b7e8f0b6 | REVISION | D17 #79 round 3: shared startup gate, credential compatibility and rotation-aware rollback |
+| 32 | 2026-11-27T05:22:33-05:00 | 51b2565083e9 | REVISION | D20: SV-NFR-002 and SV-NFR-008 Delivery and traceability Verified from L61 release-code criterion evidence; requirement text and acceptance unchanged |
