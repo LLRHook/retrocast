@@ -1,9 +1,94 @@
 # Restore drills
 
+## v0.1.0 release restore drill — 2026-11-27
+
+PASS: L66 round 2 ran the released application on a Windows 11 host with
+Docker Desktop (Docker server 29.9.3). Release tag `v0.1.0` identifies commit
+`75290b6138a98daa2ff43c16a0f8fb31d4b66a07`. Application trees:
+
+| Tree | Git object ID |
+|---|---|
+| `retrocast/` | `1565e0d68e769c7b49931d8a21c73d6731129535` |
+| `retrocast-web/` | `11e3d33d20359cf49ed375189bf6d60f2b3096f3` |
+
+This is the dated SYS-NFR-006 record for v0.1.0. It was performed after
+publication, on the release commit; it supplies the missing release-code drill
+without claiming the check occurred before publication.
+
+Setup followed the [README](../../README.md#run-with-docker-compose):
+
+```sh
+cd retrocast
+bash scripts/init-env.sh
+docker compose up --build
+```
+
+L66 exported the release with `git archive`, generated private credentials
+(init-env exit 0, with its documented Windows ACL warning), and built API, web
+and MinIO images (all exit 0). Owned `l66r2` project/image names and retained
+`l66-common.yml`, `l66-full.yml` and `l66-restore.yml` overrides selected those
+images and loopback Caddy ports 16643/16644, checked free first. LiveKit and
+Grafana host bindings were removed. Startup used `up -d --no-build --wait`
+(exit 0). No candidate application source changed.
+
+Python orchestration reused the L42 backup/restore sequence, invoking the
+released scripts unchanged. The REST fixture had two users, one guild and one
+message with one attached 53-byte text file (in place of L42's 68-byte PNG).
+With the source API stopped, `bash scripts/scheduled-backup.sh` exited 0 and
+created this pair. Dates below are archive modification times in UTC; filenames
+use the Windows host's local time.
+
+| Archive | UTC date | Bytes | SHA-256 |
+|---|---|---:|---|
+| `backup_20261127_064350.sql.gz` | 2026-11-27T11:43:50.476081+00:00 | 4042 | `8118ab2533d167bf2fec3a84be9921993212f501280aeddb6b058aadf9ea75f1` |
+| `minio_20261127_064350.tar.gz` | 2026-11-27T11:43:51.124728+00:00 | 5228 | `b01ad09822f73dd09455861c06101b9301a19319ccd4fb22cf2220a33a0b80a8` |
+
+A separate Compose project started with empty volumes and normal minio-init,
+then `bash scripts/restore.sh <sql-archive> <minio-archive>` exited 0.
+
+| Snapshot | Users | Guilds | Messages |
+|---|---:|---:|---:|
+| Source before backup | 2 | 1 | 1 |
+| Fresh target before restore | 0 | 0 | 0 |
+| Target after restore | 2 | 1 | 1 |
+
+The pre-backup message and its attachment returned. After backup, the source
+received a marker message: source count 1, restored count 0. This establishes
+recovery to the backup point and loss only of the later marker in this fixture;
+the 24-hour RPO still depends on installing and monitoring the daily schedule.
+A fresh sign-in and history request supplied a new HTTPS signed URL. Curl used
+`--connect-to` to preserve its canonical host while reaching the target port.
+The download matched all 53 input bytes; `/health` returned 200. The same pair
+was restored a second time (exit 0), explicitly recording HTTPS GET 200 and
+exact bytes. No signed URL or credential is published.
+
+The documented cron line also fired once at 11:46 UTC in an owned sidecar with
+its environment cleared, using L42 round 2's unchanged Go ptrace observer
+(compiled with `golang:1.26.11`) and cached `docker:27.5.1-cli` tools. Only the
+project, mounted paths and time fields for the near-term firing were substituted.
+The actual child shell returned `exit_status=0 signaled=false`; `gzip -t` and
+`tar -tzf` exited 0. This is cron mechanism evidence, not a 24-hour host schedule.
+
+| Cron archive | Bytes | SHA-256 |
+|---|---:|---|
+| `backup_20261127_114600.sql.gz` | 4091 | `f30b9439a9b203399517c38b99920b865e7bd6d7b5487b637f549b95639831fa` |
+| `minio_20261127_114600.tar.gz` | 10055 | `19f1f87cad6e862a1c74e86da972437b9059e1b521a424de01351c6212d879d5` |
+
+Cleanup passed: all started projects received `down -v`; all L66 containers,
+networks, volumes, cache volumes and image tags were removed. The exported
+source, independent bare clone, private environment, helpers and both backup
+directories were removed. Protected rollback images and unrelated resources
+were preserved.
+
+Source: accepted private L66 round-2 evidence `drill.json`,
+`restored-download.json`, `backup.txt`, `restore.txt`, `cron-result.json`,
+`cron-observed-exit.txt`, `cron-integrity.txt` and `cleanup.json`.
+See the [seven release-code checks](../validation/release-2026-11-27.md#release-code-runtime-checks-v010).
+
 ## D19 systemd user timer observation — 2026-11-27
 
-PASS on a Linux host with systemd and no cron daemon (Omarchy, Arch Linux).
-The source reports do not give Docker Engine or Compose versions. The stack was
+PASS on an Arch-based Linux host with systemd and no cron daemon.
+Docker Engine and Compose versions were not captured during the run. The stack was
 bound to loopback only, under Compose project `l51rc`; no production resources
 were used. The REST fixture contained one user, one guild, one message and one
 attachment (a 36-byte PDF linked from that message).
@@ -21,9 +106,10 @@ PR #90 copied in. Their SHA-256 values equal the blobs on release baseline
 `scheduled-backup.sh` and `backup.sh` are unchanged between `f916c90` and
 `7f018a3`; the Compose `backup-tools` service changed only in comments. Other
 Compose services did change, so this is identity of the scheduled backup path,
-not of the entire stack. The D18 rollback drill below also ran
-`scheduled-backup.sh` on the release code. These checks make this observation
-applicable to the release backup path.
+not of the entire stack. The D18 rollback drill below ran
+`scheduled-backup.sh` on `b1514a3` (N−1). L66 has now run the wrapper with
+the v0.1.0 release Compose configuration, as recorded above. These checks make
+this observation applicable to the release backup path.
 
 Installation followed [OPERATIONS.md](../OPERATIONS.md), substituting only
 paths and the project name, with its documented `COMPOSE_FILE` and
@@ -124,7 +210,7 @@ retained by instruction. Other owners' inhibitors, Linger, packages and power
 settings were unchanged.
 
 Sources: L51 round-2 installation report and round-3 completion report,
-checked and accepted by the driver as events E575 and E576. These private
+checked and accepted by the driver on 2026-11-27. These private
 reports are retained with the driver run; raw host evidence was not transferred
 into the repository. Commands and outputs above are drawn from those reports
 with private paths redacted. No restore or attachment download was performed
@@ -189,7 +275,8 @@ docker compose up -d --build --wait
 docker compose stop api livekit
 bash scripts/scheduled-backup.sh
 gzip -t "$BACKUP_DIR"/*.gz
-tar --force-local -tzf "$BACKUP_DIR"/minio_*.tar.gz | wc -l
+# Use the MSYS /c/ form of BACKUP_DIR for this listing.
+tar -tzf "$BACKUP_DIR"/minio_*.tar.gz | wc -l
 sha256sum "$BACKUP_DIR"/*.gz
 docker compose start --wait api livekit
 # Health and counts after backup.
@@ -197,8 +284,10 @@ docker compose start --wait api livekit
 
 The scheduled wrapper exited 0. Both gzip checks and tar listing exited 0;
 tar listed 25 entries. API and LiveKit were quiescent during the paired backup.
-On Windows, --force-local stops tar from treating C: as a remote host, as
-observed in the first harness attempt.
+The successful D18 listing used `tar -tzf` with an MSYS `/c/` path.
+`tar --force-local` was checked separately on a one-file fixture; it was not
+the command used to list this backup. The first drive-letter-path attempt
+had treated the colon as a remote-host separator.
 
 | Archive | SHA-256 |
 |---|---|
@@ -411,11 +500,11 @@ Restore script exit 0. A newly invited test member registered after these counts
 
 ## Pilot run 3 — 2026-11-24
 
-Candidate 0f7ee554a0b51d79252ace01ebcb213f5d2b5501, Windows11 Docker Desktop a Windows 11 host. Source l42pilot, fresh target l42restore. Both reused API image sha256:40f45ef0609ccd57988649a333fa76091565a07316b3df51c0fd4652959ad58c and web sha256:8d658ac5fdb4e931ea4ba8fa5d5579377a2f5d06b87554fc673911001554efe6. Documented scheduled wrapper and restore exited0. Paired backup_20261124_145041.sql.gz / minio_20261124_145041.tar.gz; before/after 2 users, 1 guild, 1 message; health200. Fresh invited browser downloaded restored PNG over HTTPS200, 68 bytes. A source message inserted after backup is absent from the target; the prebackup attachment message/file is present. Manual drill proves recovery to the backup point; no installed daily host schedule is claimed. Private scripts/output: evidence/L42/l42-drill.sh, restore.log, restore-counts-before/after.txt, rpo-source/restored.txt and restored-download.txt. See [full validation](../validation/pilot-2026-11-24.md).
+Candidate 0f7ee554a0b51d79252ace01ebcb213f5d2b5501, a Windows 11 host with Docker Desktop. Source l42pilot, fresh target l42restore. Both reused API image sha256:40f45ef0609ccd57988649a333fa76091565a07316b3df51c0fd4652959ad58c and web sha256:8d658ac5fdb4e931ea4ba8fa5d5579377a2f5d06b87554fc673911001554efe6. Documented scheduled wrapper and restore exited0. Paired backup_20261124_145041.sql.gz / minio_20261124_145041.tar.gz; before/after 2 users, 1 guild, 1 message; health200. Fresh invited browser downloaded restored PNG over HTTPS200, 68 bytes. A source message inserted after backup is absent from the target; the prebackup attachment message/file is present. Manual drill proves recovery to the backup point; no installed daily host schedule is claimed. Private scripts/output: evidence/L42/l42-drill.sh, restore.log, restore-counts-before/after.txt, rpo-source/restored.txt and restored-download.txt. See [full validation](../validation/pilot-2026-11-24.md).
 
 ## Pilot run 3 round 2 — 2026-11-24
 
-Candidate `511b8cd241fc7fab6a15f9d62364ac8000378104`, a Windows 11 host, Windows 11 / Docker Desktop. The original 0f7ee55 restore/RPO drill is carried by identical Go, storage, migration, compose, Caddy and Dockerfile object ids recorded in `evidence/L42/round2/carry.txt`; it was not rerun on the new candidate.
+Candidate `511b8cd241fc7fab6a15f9d62364ac8000378104`, a Windows 11 host with Docker Desktop. The original 0f7ee55 restore/RPO drill is carried by identical Go, storage, migration, compose, Caddy and Dockerfile object ids recorded in `evidence/L42/round2/carry.txt`; it was not rerun on the new candidate.
 
 The documented cron entry itself was installed in an owned sidecar, changing only time fields to two minutes ahead and the documented project placeholder to l42r2open. Captured `crontab -l` uses BACKUP_DIR=/srv/backups/retrocast, the documented scheduled-backup.sh path and append redirection, with no wrapper job or added PATH/COMPOSE_FILE export. It fired at 21:44 UTC. Pair `backup_20261124_214403.sql.gz` / `minio_20261124_214403.tar.gz` passed gzip/tar integrity; the actual cron shell exited 0, observed without altering the job and recorded in backup.log. Private crontab/firing/exit/integrity evidence is under `evidence/L42/round2/`.
 

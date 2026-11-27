@@ -229,3 +229,40 @@ compilation during the timed phase.
 Unchanged limitation: permission lookups under the manager lock (#51) are not
 tuned by this harness. Stored file recovery and host schedule limits are in
 [restore-drills.md](restore-drills.md) and [OPERATIONS.md](../OPERATIONS.md).
+
+## v0.1.0 release-code measurement — 2026-11-27
+
+L66 round 2 measured `75290b6138a98daa2ff43c16a0f8fb31d4b66a07` on a Windows
+11 host with Docker Desktop. Comparison with run 3 at `0f7ee55`:
+
+| Measure | Run 3 | v0.1.0 |
+|---|---:|---:|
+| Load clients / duration / sends | 20 / 600 s / 1200 | 20 / 600 s / 1200 |
+| Peer deliveries received / expected | 22800 / 22800 | 22800 / 22800 |
+| Loss / duplicates / disconnects | 0 / 0 / 0 | 0 / 0 / 0 |
+| Load p95 | 21.221 ms | 9.171 ms |
+| Single-sender deliveries / expected | 1900 / 1900 | 1900 / 1900 |
+| Single-sender p95 (SYS-NFR-002 ≤1000 ms) | 4.912 ms | 4.616 ms |
+| History p95 (SYS-NFR-007 ≤300 ms; 100 calls, 50 rows) | 1.595 ms | 1.613 ms |
+
+The release also recorded zero send errors and unexpected receipts. SYS-NFR-001,
+SYS-NFR-002 and SYS-NFR-007 PASS; command exit 0. The 20 gateways were READY and
+the channel held 1000 messages before measurement. The candidate workload was
+unchanged; its source SHA-256 was
+`4cf3a9ff9a48ee895be306e8ca87063655bd4bbe427c57b988cd2e4688563e5b`.
+With `<export>` denoting the disposable release export, the command was:
+
+```sh
+docker run --rm --name l66r2-perf-client --network l66r2perf_default \
+  -v "<export>/retrocast:/app:ro" -v l66r2-mod-cache:/go/pkg/mod \
+  -v l66r2-build-cache:/root/.cache/go-build -w /app golang:1.26.11 \
+  go run ./cmd/perf -base http://caddy -duration 10m
+```
+
+The workload used real HTTP Caddy in a newly started open-registration stack.
+It ran last, after all other L66 stacks/test jobs finished and were removed;
+no additional L66 workload ran during measurement. Unrelated user containers
+remained untouched. These are measurements on this host, not a general capacity
+or cross-platform guarantee. All L66 resources were removed afterward.
+Source: private L66 round-2 `performance-result.json`, `perf.txt`,
+`perf-metadata.json`; [release-code checks](../validation/release-2026-11-27.md#release-code-runtime-checks-v010).
