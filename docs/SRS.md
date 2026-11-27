@@ -257,7 +257,7 @@ ARCHITECTURE §8.
 | WCAG | Web Content Accessibility Guidelines |
 | RPO | Recovery point objective: the most data, in time, a restore may lose |
 
-Run 3 round 2 candidate `511b8cd`: [Pilot validation record](validation/pilot-2026-11-24.md). All 107 Musts are now Verified: SYS-FR-002 was Verified on 2026-11-27 from the accepted [D19 systemd timer observation](operations/restore-drills.md#d19-systemd-user-timer-observation--2026-11-27). The run 3 record remains historical, with a dated addendum for this later evidence.
+Run 3 round 2 candidate `511b8cd`: [Pilot validation record](validation/pilot-2026-11-24.md). SYS-FR-002 was Verified on 2026-11-27 from the accepted [D19 systemd timer observation](operations/restore-drills.md#d19-systemd-user-timer-observation--2026-11-27). Current Delivery: 105 of 107 Pilot Musts are Verified. SV-NFR-002 (Implemented) and SV-NFR-008 (Partial) were reopened when their requirements changed in server.md revs 30–31 (PRs #91 and #94) and await validation on the release code. The run 3 record remains historical, with a dated addendum for the later evidence and current status.
 
 ## Revision history
 | Rev | Date | Commit | Mode | Summary |
