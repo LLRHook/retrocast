@@ -277,4 +277,3 @@ Run 3 round 2 candidate `511b8cd`: [Pilot validation record](validation/pilot-20
 | 14 | 2026-11-27T04:50:48-05:00 | e49aba7e8602 | REVISION | Correct current Pilot Delivery to 105 of 107 Musts Verified; SV-NFR-002 and SV-NFR-008 await validation after requirement changes in server revs 30–31 |
 | 15 | 2026-11-27T05:22:33-05:00 | 51b2565083e9 | REVISION | D20: all 107 Pilot Musts Verified; accepted L61 release-code validation at 7f018a3 and D19 timer evidence linked |
 | 16 | 2026-11-27T07:17:05-05:00 | 9cc0731dafa5 | REVISION | D20: replace carried runtime evidence with L66 release-code checks on 75290b6; retain 107 Verified Pilot Musts; disclose post-publication drill timing |
-| 17 | 2026-11-27T07:38:39-05:00 | f189aefb6343 | REVISION | D20 round 2: distinguish passing restore content from missed v0.1.0 before-release clause; retain Verified Delivery by driver decision |
