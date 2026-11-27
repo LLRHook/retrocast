@@ -247,9 +247,9 @@ L66 round 2 measured `75290b6138a98daa2ff43c16a0f8fb31d4b66a07` on a Windows
 
 The release also recorded zero send errors and unexpected receipts. SYS-NFR-001,
 SYS-NFR-002 and SYS-NFR-007 PASS; command exit 0. The 20 gateways were READY and
-the channel held 1000 messages before measurement. The candidate workload was
-unchanged; its source SHA-256 was
-`4cf3a9ff9a48ee895be306e8ca87063655bd4bbe427c57b988cd2e4688563e5b`.
+the channel held 1000 messages before measurement. The Git blob ID of `retrocast/cmd/perf/main.go` is
+`22c5f3b01a613c26f8f6e394e6e5267dfb504cdf` at both `0f7ee55` and `75290b6`;
+that identical blob proves the workload unchanged.
 With `<export>` denoting the disposable release export, the command was:
 
 ```sh
@@ -261,8 +261,8 @@ docker run --rm --name l66r2-perf-client --network l66r2perf_default \
 
 The workload used real HTTP Caddy in a newly started open-registration stack.
 It ran last, after all other L66 stacks/test jobs finished and were removed;
-no additional L66 workload ran during measurement. Unrelated user containers
-remained untouched. These are measurements on this host, not a general capacity
+no additional L66 workload ran during measurement. Unrelated containers
+were running, untouched, during the measurement. These are measurements on this host, not a general capacity
 or cross-platform guarantee. All L66 resources were removed afterward.
 Source: private L66 round-2 `performance-result.json`, `perf.txt`,
 `perf-metadata.json`; [release-code checks](../validation/release-2026-11-27.md#release-code-runtime-checks-v010).

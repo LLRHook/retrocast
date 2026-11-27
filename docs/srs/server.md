@@ -228,7 +228,7 @@ System-wide constraints SYS-CON-001–SYS-CON-004 are in [system.md](system.md).
 
 | ID | Priority | Requirement | Acceptance | Verification | Delivery | UI | Traces | Source | Evidence |
 |---|---|---|---|---|---|---|---|---|---|
-| SV-NFR-004 | Must | Reliability: the server shall stop accepting requests on SIGINT or SIGTERM and finish in-flight requests before exiting. Measure: in-flight requests finish within the shutdown timeout in cmd/retrocast/main.go. | Given a request in flight, when the process receives SIGTERM, then the request completes and the process exits 0. | Demonstration | Verified | none (infra) | CMP-001 | LIM-003 | L66 round 2: PASS on release `75290b6`; [release-code checks](../validation/release-2026-11-27.md#release-code-runtime-checks-v010). |
+| SV-NFR-004 | Must | Reliability: the server shall stop accepting requests on SIGINT or SIGTERM and finish in-flight requests before exiting. Measure: in-flight requests finish within the shutdown timeout in cmd/retrocast/main.go. | Given a request in flight, when the process receives SIGTERM, then the request completes and the process exits 0. | Demonstration | Verified | none (infra) | CMP-001 | LIM-003 | L66 round 2: PASS on release `75290b6`; [release-code checks](../validation/release-2026-11-27.md#release-code-runtime-checks-v010). cmd/retrocast/main.go (10 s HTTP shutdown bound); docker-compose.yml api stop_grace_period 20s leaves room for pool drain. L42 round 2: Verified; [candidate evidence](../validation/pilot-2026-11-24.md). |
 
 #### 3.7.2 Availability
 
@@ -241,9 +241,9 @@ System-wide constraints SYS-CON-001–SYS-CON-004 are in [system.md](system.md).
 | ID | Priority | Requirement | Acceptance | Verification | Delivery | UI | Traces | Source | Evidence |
 |---|---|---|---|---|---|---|---|---|---|
 | SV-NFR-001 | Must | Security: the server shall store passwords only as salted Argon2id hashes. Measure: Argon2id parameters (time 1, memory 64 MiB, parallelism 4, salt 16 bytes, key 32 bytes). | Given a new account, when the users row is read, then `password_hash` is an Argon2id encoding with those parameters and no plaintext exists. | Test | Verified | none (system-only) | ENT-001 | RISK-012 | internal/auth/argon2.go; test: internal/auth/argon2_test.go; SYSTEM_DESIGN.md:683  CI clause assertions: [acceptance test index](../validation/acceptance-tests.md). L42 round 2: Verified; [candidate evidence](../validation/pilot-2026-11-24.md). |
-| SV-NFR-002 | Must | Security: the server shall accept an HS256 access token for 15 minutes and a single-use refresh token for 7 days. Measure: token lifetimes (`exp` − `iat` = 900 s; refresh TTL 604 800 s; refresh token of 32 random bytes).  Startup shall refuse unset, shorter-than-32-character and committed placeholder secrets for JWT, MinIO write/root and signer, LiveKit, Postgres and Grafana; database and Redis URL userinfo requires a password following this policy; keyword DSNs and pinned-mc-incompatible root credentials are refused. | Given a token issued 16 minutes ago, when a protected route is called, then 401; given two simultaneous refreshes with one refresh token, then exactly one succeeds.  Given unsafe secrets, startup refuses and names only variables; generated secrets start the stack with /health 200; setup refuses overwrite and writes mode 600 (MSYS/Cygwin warns to restrict NTFS ACLs). | Test | Verified | none (system-only) | ENT-019 | RISK-012 | L66 round 2: PASS on release `75290b6`; [release-code checks](../validation/release-2026-11-27.md#release-code-runtime-checks-v010). Token/setup criteria retain L61 evidence at `7f018a3` (identical release application trees); nine additional secret classes passed live at `75290b6`. |
+| SV-NFR-002 | Must | Security: the server shall accept an HS256 access token for 15 minutes and a single-use refresh token for 7 days. Measure: token lifetimes (`exp` − `iat` = 900 s; refresh TTL 604 800 s; refresh token of 32 random bytes).  Startup shall refuse unset, shorter-than-32-character and committed placeholder secrets for JWT, MinIO write/root and signer, LiveKit, Postgres and Grafana; database and Redis URL userinfo requires a password following this policy; keyword DSNs and pinned-mc-incompatible root credentials are refused. | Given a token issued 16 minutes ago, when a protected route is called, then 401; given two simultaneous refreshes with one refresh token, then exactly one succeeds.  Given unsafe secrets, startup refuses and names only variables; generated secrets start the stack with /health 200; setup refuses overwrite and writes mode 600 (MSYS/Cygwin warns to restrict NTFS ACLs). | Test | Verified | none (system-only) | ENT-019 | RISK-012 | L66 round 2: PASS on release `75290b6`; [release-code checks](../validation/release-2026-11-27.md#release-code-runtime-checks-v010). Changed for #79 (driver decision): shared startup validation, Compose gate and private generator; existing token lifetime and single-use acceptance retained. L61 release-code validation PASS at `7f018a3`; [criterion evidence](../validation/release-2026-11-27.md). |
 | SV-NFR-003 | Must | Security: the server shall limit requests per client IP (SV-NFR-009) on unauthenticated routes (5 per minute per route) and per user on authenticated routes (50 per minute per route), answering 429 with `Retry-After`. Measure: fixed one-minute windows in Redis (unauthenticated routes: API-001–API-003, API-049; API-059 uses 5 per minute keyed by user). | Given 6 login attempts from one client within a minute, when the sixth is sent, then 429 with `Retry-After`; given 6 invite lookups (API-049) from one client within a minute, then the sixth gets 429; given 6 password-change attempts by one user within a minute, then the sixth gets 429. | Test | Verified | none (system-only) | ENT-021, API-001–API-003, API-049, API-059 | RISK-003 | internal/api/ratelimit.go; internal/api/router.go:104–121; test: internal/api/ratelimit_test.go. Changed: rev 2 — invite lookup and password change added; keys from Q-015 (TBD-015 resolved). PR #53: anonymous outage and invite limit regressions in internal/api/ratelimit_test.go and router_test.go; API-059 is covered by TestPasswordCredentialLimit.  PR #55 round 2: API-059; internal/api/contract_test.go TestContractOpenAPI and internal/api/router_test.go TestPasswordCredentialLimit. L42 round 2: Verified; [candidate evidence](../validation/pilot-2026-11-24.md). |
-| SV-NFR-009 | Must | Security: the server shall take the client IP from `X-Forwarded-For` only as written by the Caddy hop. Measure: a client cannot move to another rate-limit bucket by sending its own `X-Forwarded-For`. | Given the compose stack, when one client sends 6 logins in a minute through Caddy with a different `X-Forwarded-For` on each, then the sixth gets 429; given the published ports, then the API port is not among them (SV-NFR-008). | Test | Verified | none (system-only) | CMP-001, CMP-010 | RISK-003 | L66 round 2: PASS on release `75290b6`; [release-code checks](../validation/release-2026-11-27.md#release-code-runtime-checks-v010). |
+| SV-NFR-009 | Must | Security: the server shall take the client IP from `X-Forwarded-For` only as written by the Caddy hop. Measure: a client cannot move to another rate-limit bucket by sending its own `X-Forwarded-For`. | Given the compose stack, when one client sends 6 logins in a minute through Caddy with a different `X-Forwarded-For` on each, then the sixth gets 429; given the published ports, then the API port is not among them (SV-NFR-008). | Test | Verified | none (system-only) | CMP-001, CMP-010 | RISK-003 | L66 round 2: PASS on release `75290b6`; [release-code checks](../validation/release-2026-11-27.md#release-code-runtime-checks-v010). Added rev 2 (Q-015). internal/api/ratelimit.go:13–22 (`ClientIPExtractor`); internal/api/router.go:67–68; the compose smoke of 2026-11-23 saw separate buckets for two real clients through Caddy. ADR-015. PR #53: API unpublished in compose; forwarded-header bucket checks retained. L42 round 2: Verified; [candidate evidence](../validation/pilot-2026-11-24.md). |
 | SV-NFR-010 | Must | Security: when Redis is unreachable the server shall refuse rate-limited unauthenticated requests with 503 `SERVICE_UNAVAILABLE` and serve authenticated requests without a limit. Measure: response to each route class while Redis is stopped. | Given Redis stopped, when API-002 or API-049 is called, then 503 `SERVICE_UNAVAILABLE`; when a signed-in member calls API-023 with a valid access token, then 200. | Test | Verified | none (system-only) | CMP-001, CMP-005 | RISK-003 | Added rev 2 (Q-015). Reason (ADR-015): guessing and enumeration happen on the unauthenticated routes; sign-in already needs Redis for refresh tokens, so failing closed there costs no extra availability; access tokens are checked without Redis, so members already signed in keep chatting, and the 15-minute token lifetime and a small trusted group bound the abuse. PR #53: Redis outage policy tests; silent-connection deadline test in internal/redis/client_test.go.  CI clause assertions: [acceptance test index](../validation/acceptance-tests.md). L42 round 2: Verified; [candidate evidence](../validation/pilot-2026-11-24.md). |
 | SV-NFR-011 | Must | Security: the server shall serve cross-origin browser traffic (CORS requests, gateway upgrades) only for its own origin and the origins listed in `ALLOWED_ORIGINS`. Measure: responses that allow a foreign origin (target 0; `Access-Control-Allow-Origin` is never `*`). | Given Origin `https://other.example` not in the list, when it sends a CORS preflight or opens `/gateway`, then no `Access-Control-Allow-Origin` names it and the upgrade gets 403; given an Origin equal to the instance's own external origin (scheme, host and effective port; the scheme comes from the `X-Forwarded-Proto` that Caddy sets), then it is served; given an Origin that differs from it only in scheme or port and is not listed, then it is refused; given no Origin header (a native client), then it is served. | Test | Verified | none (system-only) | CMP-001, CMP-002 | RISK-003 | Added rev 2 (Q-016). cmd/retrocast/main.go (CORS); internal/gateway/server.go:14. ADR-016. PR #53: shared origin policy; REST preflight and gateway handshake positive/negative tests. L42 round 2: Verified; [candidate evidence](../validation/pilot-2026-11-24.md). |
 | SV-NFR-008 | Must | Security: every client connection shall use HTTPS or WSS through Caddy. Attachment download URLs shall use a dedicated signer allowed only s3:GetObject on attachment bucket objects, with required credentials in every environment and no root fallback. Measure: published ports (only Caddy 80 and 443; LiveKit 7880, 7881 and UDP 50000–50100; Grafana on 127.0.0.1:3000). | Given the compose stack, when `docker compose ps` lists published ports, then only those appear and attachment URLs use `https`; signed GET returns exact bytes and carries the dedicated credential ID; signer put, list, delete, other-bucket read and admin are denied; missing signer credentials prevent startup. | Inspection, Test | Verified | none (infra) | CMP-010 | RISK-012, RISK-003 | Changed in this revision, D16/B10 driver decision: least-privilege signer; L61 release-code validation PASS at `7f018a3`; [criterion evidence](../validation/release-2026-11-27.md). B6: role_reorder_test.go, role_reorder_live_test.go, storage/minio_test.go and storage/caddy_test.go; owned Caddy browser run (keyboard reorder, reload, second member event, hierarchy refusal, inline PNG and PDF response download).  CI clause assertions: [acceptance test index](../validation/acceptance-tests.md). L42 round 2: Verified; [candidate evidence](../validation/pilot-2026-11-24.md). |
@@ -253,7 +253,7 @@ System-wide constraints SYS-CON-001–SYS-CON-004 are in [system.md](system.md).
 
 | ID | Priority | Requirement | Acceptance | Verification | Delivery | UI | Traces | Source | Evidence |
 |---|---|---|---|---|---|---|---|---|---|
-| SV-NFR-007 | Must | Maintainability: the server shall change the database schema only through numbered migrations applied at startup. Measure: every table and column exists in `migrations/`; startup applies pending ones before serving. | Given an empty database, when the server starts, then migrations 000001–000020 are applied and `/health` returns 200. | Test | Verified | none (infra) | ENT-001–ENT-018 | LIM-003 | L66 round 2: PASS on release `75290b6`; [release-code checks](../validation/release-2026-11-27.md#release-code-runtime-checks-v010). |
+| SV-NFR-007 | Must | Maintainability: the server shall change the database schema only through numbered migrations applied at startup. Measure: every table and column exists in `migrations/`; startup applies pending ones before serving. | Given an empty database, when the server starts, then migrations 000001–000020 are applied and `/health` returns 200. | Test | Verified | none (infra) | ENT-001–ENT-018 | LIM-003 | L66 round 2: PASS on release `75290b6`; [release-code checks](../validation/release-2026-11-27.md#release-code-runtime-checks-v010). cmd/retrocast/main.go (golang-migrate `file://migrations`); CI "Run migrations" step L42 round 2: Verified; [candidate evidence](../validation/pilot-2026-11-24.md). |
 
 #### 3.7.5 Portability
 Covered system-wide by SYS-NFR-004.
@@ -283,107 +283,107 @@ Scraping and dashboards are SYS-FR-001 in [system.md](system.md).
 
 ## 5.1 Traceability matrix
 
-| Req | Priority | Delivery | Entities | APIs / Events | Components | Verification | Evidence |
-|---|---|---|---|---|---|---| --- |
-| SV-FR-001 | Must | Verified | ENT-001, ENT-019 | API-001 | CMP-001 | Test | — |
-| SV-FR-002 | Must | Verified | ENT-001 | API-001 | CMP-001 | Test | — |
-| SV-FR-003 | Must | Verified | — | API-001 | CMP-001 | Test | — |
-| SV-FR-004 | Must | Verified | ENT-001, ENT-019 | API-002 | CMP-001 | Test | — |
-| SV-FR-005 | Must | Verified | ENT-019 | API-003 | CMP-001, CMP-005 | Test | — |
-| SV-FR-006 | Must | Verified | ENT-019 | API-004 | CMP-001, CMP-005 | Test | — |
-| SV-FR-060 | Must | Verified | ENT-001 | API-059 | CMP-001 | Test | — |
-| SV-FR-061 | Must | Verified | ENT-019 | API-059, API-003 | CMP-001, CMP-005 | Test | — |
-| SV-FR-007 | Must | Verified | ENT-002, ENT-004 | API-013, EVT-012 | CMP-001 | Test | — |
-| SV-FR-008 | Must | Verified | ENT-005, ENT-006 | API-013 | CMP-001 | Test | — |
-| SV-FR-009 | Must | Verified | ENT-003 | API-013, API-018 | CMP-001 | Test | — |
-| SV-FR-010 | Must | Verified | ENT-002 | API-014 | CMP-001 | Test | — |
-| SV-FR-011 | Must | Verified | ENT-002 | API-015, EVT-013 | CMP-001 | Test | — |
-| SV-FR-012 | Must | Verified | ENT-002 | API-016, EVT-014 | CMP-001 | Test | — |
-| SV-FR-013 | Must | Verified | ENT-002, ENT-004 | API-007 | CMP-001 | Test | — |
-| SV-FR-014 | Must | Verified | ENT-003 | API-017, EVT-015 | CMP-001 | Test | — |
-| SV-FR-015 | Must | Verified | ENT-003 | API-020, API-021, EVT-016, EVT-017 | CMP-001 | Test | — |
-| SV-FR-016 | Must | Verified | ENT-003 | API-018, API-019 | CMP-001 | Test | — |
-| SV-FR-017 | Could | Implemented | ENT-003 | API-017 | CMP-001 | Test | — |
-| SV-FR-018 | Must | Verified | ENT-010 | API-047 | CMP-001 | Test | — |
-| SV-FR-019 | Must | Verified | ENT-010 | API-049 | CMP-001 | Test | — |
-| SV-FR-020 | Must | Verified | ENT-004, ENT-010 | API-050, EVT-018 | CMP-001, CMP-002 | Test | — |
-| SV-FR-021 | Must | Verified | ENT-010 | API-048, API-051 | CMP-001 | Test | — |
-| SV-FR-022 | Must | Verified | ENT-004 | API-035, EVT-019 | CMP-001 | Test | — |
-| SV-FR-023 | Must | Verified | ENT-004, ENT-005 | API-033 | CMP-001 | Test | — |
-| SV-FR-024 | Must | Verified | ENT-004 | API-036 | CMP-001 | Test | — |
-| SV-FR-025 | Must | Verified | ENT-008 | API-022 | CMP-001 | Test | — |
-| SV-FR-026 | Must | Verified | — | EVT-009 | CMP-002 | Test | — |
-| SV-FR-027 | Must | Verified | ENT-008, ENT-009 | API-023 | CMP-001 | Test | — |
-| SV-FR-028 | Must | Verified | ENT-008 | API-024 | CMP-001 | Test | — |
-| SV-FR-029 | Could | Implemented | ENT-008 | API-025, EVT-010 | CMP-001 | Test | — |
-| SV-FR-030 | Could | Implemented | ENT-008 | API-026, EVT-011 | CMP-001 | Test | — |
-| SV-FR-031 | Must | Verified | ENT-021 | API-028, EVT-024 | CMP-002 | Test | — |
-| SV-FR-032 | Must | Verified | ENT-020 | EVT-003, EVT-025 | CMP-002 | Test | — |
-| SV-FR-033 | Must | Verified | ENT-020 | EVT-008, EVT-025 | CMP-002 | Test | — |
-| SV-FR-034 | Must | Verified | ENT-020 | EVT-025 | CMP-002 | Test | — |
-| SV-FR-035 | Must | Verified | — | EVT-001 | CMP-002 | Test | — |
-| SV-FR-036 | Must | Verified | — | EVT-002, EVT-003 | CMP-002 | Test | — |
-| SV-FR-037 | Must | Verified | — | EVT-004, EVT-005 | CMP-002 | Test | — |
-| SV-FR-038 | Must | Verified | — | EVT-006 | CMP-002 | Test | — |
-| SV-FR-039 | Won't | Deprecated (rev 2, superseded by SV-FR-072) | — | EVT-007 | CMP-002 | Test | — |
-| SV-FR-071 | Must | Verified | ENT-004 | EVT-009, EVT-012, EVT-018, EVT-019 | CMP-002 | Test | — |
-| SV-FR-072 | Must | Verified | — | EVT-003, EVT-009, EVT-025 | CMP-002 | Test | — |
-| SV-FR-040 | Must | Verified | ENT-006 | API-039, EVT-021 | CMP-001 | Test | — |
-| SV-FR-041 | Must | Verified | ENT-006 | API-041, EVT-022 | CMP-001 | Test | — |
-| SV-FR-042 | Must | Verified | ENT-006 | API-042, EVT-023 | CMP-001 | Test | — |
-| SV-FR-043 | Must | Verified | ENT-005 | API-043, API-044, API-037, EVT-020 | CMP-001 | Test | — |
-| SV-FR-044 | Must | Verified | ENT-006 | API-040 | CMP-001 | Test | — |
-| SV-FR-045 | Must | Verified | ENT-005, ENT-006, ENT-007 | — | CMP-001 | Test | — |
-| SV-FR-046 | Must | Verified | ENT-002, ENT-006 | — | CMP-001 | Test | — |
-| SV-FR-047 | Could | Implemented | ENT-007 | API-045, API-046 | CMP-001 | Test | — |
-| SV-FR-078 | Must | Verified | ENT-005, ENT-006, ENT-007 | API-037, API-039, API-041, API-043, API-044, API-045 | CMP-001 | Test | — |
-| SV-FR-048 | Could | Implemented | ENT-016 | API-056, EVT-026 | CMP-001, CMP-007 | Test | — |
-| SV-FR-049 | Could | Implemented | ENT-016 | API-057, EVT-026 | CMP-001 | Test | — |
-| SV-FR-050 | Could | Implemented | ENT-016 | API-058 | CMP-001 | Test | — |
-| SV-FR-051 | Could | Partial | ENT-009, ENT-022 | API-027 | CMP-001, CMP-006 | Test | — |
-| SV-FR-052 | Could | Implemented | ENT-009 | API-023 | CMP-001, CMP-006 | Test | — |
-| SV-FR-053 | Could | Partial | ENT-001 | API-005, API-006 | CMP-001 | Test | — |
-| SV-FR-054 | Could | Partial | ENT-012, ENT-013 | API-008 | CMP-001 | Test | — |
-| SV-FR-055 | Could | Implemented | ENT-008, ENT-012 | API-022, EVT-009 | CMP-001, CMP-002 | Test | — |
-| SV-FR-056 | Could | Partial | ENT-012, ENT-013 | API-008 | CMP-001 | Test | — |
-| SV-FR-057 | Could | Partial | ENT-013 | API-010, API-011 | CMP-001 | Test | — |
-| SV-FR-058 | Could | Implemented | ENT-012, ENT-013 | API-009 | CMP-001 | Test | — |
-| SV-FR-059 | Could | Partial | ENT-008 | API-055 | CMP-001, CMP-004 | Test | — |
-| SV-FR-062 | Must | Verified | — | API-001 | CMP-001 | Test | — |
-| SV-FR-063 | Must | Verified | ENT-001, ENT-004, ENT-010 | API-001 | CMP-001 | Test | — |
-| SV-FR-064 | Must | Verified | — | API-001, API-002 | CMP-001 | Test | — |
-| SV-FR-065 | Must | Verified | ENT-001 | API-001 | CMP-001 | Test | — |
-| SV-FR-066 | Must | Verified | ENT-004 | API-038, EVT-019 | CMP-001 | Test | — |
-| SV-FR-067 | Must | Verified | ENT-004, ENT-011 | API-053, API-050, EVT-019, EVT-027 | CMP-001 | Test | — |
-| SV-FR-068 | Must | Verified | ENT-011 | API-052 | CMP-001 | Test | — |
-| SV-FR-069 | Must | Verified | ENT-011 | API-054, EVT-028 | CMP-001 | Test | — |
-| SV-FR-070 | Must | Verified | ENT-004, ENT-006 | API-038, API-053 | CMP-001 | Test | — |
-| SV-FR-073 | Should | Verified | — | — | CMP-003 | Test | — |
-| SV-FR-074 | Could | Implemented | ENT-014 | API-030, API-031, EVT-029, EVT-030 | CMP-001 | Test | — |
-| SV-FR-075 | Could | Implemented | ENT-014 | API-032 | CMP-001 | Test | — |
-| SV-FR-076 | Could | Implemented | ENT-015 | API-012, API-029, EVT-003 | CMP-001 | Test | — |
-| SV-FR-077 | Could | Partial | ENT-004 | API-034, API-037, EVT-020 | CMP-001 | Test | — |
-| SV-IR-001 | Must | Verified | — | API-001–API-060 | CMP-001 | Test | — |
-| SV-IR-002 | Must | Verified | — | EVT-001–EVT-030 | CMP-002 | Test | — |
-| SV-IR-003 | Must | Verified | — | all API | CMP-001 | Test | — |
-| SV-IR-004 | Must | Verified | ENT-004 | API-033, EVT-003 | CMP-001, CMP-002 | Test | — |
-| SV-IR-005 | Should | Verified | — | API-001–API-060 | CMP-001 | Demonstration | — |
-| SV-IR-006 | Could | Implemented | — | API-056 | CMP-001, CMP-007 | Test | — |
-| SV-IR-007 | Must | Verified | — | API-001–API-060 | CMP-001 | Test | — |
-| SV-IR-008 | Must | Verified | — | API-001–API-060 | CMP-001 | Test | — |
-| SV-NFR-001 | Must | Verified | ENT-001 | API-001, API-002 | CMP-001 | Test | — |
-| SV-NFR-002 | Must | Verified | ENT-019 | API-002, API-003 | CMP-001 | Test | L66 `75290b6`: [release-code checks](../validation/release-2026-11-27.md#release-code-runtime-checks-v010). |
-| SV-NFR-003 | Must | Verified | ENT-021 | API-001–API-003, API-049, API-059 | CMP-001, CMP-005 | Test | — |
-| SV-NFR-004 | Must | Verified | — | — | CMP-001 | Demonstration | L66 `75290b6`: [release-code checks](../validation/release-2026-11-27.md#release-code-runtime-checks-v010). |
-| SV-NFR-005 | Must | Verified | — | `/health` | CMP-001 | Test | — |
-| SV-NFR-006 | Should | Verified | — | — | CMP-001 | Inspection | — |
-| SV-NFR-007 | Must | Verified | ENT-001–ENT-018 | — | CMP-001, CMP-004 | Test | L66 `75290b6`: [release-code checks](../validation/release-2026-11-27.md#release-code-runtime-checks-v010). |
-| SV-NFR-008 | Must | Verified | — | — | CMP-010 | Inspection | — |
-| SV-NFR-009 | Must | Verified | — | API-001–API-003, API-049 | CMP-001, CMP-010 | Test | L66 `75290b6`: [release-code checks](../validation/release-2026-11-27.md#release-code-runtime-checks-v010). |
-| SV-NFR-010 | Must | Verified | — | API-001–API-003, API-049 | CMP-001, CMP-005 | Test | — |
-| SV-NFR-011 | Must | Verified | — | all API, `/gateway` | CMP-001, CMP-002 | Test | — |
-| SV-NFR-012 | Must | Verified | — | `/metrics` | CMP-001, CMP-010, CMP-011 | Inspection | — |
-| SV-NFR-013 | Must | Verified | — | `/metrics` | CMP-001, CMP-011 | Test | — |
+| Req | Priority | Delivery | Entities | APIs / Events | Components | Verification |
+|---|---|---|---|---|---|---|
+| SV-FR-001 | Must | Verified | ENT-001, ENT-019 | API-001 | CMP-001 | Test |
+| SV-FR-002 | Must | Verified | ENT-001 | API-001 | CMP-001 | Test |
+| SV-FR-003 | Must | Verified | — | API-001 | CMP-001 | Test |
+| SV-FR-004 | Must | Verified | ENT-001, ENT-019 | API-002 | CMP-001 | Test |
+| SV-FR-005 | Must | Verified | ENT-019 | API-003 | CMP-001, CMP-005 | Test |
+| SV-FR-006 | Must | Verified | ENT-019 | API-004 | CMP-001, CMP-005 | Test |
+| SV-FR-060 | Must | Verified | ENT-001 | API-059 | CMP-001 | Test |
+| SV-FR-061 | Must | Verified | ENT-019 | API-059, API-003 | CMP-001, CMP-005 | Test |
+| SV-FR-007 | Must | Verified | ENT-002, ENT-004 | API-013, EVT-012 | CMP-001 | Test |
+| SV-FR-008 | Must | Verified | ENT-005, ENT-006 | API-013 | CMP-001 | Test |
+| SV-FR-009 | Must | Verified | ENT-003 | API-013, API-018 | CMP-001 | Test |
+| SV-FR-010 | Must | Verified | ENT-002 | API-014 | CMP-001 | Test |
+| SV-FR-011 | Must | Verified | ENT-002 | API-015, EVT-013 | CMP-001 | Test |
+| SV-FR-012 | Must | Verified | ENT-002 | API-016, EVT-014 | CMP-001 | Test |
+| SV-FR-013 | Must | Verified | ENT-002, ENT-004 | API-007 | CMP-001 | Test |
+| SV-FR-014 | Must | Verified | ENT-003 | API-017, EVT-015 | CMP-001 | Test |
+| SV-FR-015 | Must | Verified | ENT-003 | API-020, API-021, EVT-016, EVT-017 | CMP-001 | Test |
+| SV-FR-016 | Must | Verified | ENT-003 | API-018, API-019 | CMP-001 | Test |
+| SV-FR-017 | Could | Implemented | ENT-003 | API-017 | CMP-001 | Test |
+| SV-FR-018 | Must | Verified | ENT-010 | API-047 | CMP-001 | Test |
+| SV-FR-019 | Must | Verified | ENT-010 | API-049 | CMP-001 | Test |
+| SV-FR-020 | Must | Verified | ENT-004, ENT-010 | API-050, EVT-018 | CMP-001, CMP-002 | Test |
+| SV-FR-021 | Must | Verified | ENT-010 | API-048, API-051 | CMP-001 | Test |
+| SV-FR-022 | Must | Verified | ENT-004 | API-035, EVT-019 | CMP-001 | Test |
+| SV-FR-023 | Must | Verified | ENT-004, ENT-005 | API-033 | CMP-001 | Test |
+| SV-FR-024 | Must | Verified | ENT-004 | API-036 | CMP-001 | Test |
+| SV-FR-025 | Must | Verified | ENT-008 | API-022 | CMP-001 | Test |
+| SV-FR-026 | Must | Verified | — | EVT-009 | CMP-002 | Test |
+| SV-FR-027 | Must | Verified | ENT-008, ENT-009 | API-023 | CMP-001 | Test |
+| SV-FR-028 | Must | Verified | ENT-008 | API-024 | CMP-001 | Test |
+| SV-FR-029 | Could | Implemented | ENT-008 | API-025, EVT-010 | CMP-001 | Test |
+| SV-FR-030 | Could | Implemented | ENT-008 | API-026, EVT-011 | CMP-001 | Test |
+| SV-FR-031 | Must | Verified | ENT-021 | API-028, EVT-024 | CMP-002 | Test |
+| SV-FR-032 | Must | Verified | ENT-020 | EVT-003, EVT-025 | CMP-002 | Test |
+| SV-FR-033 | Must | Verified | ENT-020 | EVT-008, EVT-025 | CMP-002 | Test |
+| SV-FR-034 | Must | Verified | ENT-020 | EVT-025 | CMP-002 | Test |
+| SV-FR-035 | Must | Verified | — | EVT-001 | CMP-002 | Test |
+| SV-FR-036 | Must | Verified | — | EVT-002, EVT-003 | CMP-002 | Test |
+| SV-FR-037 | Must | Verified | — | EVT-004, EVT-005 | CMP-002 | Test |
+| SV-FR-038 | Must | Verified | — | EVT-006 | CMP-002 | Test |
+| SV-FR-039 | Won't | Deprecated (rev 2, superseded by SV-FR-072) | — | EVT-007 | CMP-002 | Test |
+| SV-FR-071 | Must | Verified | ENT-004 | EVT-009, EVT-012, EVT-018, EVT-019 | CMP-002 | Test |
+| SV-FR-072 | Must | Verified | — | EVT-003, EVT-009, EVT-025 | CMP-002 | Test |
+| SV-FR-040 | Must | Verified | ENT-006 | API-039, EVT-021 | CMP-001 | Test |
+| SV-FR-041 | Must | Verified | ENT-006 | API-041, EVT-022 | CMP-001 | Test |
+| SV-FR-042 | Must | Verified | ENT-006 | API-042, EVT-023 | CMP-001 | Test |
+| SV-FR-043 | Must | Verified | ENT-005 | API-043, API-044, API-037, EVT-020 | CMP-001 | Test |
+| SV-FR-044 | Must | Verified | ENT-006 | API-040 | CMP-001 | Test |
+| SV-FR-045 | Must | Verified | ENT-005, ENT-006, ENT-007 | — | CMP-001 | Test |
+| SV-FR-046 | Must | Verified | ENT-002, ENT-006 | — | CMP-001 | Test |
+| SV-FR-047 | Could | Implemented | ENT-007 | API-045, API-046 | CMP-001 | Test |
+| SV-FR-078 | Must | Verified | ENT-005, ENT-006, ENT-007 | API-037, API-039, API-041, API-043, API-044, API-045 | CMP-001 | Test |
+| SV-FR-048 | Could | Implemented | ENT-016 | API-056, EVT-026 | CMP-001, CMP-007 | Test |
+| SV-FR-049 | Could | Implemented | ENT-016 | API-057, EVT-026 | CMP-001 | Test |
+| SV-FR-050 | Could | Implemented | ENT-016 | API-058 | CMP-001 | Test |
+| SV-FR-051 | Could | Partial | ENT-009, ENT-022 | API-027 | CMP-001, CMP-006 | Test |
+| SV-FR-052 | Could | Implemented | ENT-009 | API-023 | CMP-001, CMP-006 | Test |
+| SV-FR-053 | Could | Partial | ENT-001 | API-005, API-006 | CMP-001 | Test |
+| SV-FR-054 | Could | Partial | ENT-012, ENT-013 | API-008 | CMP-001 | Test |
+| SV-FR-055 | Could | Implemented | ENT-008, ENT-012 | API-022, EVT-009 | CMP-001, CMP-002 | Test |
+| SV-FR-056 | Could | Partial | ENT-012, ENT-013 | API-008 | CMP-001 | Test |
+| SV-FR-057 | Could | Partial | ENT-013 | API-010, API-011 | CMP-001 | Test |
+| SV-FR-058 | Could | Implemented | ENT-012, ENT-013 | API-009 | CMP-001 | Test |
+| SV-FR-059 | Could | Partial | ENT-008 | API-055 | CMP-001, CMP-004 | Test |
+| SV-FR-062 | Must | Verified | — | API-001 | CMP-001 | Test |
+| SV-FR-063 | Must | Verified | ENT-001, ENT-004, ENT-010 | API-001 | CMP-001 | Test |
+| SV-FR-064 | Must | Verified | — | API-001, API-002 | CMP-001 | Test |
+| SV-FR-065 | Must | Verified | ENT-001 | API-001 | CMP-001 | Test |
+| SV-FR-066 | Must | Verified | ENT-004 | API-038, EVT-019 | CMP-001 | Test |
+| SV-FR-067 | Must | Verified | ENT-004, ENT-011 | API-053, API-050, EVT-019, EVT-027 | CMP-001 | Test |
+| SV-FR-068 | Must | Verified | ENT-011 | API-052 | CMP-001 | Test |
+| SV-FR-069 | Must | Verified | ENT-011 | API-054, EVT-028 | CMP-001 | Test |
+| SV-FR-070 | Must | Verified | ENT-004, ENT-006 | API-038, API-053 | CMP-001 | Test |
+| SV-FR-073 | Should | Verified | — | — | CMP-003 | Test |
+| SV-FR-074 | Could | Implemented | ENT-014 | API-030, API-031, EVT-029, EVT-030 | CMP-001 | Test |
+| SV-FR-075 | Could | Implemented | ENT-014 | API-032 | CMP-001 | Test |
+| SV-FR-076 | Could | Implemented | ENT-015 | API-012, API-029, EVT-003 | CMP-001 | Test |
+| SV-FR-077 | Could | Partial | ENT-004 | API-034, API-037, EVT-020 | CMP-001 | Test |
+| SV-IR-001 | Must | Verified | — | API-001–API-060 | CMP-001 | Test |
+| SV-IR-002 | Must | Verified | — | EVT-001–EVT-030 | CMP-002 | Test |
+| SV-IR-003 | Must | Verified | — | all API | CMP-001 | Test |
+| SV-IR-004 | Must | Verified | ENT-004 | API-033, EVT-003 | CMP-001, CMP-002 | Test |
+| SV-IR-005 | Should | Verified | — | API-001–API-060 | CMP-001 | Demonstration |
+| SV-IR-006 | Could | Implemented | — | API-056 | CMP-001, CMP-007 | Test |
+| SV-IR-007 | Must | Verified | — | API-001–API-060 | CMP-001 | Test |
+| SV-IR-008 | Must | Verified | — | API-001–API-060 | CMP-001 | Test |
+| SV-NFR-001 | Must | Verified | ENT-001 | API-001, API-002 | CMP-001 | Test |
+| SV-NFR-002 | Must | Verified | ENT-019 | API-002, API-003 | CMP-001 | Test |
+| SV-NFR-003 | Must | Verified | ENT-021 | API-001–API-003, API-049, API-059 | CMP-001, CMP-005 | Test |
+| SV-NFR-004 | Must | Verified | — | — | CMP-001 | Demonstration |
+| SV-NFR-005 | Must | Verified | — | `/health` | CMP-001 | Test |
+| SV-NFR-006 | Should | Verified | — | — | CMP-001 | Inspection |
+| SV-NFR-007 | Must | Verified | ENT-001–ENT-018 | — | CMP-001, CMP-004 | Test |
+| SV-NFR-008 | Must | Verified | — | — | CMP-010 | Inspection |
+| SV-NFR-009 | Must | Verified | — | API-001–API-003, API-049 | CMP-001, CMP-010 | Test |
+| SV-NFR-010 | Must | Verified | — | API-001–API-003, API-049 | CMP-001, CMP-005 | Test |
+| SV-NFR-011 | Must | Verified | — | all API, `/gateway` | CMP-001, CMP-002 | Test |
+| SV-NFR-012 | Must | Verified | — | `/metrics` | CMP-001, CMP-010, CMP-011 | Inspection |
+| SV-NFR-013 | Must | Verified | — | `/metrics` | CMP-001, CMP-011 | Test |
 
 ## Revision history
 | Rev | Date | Commit | Mode | Summary |
@@ -420,4 +420,4 @@ Scraping and dashboards are SYS-FR-001 in [system.md](system.md).
 | 30 | 2026-11-26T06:59:05-05:00 | 82d43d52ec6b | REVISION | D16: dedicated least-privilege signer and argv-safe bootstrap; SV-NFR-008 / ADR-019 |
 | 31 | 2026-11-26T07:08:19-05:00 | 4935b7e8f0b6 | REVISION | D17 #79 round 3: shared startup gate, credential compatibility and rotation-aware rollback |
 | 32 | 2026-11-27T05:22:33-05:00 | 51b2565083e9 | REVISION | D20: SV-NFR-002 and SV-NFR-008 Delivery and traceability Verified from L61 release-code criterion evidence; requirement text and acceptance unchanged |
-| 33 | 2026-11-27T07:17:05-05:00 | 9cc0731dafa5 | REVISION | D20: L66 release-code evidence for SV-NFR-004/007/009 and nine SV-NFR-002 secret classes; preserve L61 token/setup evidence; traceability Evidence column; requirement text, acceptance and Delivery unchanged |
+| 33 | 2026-11-27T07:17:05-05:00 | 9cc0731dafa5 | REVISION | D20: L66 release-code evidence for SV-NFR-004/007/009 and nine SV-NFR-002 secret classes; preserve L61 token/setup evidence; requirement text, acceptance and Delivery unchanged |

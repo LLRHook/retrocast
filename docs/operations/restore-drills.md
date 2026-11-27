@@ -2,7 +2,10 @@
 
 ## v0.1.0 release restore drill — 2026-11-27
 
-PASS: L66 round 2 ran the released application on a Windows 11 host with
+Drill content PASS on `75290b6`. It was recorded after v0.1.0 was published,
+so v0.1.0 did not meet the before-release clause; this record precedes the
+next release of these application trees. L66 round 2 ran the released
+application on a Windows 11 host with
 Docker Desktop (Docker server 29.9.3). Release tag `v0.1.0` identifies commit
 `75290b6138a98daa2ff43c16a0f8fb31d4b66a07`. Application trees:
 
@@ -210,7 +213,8 @@ retained by instruction. Other owners' inhibitors, Linger, packages and power
 settings were unchanged.
 
 Sources: L51 round-2 installation report and round-3 completion report,
-checked and accepted by the driver on 2026-11-27. These private
+round 2 checked on 2026-11-26; round 3 and the observation accepted on
+2026-11-27. These private
 reports are retained with the driver run; raw host evidence was not transferred
 into the repository. Commands and outputs above are drawn from those reports
 with private paths redacted. No restore or attachment download was performed
