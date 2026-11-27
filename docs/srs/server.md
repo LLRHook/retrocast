@@ -421,3 +421,4 @@ Scraping and dashboards are SYS-FR-001 in [system.md](system.md).
 | 31 | 2026-11-26T07:08:19-05:00 | 4935b7e8f0b6 | REVISION | D17 #79 round 3: shared startup gate, credential compatibility and rotation-aware rollback |
 | 32 | 2026-11-27T05:22:33-05:00 | 51b2565083e9 | REVISION | D20: SV-NFR-002 and SV-NFR-008 Delivery and traceability Verified from L61 release-code criterion evidence; requirement text and acceptance unchanged |
 | 33 | 2026-11-27T07:17:05-05:00 | 9cc0731dafa5 | REVISION | D20: L66 release-code evidence for SV-NFR-004/007/009 and nine SV-NFR-002 secret classes; preserve L61 token/setup evidence; requirement text, acceptance and Delivery unchanged |
+| 34 | 2026-11-27T07:38:39-05:00 | f189aefb6343 | REVISION | D20 round 2: preserve ten-row evidence provenance including SV-NFR-002 change note and L61 coverage; restore seven-column traceability matrix |
